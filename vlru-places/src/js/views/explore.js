@@ -8,7 +8,8 @@
  *   type   — all | place | event
  *   place  — id выбранного объекта (открывает превью)
  *   panel  — route (редактор маршрута)
- * Расширенные фильтры сценария — в store.filters[сценарий].
+ * Расширенные фильтры сценария — в store.filters[сценарий]. Локальная вкладка панели
+ * переключает встроенную форму фильтров и список без изменения URL.
  */
 
 import { html, render, fragment, $, $$, on, debounce, createDisposer, isMobileLayout } from '../core/dom.js';
@@ -16,11 +17,11 @@ import { store } from '../core/store.js';
 import { setQuery } from '../core/router.js';
 import { icon } from '../ui/icon.js';
 import { toast } from '../ui/toast.js';
-import { SCENARIO_BY_ID, CATEGORIES, TYPE_FILTERS, ACCESS, DIFFICULTY, BEACH, categoryOf } from '../data/taxonomy.js';
+import { SCENARIO_BY_ID, CATEGORIES, FILTERS, TYPE_FILTERS, ACCESS, DIFFICULTY, BEACH, categoryOf } from '../data/taxonomy.js';
 import { listItems, getItem, peekItem, countActiveFilters } from '../api/places.js';
 import { countActivePins } from '../api/pins.js';
 import { resultRow, resultRowSkeleton, media, itemUrl } from '../ui/cards.js';
-import { openFiltersDialog, activeFilterChips, removeFilter } from '../ui/filters-dialog.js';
+import { filterField, readFiltersForm, activeFilterChips, removeFilter } from '../ui/filters-dialog.js';
 import { toggleRoute, isInRoute } from '../ui/route-store.js';
 import { countLabel, formatDistance, formatEventWhen } from '../core/format.js';
 import { createRouteController } from './route-panel.js';
@@ -43,6 +44,7 @@ export function createExplorePanel(stage) {
   let requestId = 0;
   let slots = null;
   let liveChip = null;
+  let activeTab = 'filters';
   /** false после leave(): асинхронные ответы, пришедшие позже, ничего не рисуют. */
   let active = false;
 
@@ -64,7 +66,7 @@ export function createExplorePanel(stage) {
       </form>
     `);
 
-    const chips = fragment(html`<div class="chip-row" role="group" aria-label="Категории" data-top-slot="chips"></div>`);
+    const chips = fragment(html`<div class="chip-row chip-row--wrap" role="group" aria-label="Категории" data-top-slot="chips"></div>`);
 
     const input = $('input', search);
     const onInput = debounce(() => setQuery({ q: input.value.trim(), place: '' }), 250);
@@ -86,6 +88,10 @@ export function createExplorePanel(stage) {
     render(
       els.head,
       html`
+        <div class="segmented map-panel__view" role="tablist" aria-label="Содержимое панели" data-view-tabs>
+          <button type="button" class="segmented__item" id="map-tab-filters" role="tab" data-action="tab" data-id="filters" aria-controls="map-panel-content" aria-selected="true">Фильтры</button>
+          <button type="button" class="segmented__item" id="map-tab-list" role="tab" data-action="tab" data-id="list" aria-controls="map-panel-content" aria-selected="false" tabindex="-1">Список <span class="segmented__count" data-list-count>0</span></button>
+        </div>
         <div data-slot-home="search"></div>
         <div data-slot-home="chips"></div>
         <div class="map-panel__toolbar" data-toolbar>
@@ -108,7 +114,9 @@ export function createExplorePanel(stage) {
     const badge = $('.filter-btn__count', slots.search);
     badge.hidden = !active;
     badge.textContent = active || '';
-    $('[data-action="filters"]', slots.search).setAttribute('aria-label', active ? `Фильтры, выбрано: ${active}` : 'Фильтры');
+    const filterButton = $('[data-action="filters"]', slots.search);
+    filterButton.setAttribute('aria-label', active ? `Фильтры, выбрано: ${active}` : 'Фильтры');
+    filterButton.setAttribute('aria-pressed', String(activeTab === 'filters'));
 
     const categories = CATEGORIES[state.scenario];
     render(
@@ -126,9 +134,19 @@ export function createExplorePanel(stage) {
     );
   }
 
+  function paintTabs(loading = false) {
+    $$('[data-action="tab"]', els.head).forEach((tab) => {
+      const selected = tab.dataset.id === activeTab;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    });
+    $('[data-list-count]', els.head).textContent = loading ? '…' : results.length;
+  }
+
   function paintToolbar(loading = false) {
     const toolbar = $('[data-toolbar]', els.head);
     if (!toolbar) return;
+    paintTabs(loading);
     // Счётчик — постоянный live-регион: пересоздавать его нельзя, иначе скринридер не озвучит изменение
     render($('[data-count]', toolbar), loading ? 'Ищем…' : html`<strong>${countLabel(results.length, RESULT_FORMS[state.type])}</strong>`);
     render(
@@ -147,7 +165,7 @@ export function createExplorePanel(stage) {
     );
     const activeRow = $('[data-active-filters]', els.head);
     const chips = activeFilterChips(state.scenario, filters());
-    activeRow.hidden = !chips.length;
+    activeRow.hidden = activeTab !== 'list' || !chips.length;
     render(activeRow, chips);
   }
 
@@ -159,14 +177,15 @@ export function createExplorePanel(stage) {
     els.foot.hidden = false;
   }
 
-  /* ── Список ── */
+  /* ── Фильтры и список ── */
+
+  const hasConditions = () => Boolean(countActiveFilters(filters()) || state.q || state.cat || state.type !== 'all');
 
   function paintLoading() {
     render(els.body, html`<ul class="map-panel__list" role="list" aria-busy="true">${Array.from({ length: 6 }, resultRowSkeleton)}</ul>`);
   }
 
   function paintEmpty() {
-    const hasFilters = countActiveFilters(filters()) || state.q || state.cat || state.type !== 'all';
     render(
       els.body,
       html`
@@ -178,7 +197,7 @@ export function createExplorePanel(stage) {
             Попробуйте изменить условия или загляните в другой раздел.
           </p>
           <div class="empty__actions">
-            ${hasFilters ? html`<button type="button" class="btn btn--primary" data-action="reset-all">Сбросить всё</button>` : ''}
+            ${hasConditions() ? html`<button type="button" class="btn btn--primary" data-action="reset-all">Сбросить всё</button>` : ''}
             <a class="btn btn--outline" href="#/add?scenario=${state.scenario}">Предложить место</a>
           </div>
         </div>
@@ -206,10 +225,43 @@ export function createExplorePanel(stage) {
     );
   }
 
+  function paintFilters() {
+    const value = filters();
+    render(
+      els.body,
+      html`
+        <form class="filters-form map-panel__filters" data-inline-filters>
+          <p class="map-panel__filters-note">Места на карте обновляются сразу после выбора.</p>
+          ${FILTERS[state.scenario].map((filter) => filterField(filter, value[filter.id]))}
+          <button type="button" class="btn btn--outline" data-action="reset-all" ${hasConditions() ? '' : 'disabled'}>Сбросить всё</button>
+        </form>
+      `,
+    );
+  }
+
+  function paintBody() {
+    if (state.selected || state.panel === 'route') return;
+    els.body.setAttribute('role', 'tabpanel');
+    els.body.setAttribute('aria-labelledby', `map-tab-${activeTab}`);
+    if (activeTab === 'filters') paintFilters();
+    else paintList();
+  }
+
+  function setActiveTab(tab, { focus = false } = {}) {
+    if (!['filters', 'list'].includes(tab)) return;
+    activeTab = tab;
+    paintSlots();
+    paintToolbar();
+    paintBody();
+    els.body.scrollTop = 0;
+    if (isMobileLayout() && stage.getSheet() === 'peek') stage.setSheet('half');
+    if (focus) $(`#map-tab-${tab}`, els.head)?.focus();
+  }
+
   /** → true, если ответ актуален и отрисован. */
   async function loadResults({ fit = false } = {}) {
     const id = ++requestId;
-    const listVisible = !state.selected && state.panel !== 'route';
+    const listVisible = !state.selected && state.panel !== 'route' && activeTab === 'list';
     paintToolbar(true);
     if (listVisible && (!results.length || fit)) paintLoading();
     try {
@@ -227,7 +279,7 @@ export function createExplorePanel(stage) {
       map.setItems(results, { scenario: state.scenario });
       paintSlots();
       paintToolbar();
-      if (!state.selected && state.panel !== 'route') paintList();
+      if (!state.selected && state.panel !== 'route') paintBody();
       if (fit && results.length && (state.q || state.cat || countActiveFilters(filters()))) {
         map.fitTo(results.map((item) => item.coords), { maxZoom: 14 });
       }
@@ -236,17 +288,19 @@ export function createExplorePanel(stage) {
       console.error('Не удалось загрузить места', error);
       if (id !== requestId || !active) return false;
       paintToolbar();
-      render(
-        els.body,
-        html`
-          <div class="empty">
-            <span class="empty__icon">${icon('wifi-off', 'icon--lg')}</span>
-            <h2 class="empty__title">Не получилось загрузить места</h2>
-            <p class="empty__text">Проверьте соединение и попробуйте ещё раз.</p>
-            <div class="empty__actions"><button type="button" class="btn btn--primary" data-action="retry">Повторить</button></div>
-          </div>
-        `,
-      );
+      if (!state.selected && state.panel !== 'route') {
+        render(
+          els.body,
+          html`
+            <div class="empty">
+              <span class="empty__icon">${icon('wifi-off', 'icon--lg')}</span>
+              <h2 class="empty__title">Не получилось загрузить места</h2>
+              <p class="empty__text">Проверьте соединение и попробуйте ещё раз.</p>
+              <div class="empty__actions"><button type="button" class="btn btn--primary" data-action="retry">Повторить</button></div>
+            </div>
+          `,
+        );
+      }
       return false;
     }
   }
@@ -277,12 +331,14 @@ export function createExplorePanel(stage) {
     const category = categoryOf(item);
     const inRoute = isInRoute(item.id);
     const photos = item.photos?.length ? item.photos : [null];
+    els.body.removeAttribute('role');
+    els.body.removeAttribute('aria-labelledby');
     render(
       els.body,
       html`
         <article class="preview" aria-labelledby="preview-title">
           <div class="preview__bar">
-            <button type="button" class="btn btn--sm btn--ghost" data-action="back">${icon('arrow-left', 'icon--sm')}К списку</button>
+            <button type="button" class="btn btn--sm btn--ghost" data-action="back">${icon('arrow-left', 'icon--sm')}${activeTab === 'list' ? 'К списку' : 'К фильтрам'}</button>
             <button type="button" class="icon-btn icon-btn--sm" data-action="share" data-id="${item.id}" aria-label="Поделиться" title="Поделиться">${icon('share-2')}</button>
           </div>
           <div class="preview__gallery-wrap">
@@ -379,33 +435,32 @@ export function createExplorePanel(stage) {
           case 'type':
             setQuery({ type: id === 'all' ? '' : id, place: '' });
             break;
+          case 'tab':
+            setActiveTab(id);
+            break;
           case 'clear-search':
             slots.input.value = '';
             setQuery({ q: '', place: '' });
             slots.input.focus();
             break;
           case 'filters':
-            openFiltersDialog({
-              scenario: state.scenario,
-              value: filters(),
-              count: async (value) => (await listItems({ scenario: state.scenario, type: state.type, q: state.q, category: state.cat, filters: value, latency: 0 })).total,
-              onApply: (value) => {
-                store.set((s) => ({ filters: { ...s.filters, [state.scenario]: value } }));
-                loadResults({ fit: true }).then((ok) => ok && panel.applySelection());
-              },
-            });
+            setActiveTab('filters');
+            if (state.selected || state.panel === 'route') setQuery({ place: '', panel: '' });
             break;
           case 'remove-filter':
             store.set((s) => ({ filters: { ...s.filters, [state.scenario]: removeFilter(filters(), el.dataset.filter, el.dataset.value) } }));
-            loadResults().then((ok) => ok && panel.applySelection());
+            loadResults();
             break;
-          case 'reset-all':
+          case 'reset-all': {
+            const urlChanges = state.q || state.cat || state.type !== 'all' || state.selected;
             store.set((s) => ({ filters: { ...s.filters, [state.scenario]: {} } }));
             slots.input.value = '';
-            setQuery({ q: '', cat: '', type: '', place: '' });
+            if (urlChanges) setQuery({ q: '', cat: '', type: '', place: '' });
+            else loadResults({ fit: true });
             break;
+          }
           case 'retry':
-            loadResults().then((ok) => ok && panel.applySelection());
+            loadResults();
             break;
           case 'select':
             setQuery({ place: id, panel: '' });
@@ -427,6 +482,24 @@ export function createExplorePanel(stage) {
     );
 
     disposer.add(
+      on(els.root, 'change', '[data-inline-filters]', (event, form) => {
+        const value = readFiltersForm(form, state.scenario);
+        store.set((s) => ({ filters: { ...s.filters, [state.scenario]: value } }));
+        loadResults({ fit: true });
+      }),
+    );
+    disposer.add(on(els.root, 'submit', '[data-inline-filters]', (event) => event.preventDefault()));
+
+    disposer.add(
+      on(els.head, 'keydown', '[role="tab"]', (event, tab) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 'filters' : event.key === 'End' ? 'list' : activeTab === 'filters' ? 'list' : 'filters';
+        setActiveTab(next, { focus: true });
+      }),
+    );
+
+    disposer.add(
       on(els.body, 'mouseover', '.result-row', (event, row) => map.hover(row.dataset.id)),
     );
     disposer.add(
@@ -439,7 +512,7 @@ export function createExplorePanel(stage) {
           const item = peekItem(state.selected);
           if (item) paintPreview(item);
         } else if (state.panel !== 'route') {
-          paintList();
+          paintBody();
         }
       }, ['route']),
     );
@@ -476,6 +549,7 @@ export function createExplorePanel(stage) {
       active = true;
       state = readQuery(ctx.query);
       results = [];
+      activeTab = 'filters';
       slots = createSlots();
       paintHeadShell();
       paintSlots();
@@ -489,6 +563,8 @@ export function createExplorePanel(stage) {
       loadResults().then((ok) => ok && this.applySelection());
       if (state.panel === 'route') {
         els.panel.classList.add('is-detail');
+        els.body.removeAttribute('role');
+        els.body.removeAttribute('aria-labelledby');
         route.openEditor(els.body);
       }
     },
@@ -510,6 +586,8 @@ export function createExplorePanel(stage) {
       if (state.panel === 'route' && prev.panel !== 'route') {
         map.select(null);
         els.panel.classList.add('is-detail');
+        els.body.removeAttribute('role');
+        els.body.removeAttribute('aria-labelledby');
         route.openEditor(els.body);
         els.foot.hidden = true;
         if (isMobileLayout()) stage.setSheet('half');
@@ -519,7 +597,7 @@ export function createExplorePanel(stage) {
         route.closeEditor();
         if (!state.selected) els.panel.classList.remove('is-detail');
         paintFoot();
-        if (!queryChanged && !state.selected) paintList();
+        if (!queryChanged && !state.selected) paintBody();
       }
 
       if (queryChanged) {
@@ -537,8 +615,8 @@ export function createExplorePanel(stage) {
         map.select(null);
         els.panel.classList.remove('is-detail');
         paintFoot();
-        paintList();
-        if (isMobileLayout() && stage.getSheet() === 'half') stage.setSheet('peek');
+        paintBody();
+        if (isMobileLayout() && activeTab === 'list' && stage.getSheet() === 'half') stage.setSheet('peek');
       }
     },
 
