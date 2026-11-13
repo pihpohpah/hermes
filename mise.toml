@@ -1,0 +1,17 @@
+[tools]
+go = "1.27.3"
+golangci-lint = "2"
+
+[env]
+_.file = ".env"
+
+[tasks.bootstrap]
+run = """
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "Created .env from .env.example"
+else
+  echo ".env already exists"
+fi
+go mod download
+"""
