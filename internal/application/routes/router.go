@@ -37,6 +37,10 @@ type Handlers struct {
 	CreateReport       *httproutes.CreateReportHandler
 	CreateUser         *httproutes.CreateUserHandler
 	GetCurrentUser     *httproutes.GetCurrentUserHandler
+	CreateSubmission   *httproutes.CreateSubmissionHandler
+	GetSubmission      *httproutes.GetSubmissionHandler
+	ListSubmissions    *httproutes.ListSubmissionsHandler
+	PhotoUpload        *httproutes.PhotoUploadHandler
 	RequireAuth        func(http.Handler) http.Handler
 	LoadAuth           func(http.Handler) http.Handler
 	AllowedOrigins     []string
@@ -90,6 +94,14 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	mux.Handle("PUT /pins/{id}/going", requireAuth(h.SetPinGoing))
 	mux.Handle("DELETE /pins/{id}/going", requireAuth(h.SetPinGoing))
 	mux.Handle("POST /pins/{id}/reports", requireAuth(h.ReportPin))
+
+	// Предложения пользователей (места, события, правки) и загрузка фото.
+	mux.Handle("POST /submissions", requireAuth(h.CreateSubmission))
+	mux.Handle("GET /submissions", requireAuth(h.ListSubmissions))
+	mux.Handle("GET /submissions/{id}", requireAuth(h.GetSubmission))
+	if h.PhotoUpload != nil {
+		mux.Handle("POST /photos", requireAuth(h.PhotoUpload))
+	}
 
 	mux.Handle("GET /forecast/place/{id}", h.GetPlaceForecast)
 	mux.Handle("POST /forecast/refresh", h.RefreshForecast)

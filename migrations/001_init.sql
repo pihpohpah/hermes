@@ -352,6 +352,75 @@ CREATE TABLE IF NOT EXISTS collection_items (
     PRIMARY KEY (collection_id, item_type, item_id)
 );
 
+-- Предложения пользователей: новые места, события и правки. Редакция ведёт
+-- статус review -> published/rejected; контакт нужен для обратной связи.
+-- idempotency_key связывает повторную отправку с той же записью.
+CREATE TABLE IF NOT EXISTS submissions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    idempotency_key text,
+    type text NOT NULL CHECK (type IN ('place', 'event', 'fix')),
+    status text NOT NULL DEFAULT 'review' CHECK (status IN ('review', 'published', 'rejected')),
+    scenario text CHECK (scenario IS NULL OR scenario IN ('city', 'nature', 'sea')),
+    category text,
+    title text NOT NULL,
+    address text NOT NULL DEFAULT '',
+    location geography(Point, 4326),
+    event_date date,
+    event_time text NOT NULL DEFAULT '',
+    description text NOT NULL DEFAULT '',
+    hours text NOT NULL DEFAULT '',
+    price text NOT NULL DEFAULT '',
+    link text NOT NULL DEFAULT '',
+    fix_id text NOT NULL DEFAULT '',
+    fix_reasons text[] NOT NULL DEFAULT '{}',
+    contact text NOT NULL DEFAULT '',
+    photos jsonb NOT NULL DEFAULT '[]'::jsonb,
+    moderator_note text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT submissions_title_length CHECK (char_length(title) BETWEEN 1 AND 200),
+    CONSTRAINT submissions_contact_length CHECK (char_length(contact) <= 140)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_author_idem
+    ON submissions (author_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_submissions_author_created_at ON submissions USING btree (author_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions USING btree (status);
+
+-- Загруженные фото. id — uuid v7 (генерируется приложением, время сортировки
+-- встроено в ключ). Файл появится в storage_path, когда хранилище подключат;
+-- до этого фото существует как запись на модерации. Удаление мягкое: статус.
+CREATE TABLE IF NOT EXISTS photos (
+    id uuid PRIMARY KEY,
+    owner_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    status text NOT NULL DEFAULT 'moderation' CHECK (status IN ('moderation', 'active', 'rejected', 'deleted')),
+    storage_path text NOT NULL DEFAULT '',
+    original_name text NOT NULL DEFAULT '',
+    content_type text NOT NULL DEFAULT '',
+    size_bytes bigint NOT NULL DEFAULT 0,
+    width int,
+    height int,
+    sha256 text NOT NULL DEFAULT '',
+    alt text NOT NULL DEFAULT '',
+    author text NOT NULL DEFAULT '',
+    license text NOT NULL DEFAULT '',
+    license_url text NOT NULL DEFAULT '',
+    source_url text NOT NULL DEFAULT '',
+    place_id uuid REFERENCES places(id) ON DELETE SET NULL,
+    submission_id uuid REFERENCES submissions(id) ON DELETE CASCADE,
+    moderated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    moderated_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Очередь модерации и типичные выборки.
+CREATE INDEX IF NOT EXISTS idx_photos_status ON photos USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_photos_owner_id ON photos USING btree (owner_id);
+CREATE INDEX IF NOT EXISTS idx_photos_place_id ON photos USING btree (place_id);
+CREATE INDEX IF NOT EXISTS idx_photos_submission_id ON photos USING btree (submission_id);
+
 CREATE INDEX IF NOT EXISTS idx_places_location ON places USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_places_type ON places USING btree (type);
 CREATE INDEX IF NOT EXISTS idx_places_layer_code ON places USING btree (layer_code);

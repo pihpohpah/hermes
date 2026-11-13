@@ -92,8 +92,22 @@ func runListen(
 	idempotencyRepo := repository.NewIdempotencyRepository(pool)
 	txManager := repository.NewTxManager(pool)
 
+	photoRepo := repository.NewPhotoRepository(pool)
+	createPhotoUC := usecase.NewCreatePhotoUseCase(photoRepo)
+
 	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
 	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
+
+	submissionRepo := repository.NewSubmissionRepository(pool)
+	createSubmissionUC := usecase.NewCreateSubmissionUseCase(
+		submissionRepo,
+		submissionRepo,
+		idempotencyRepo,
+		txManager,
+		cfg.TTL,
+	)
+	getSubmissionUC := usecase.NewGetSubmissionUseCase(submissionRepo)
+	listSubmissionsUC := usecase.NewListSubmissionsUseCase(submissionRepo)
 
 	router := routes.NewHTTPRouter(logger, routes.Handlers{
 		Health:             httproutes.NewHealthCheckHandler(logger, pool),
@@ -121,6 +135,10 @@ func runListen(
 		CreateReport:       httproutes.NewCreateReportHandler(logger, createReportUC),
 		CreateUser:         httproutes.NewCreateUserHandler(logger, createUserUC, cfg.IsProd()),
 		GetCurrentUser:     httproutes.NewGetCurrentUserHandler(logger),
+		CreateSubmission:   httproutes.NewCreateSubmissionHandler(logger, createSubmissionUC),
+		GetSubmission:      httproutes.NewGetSubmissionHandler(logger, getSubmissionUC),
+		ListSubmissions:    httproutes.NewListSubmissionsHandler(logger, listSubmissionsUC),
+		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, createPhotoUC, cfg.MaxUploadMB<<20),
 		RequireAuth:        authMiddleware.Require,
 		LoadAuth:           authMiddleware.Load,
 		AllowedOrigins:     cfg.AllowedOriginList(),
