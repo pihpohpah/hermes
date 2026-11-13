@@ -5,7 +5,8 @@
 
 import { html, attr } from '../core/dom.js';
 import { icon } from './icon.js';
-import { categoryOf, PIN_KIND_BY_ID, DIFFICULTY } from '../data/taxonomy.js';
+import { categoryOf, PIN_KIND_BY_ID, DIFFICULTY, SCENARIO_BY_ID } from '../data/taxonomy.js';
+import { haversineKm } from '../core/geo.js';
 import { formatDistance, formatEventWhen, dateTileParts, pinTiming, initials, avatarStyle, countLabel } from '../core/format.js';
 
 export const itemUrl = (item) => `#/${item.type === 'event' ? 'event' : 'place'}/${item.id}`;
@@ -67,8 +68,13 @@ function meta(item, className) {
   `;
 }
 
-/** Карточка справочника. layout: 'grid' | 'row'. */
-export function placeCard(item, { layout = 'grid', inRoute = false, eager = false } = {}) {
+/** Подпись «почему это вам» у рекомендаций. */
+export function reasonLine(reason) {
+  return html`<p class="reason">${icon('sparkles', 'icon--sm')}<span>${reason}</span></p>`;
+}
+
+/** Карточка справочника. layout: 'grid' | 'row'. reason — подпись рекомендации. */
+export function placeCard(item, { layout = 'grid', inRoute = false, eager = false, reason = '' } = {}) {
   const badges =
     item.type === 'event'
       ? dateTile(item.startsAt)
@@ -95,6 +101,7 @@ export function placeCard(item, { layout = 'grid', inRoute = false, eager = fals
         <div class="place-card__action">${routeButton}</div>
       </div>
       <div class="place-card__body">
+        ${reason ? reasonLine(reason) : ''}
         <div class="place-card__meta">${meta(item, 'place-card')}</div>
         <h3 class="place-card__title">
           <a class="place-card__link" href="${itemUrl(item)}">${item.title}</a>
@@ -102,6 +109,49 @@ export function placeCard(item, { layout = 'grid', inRoute = false, eager = fals
         <p class="place-card__text">${item.short}</p>
         <div class="place-card__facts">${facts(item)}</div>
       </div>
+    </article>
+  `;
+}
+
+/** Нумерованные точки маршрута. note(stop, index) — подпись справа, например расстояние от предыдущей. */
+export function routeStops(stops, { note = null } = {}) {
+  return html`
+    <ol class="route-stops" role="list">
+      ${stops.map(
+        (stop, index) => html`
+          <li class="route-stops__item">
+            <span class="route-stops__number" aria-hidden="true">${index + 1}</span>
+            ${media(stop)}
+            <span class="route-stops__body">
+              <a class="route-stops__title" href="${itemUrl(stop)}">${stop.title}</a>
+              <span class="route-stops__meta">${categoryOf(stop).label} · ${stop.district}</span>
+            </span>
+            ${note ? html`<span class="route-stops__note">${note(stop, index)}</span>` : ''}
+          </li>
+        `,
+      )}
+    </ol>
+  `;
+}
+
+/** Длина маршрута по прямой с той же поправкой на дороги, что и в map/routing.js. */
+export const approxRouteKm = (stops) => stops.slice(1).reduce((sum, stop, i) => sum + haversineKm(stops[i].coords, stop.coords) * 1.25, 0);
+
+/** Предложенный маршрут: тема, причина, точки и кнопка «Построить на карте». */
+export function routeCard(route) {
+  const scenario = SCENARIO_BY_ID[route.scenario];
+  return html`
+    <article class="route-card">
+      <header class="route-card__head">
+        <span class="badge badge--${route.scenario}">${icon(scenario.icon)}${scenario.label}</span>
+        <h3 class="route-card__title">${route.title}</h3>
+        ${reasonLine(route.reason)}
+      </header>
+      ${routeStops(route.stops)}
+      <footer class="route-card__foot">
+        <span class="route-card__summary">${icon('route', 'icon--sm')}${countLabel(route.stops.length, ['точка', 'точки', 'точек'])} · ≈ ${formatDistance(approxRouteKm(route.stops))}</span>
+        <button type="button" class="btn btn--sm btn--outline" data-action="route-load" data-ids="${route.stops.map((stop) => stop.id).join(',')}">${icon('map')}Построить на карте</button>
+      </footer>
     </article>
   `;
 }

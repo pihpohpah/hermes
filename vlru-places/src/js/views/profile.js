@@ -1,6 +1,6 @@
 /**
- * Профиль (#/profile?tab=pins|going|submissions): метки пользователя, отметки «Я приду»
- * и предложения в редакцию со статусом проверки. Без входа показывает приглашение войти.
+ * Профиль (#/profile?tab=foryou|pins|going|submissions): лента рекомендаций «Для вас», метки пользователя,
+ * отметки «Я приду» и предложения в редакцию со статусом проверки. Без входа показывает приглашение войти.
  */
 
 import { html, render, on, createDisposer } from '../core/dom.js';
@@ -12,11 +12,16 @@ import { openDialog, confirmDialog } from '../ui/dialog.js';
 import { openAuthDialog } from '../ui/auth-dialog.js';
 import { listPins, setGoing } from '../api/pins.js';
 import { updateProfile, logout, formatPhone } from '../api/auth.js';
-import { pinCard, avatar } from '../ui/cards.js';
+import { getRecommendations } from '../api/recommendations.js';
+import { peekItem } from '../api/places.js';
+import { pinCard, avatar, placeCard, placeCardSkeleton, routeCard } from '../ui/cards.js';
+import { openLuckyDialog } from '../ui/lucky-dialog.js';
+import { toggleRoute, isInRoute, replaceRoute } from '../ui/route-store.js';
 import { formatAgo, formatDay } from '../core/format.js';
 import { footer } from '../ui/footer.js';
 
 const TABS = [
+  { id: 'foryou', label: 'Для вас', icon: 'sparkles' },
   { id: 'pins', label: 'Мои метки', icon: 'radio' },
   { id: 'going', label: 'Я иду', icon: 'users' },
   { id: 'submissions', label: 'Предложения', icon: 'flag' },
@@ -30,14 +35,66 @@ const STATUS = {
 
 const TYPE_LABEL = { place: 'Место', event: 'Событие', fix: 'Правка' };
 
+const DEFAULT_TAB = 'foryou';
+const readTab = (query) => (TABS.some((t) => t.id === query.tab) ? query.tab : DEFAULT_TAB);
+
+function forYouSection(id, title, content) {
+  return html`
+    <section class="foryou__section" aria-labelledby="${id}">
+      <h2 class="foryou__title" id="${id}">${title}</h2>
+      ${content}
+    </section>
+  `;
+}
+
+function forYou(recs) {
+  const banner = html`
+    <div class="lucky-banner">
+      <span class="lucky-banner__icon">${icon('dices', 'icon--lg')}</span>
+      <div class="lucky-banner__text">
+        <strong>Хочется чего-то нового?</strong>
+        <p>Случайное место, событие или целый маршрут в один клик.</p>
+      </div>
+      <button type="button" class="btn btn--primary" data-action="lucky">${icon('dices')}Мне повезёт</button>
+    </div>
+  `;
+  if (!recs) {
+    return html`${banner}<ul class="catalog__grid foryou__grid" role="list" aria-busy="true">${Array.from({ length: 4 }, () => html`<li>${placeCardSkeleton()}</li>`)}</ul>`;
+  }
+  const { places, events, routes } = recs;
+  if (!places.length && !events.length && !routes.length) {
+    return html`
+      ${banner}
+      <div class="empty">
+        <span class="empty__icon">${icon('sparkles', 'icon--lg')}</span>
+        <h2 class="empty__title">Подборка пока пустая</h2>
+        <p class="empty__text">Открывайте карточки мест, ищите и отмечайте «Уже были здесь» — лента подстроится под вас.</p>
+        <div class="empty__actions"><a class="btn btn--outline" href="#/catalog">Открыть справочник</a></div>
+      </div>
+    `;
+  }
+  const grid = (entries) => html`
+    <ul class="catalog__grid foryou__grid" role="list">
+      ${entries.map(({ item, reason }) => html`<li>${placeCard(item, { reason, inRoute: isInRoute(item.id) })}</li>`)}
+    </ul>
+  `;
+  return html`
+    ${banner}
+    ${places.length ? forYouSection('foryou-places', 'Места для вас', grid(places)) : ''}
+    ${routes.length ? forYouSection('foryou-routes', 'Маршруты для вас', html`<div class="foryou__routes">${routes.map(routeCard)}</div>`) : ''}
+    ${events.length ? forYouSection('foryou-events', 'События для вас', grid(events)) : ''}
+  `;
+}
+
 export const profileView = {
   title: 'Профиль',
   section: null,
 
   mount(target, ctx) {
     const disposer = createDisposer();
-    let tab = TABS.some((t) => t.id === ctx.query.tab) ? ctx.query.tab : 'pins';
+    let tab = readTab(ctx.query);
     let pins = [];
+    let recs = null;
     let mounted = true;
 
     function guest() {
@@ -48,7 +105,7 @@ export const profileView = {
             <div class="state-page">
               <span class="state-page__icon state-page__icon--neutral">${icon('user', 'icon--xl')}</span>
               <h1 class="state-page__title">Профиль появится после входа</h1>
-              <p class="state-page__text">Войдите по номеру телефона — здесь будут ваши метки, отметки «Я приду» и статусы предложений.</p>
+              <p class="state-page__text">Войдите по номеру телефона — здесь будут подборка «Для вас», ваши метки, отметки «Я приду» и статусы предложений.</p>
               <div class="state-page__actions">
                 <button type="button" class="btn btn--primary btn--lg" data-action="login">${icon('log-in')}Войти</button>
                 <a class="btn btn--outline btn--lg" href="#/map">На карту</a>
@@ -62,6 +119,7 @@ export const profileView = {
 
     function tabContent(user) {
       const now = Date.now();
+      if (tab === 'foryou') return forYou(recs);
       if (tab === 'pins') {
         const mine = pins.filter((pin) => pin.mine);
         const past = store.get().myPins.filter((pin) => new Date(pin.endsAt).getTime() <= now);
@@ -153,7 +211,7 @@ export const profileView = {
               ${TABS.map(
                 (t) => html`
                   <button type="button" class="tab" data-action="tab" data-id="${t.id}" aria-pressed="${tab === t.id}">
-                    ${icon(t.icon)}${t.label}<span class="tab__count">${counts[t.id]}</span>
+                    ${icon(t.icon)}${t.label}${counts[t.id] === undefined ? '' : html`<span class="tab__count">${counts[t.id]}</span>`}
                   </button>
                 `,
               )}
@@ -173,9 +231,10 @@ export const profileView = {
     }
 
     async function load() {
-      const next = await listPins();
+      const [nextPins, nextRecs] = await Promise.all([listPins(), getRecommendations()]);
       if (!mounted) return;
-      pins = next;
+      pins = nextPins;
+      recs = nextRecs;
       paint();
     }
 
@@ -183,7 +242,10 @@ export const profileView = {
       on(target, 'click', '[data-action]', async (event, el) => {
         const { action, id } = el.dataset;
         if (action === 'login') openAuthDialog();
-        if (action === 'tab') setQuery({ tab: id === 'pins' ? '' : id });
+        if (action === 'tab') setQuery({ tab: id === DEFAULT_TAB ? '' : id });
+        if (action === 'lucky') openLuckyDialog();
+        if (action === 'route-toggle') toggleRoute(id, peekItem(id)?.title);
+        if (action === 'route-load') replaceRoute(el.dataset.ids.split(','));
         if (action === 'select') navigate('/now', { pin: id });
         if (action === 'pin-going') {
           const pin = pins.find((p) => p.id === id);
@@ -224,11 +286,12 @@ export const profileView = {
     );
 
     disposer.add(store.subscribe(load, ['user', 'myPins', 'joinedPins', 'submissions']));
+    disposer.add(store.subscribe(paint, ['route']));
     load();
 
     return {
       update(next) {
-        tab = TABS.some((t) => t.id === next.query.tab) ? next.query.tab : 'pins';
+        tab = readTab(next.query);
         paint();
       },
       unmount() {

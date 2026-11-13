@@ -41,3 +41,17 @@ export function moveStop(id, delta) {
 }
 
 export const clearRoute = () => store.set({ route: [] });
+
+/** Заменяет маршрут целиком и открывает его на карте. Прежний маршрут можно вернуть из уведомления. */
+export function replaceRoute(ids) {
+  const previous = store.get().route;
+  const next = ids.slice(0, MAX_STOPS);
+  store.set({ route: next });
+  navigate('/map', { panel: 'route' });
+  const replaced = previous.length > 0 && previous.join() !== next.join();
+  toast(replaced ? 'Маршрут заменён' : 'Маршрут построен', {
+    type: 'success',
+    group: 'route',
+    action: replaced ? { label: 'Вернуть прежний', onClick: () => store.set({ route: previous }) } : null,
+  });
+}

@@ -2,7 +2,7 @@
  * Глобальное состояние приложения.
  *
  * Хранит только то, что переживает смену экрана: сценарий, пользователя, маршрут, отметки
- * «Я приду», созданные метки и отправленные предложения. Состояние конкретного экрана
+ * «Я приду», созданные метки, отправленные предложения и историю для рекомендаций. Состояние конкретного экрана
  * (поиск, выбранная точка) живёт в URL — так ссылки остаются рабочими.
  *
  * Часть полей сохраняется в localStorage (ключ STORAGE_KEY), чтобы демо переживало перезагрузку.
@@ -10,7 +10,7 @@
  */
 
 const STORAGE_KEY = 'vlru-places:v1';
-const PERSISTED = ['scenario', 'user', 'accounts', 'joinedPins', 'myPins', 'submissions', 'route', 'routeMode'];
+const PERSISTED = ['scenario', 'user', 'accounts', 'joinedPins', 'myPins', 'submissions', 'route', 'routeMode', 'history'];
 
 const initialState = {
   scenario: 'city',
@@ -22,6 +22,15 @@ const initialState = {
   route: [],
   routeMode: 'foot',
   filters: {},
+  /**
+   * Сигналы для рекомендаций (src/js/api/history.js), новые — в начале списка.
+   * Начальные значения — демо-профиль, чтобы лента «Для вас» не была пустой с первого входа.
+   */
+  history: {
+    viewed: ['mys-tobizina', 'tssi-zarya'],
+    visited: ['tokarevskiy-mayak', 'orlinoe-gnezdo', 'millionka'],
+    searches: ['водопады', 'закат'],
+  },
 };
 
 function load() {

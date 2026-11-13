@@ -1,12 +1,19 @@
 /*
  * Оверлеи.
- * .dialog — нативный <dialog>, открывается через showModal(). На экранах < 48rem становится нижней шторкой.
+ * .dialog — нативный <dialog>, открывается через showModal(). Всегда по центру экрана; высота — по содержимому,
+ *   но не больше экрана за вычетом отступа --dialog-gap, лишнее прокручивается в .dialog__body.
+ *   .dialog--fixed — постоянная высота для окон, чьё содержимое меняется на месте (иначе окно «прыгает»).
  * .menu — выпадающее меню (аватар, «Ещё»). Видимость через атрибут hidden, позиционирование — в обёртке .menu-anchor.
  */
 
 .dialog {
+  --dialog-gap: var(--space-6);
+  --dialog-max-height: min(48rem, calc(100vh - 2 * var(--dialog-gap)));
+
   width: min(30rem, calc(100vw - var(--space-8)));
-  max-height: min(48rem, calc(100dvh - var(--space-8)));
+  height: fit-content;
+  max-height: var(--dialog-max-height);
+  margin: auto;
   padding: 0;
   border: 0;
   border-radius: var(--radius-xl);
@@ -31,8 +38,20 @@
   width: min(40rem, calc(100vw - var(--space-8)));
 }
 
+.dialog--fixed {
+  height: min(44rem, var(--dialog-max-height));
+}
+
+/* dvh учитывает панели мобильного браузера; где его нет, остаётся vh */
+@supports (height: 100dvh) {
+  .dialog {
+    --dialog-max-height: min(48rem, calc(100dvh - 2 * var(--dialog-gap)));
+  }
+}
+
 .dialog__header {
   display: flex;
+  flex: none;
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-5) 0 var(--space-6);
@@ -49,8 +68,13 @@
   margin-right: calc(var(--space-1) * -1);
 }
 
+/*
+ * База auto, а не flex: 1: Safari читает flex: 1 как базу 0px, и окно с высотой по содержимому
+ * схлопывает тело до нуля. min-height: 0 разрешает телу сжиматься с прокруткой, когда окно упёрлось в предел.
+ */
 .dialog__body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--space-4) var(--space-6) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -63,6 +87,7 @@
 
 .dialog__footer {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -79,39 +104,25 @@
   from { opacity: 0; }
 }
 
-@keyframes sheet-in {
-  from { transform: translateY(100%); }
-}
-
 @media (max-width: 47.99rem) {
+  .dialog {
+    --dialog-gap: var(--space-4);
+  }
+
+  /* Вырезы и панели телефона не должны перекрывать окно */
   .dialog,
   .dialog--wide {
-    width: 100%;
+    width: calc(100% - 2 * var(--dialog-gap));
     max-width: 100%;
-    max-height: calc(100dvh - var(--space-6));
-    margin: auto 0 0;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    padding-bottom: env(safe-area-inset-bottom);
+    max-height: calc(var(--dialog-max-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
-  .dialog[open] {
-    animation: sheet-in var(--dur-slow) var(--ease-out);
-  }
-
-  /* «Ручка» шторки — визуальная подсказка */
-  .dialog::before {
-    content: "";
-    flex: none;
-    align-self: center;
-    width: 2.25rem;
-    height: 0.25rem;
-    margin-top: var(--space-2);
-    border-radius: var(--radius-full);
-    background: var(--gray-300);
+  .dialog--fixed {
+    height: min(44rem, calc(var(--dialog-max-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   }
 
   .dialog__header {
-    padding: var(--space-3) var(--space-4) 0 var(--space-5);
+    padding: var(--space-4) var(--space-4) 0 var(--space-5);
   }
 
   .dialog__body {

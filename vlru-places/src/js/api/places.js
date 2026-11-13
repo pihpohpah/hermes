@@ -7,6 +7,7 @@
 import { getJson, delay, ApiError } from './http.js';
 import { distanceFromCenter } from '../core/geo.js';
 import { COLLECTIONS, SCENARIOS } from '../data/taxonomy.js';
+import { trackSearch } from './history.js';
 
 let dataset = null;
 
@@ -95,6 +96,7 @@ const SORTERS = {
 export async function listItems({ scenario = 'city', type = 'all', q = '', category = '', filters = {}, collection = '', sort = 'recommended', latency = 180 } = {}) {
   const { items } = await load();
   await delay(latency);
+  trackSearch(q);
   const now = Date.now();
 
   const inScope = items.filter(
@@ -171,6 +173,13 @@ export async function getCollectionCounts(scenario = 'all') {
       items.filter((item) => isCurrent(item) && (scenario === 'all' || item.scenario === scenario) && collection.match(item)).length,
     ]),
   );
+}
+
+/** Все актуальные места и события — сырьё для рекомендаций и «Мне повезёт». */
+export async function listCurrentItems() {
+  const { items } = await load();
+  const now = Date.now();
+  return items.filter((item) => isCurrent(item, now));
 }
 
 export async function getScenarioCounts() {

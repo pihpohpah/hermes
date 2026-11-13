@@ -479,14 +479,35 @@
             <h3>Подборка</h3>
             <div class="ds-stage ds-stage--grid" data-ds="collections"></div>
           </div>
+          <div class="ds-sub">
+            <h3>Рекомендация и предложенный маршрут</h3>
+            <p>
+              Лента «Для вас» в профиле. Над мета-строкой — причина рекомендации (<code>.reason</code>): одна короткая фраза
+              об одном сигнале — где человек был, что смотрел или искал. Маршрут — нумерованные точки (<code>.route-stops</code>)
+              и кнопка, которая заменяет текущий маршрут на карте.
+            </p>
+            <div class="ds-stage ds-stage--grid" data-ds="recommendations"></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Приглашение «Мне повезёт»</h3>
+            <div class="ds-stage ds-stage--column">
+              <div class="lucky-banner" style="width: 100%">
+                <span class="lucky-banner__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-dices"></use></svg></span>
+                <div class="lucky-banner__text"><strong>Хочется чего-то нового?</strong><p>Случайное место, событие или целый маршрут в один клик.</p></div>
+                <button type="button" class="btn btn--primary" data-ds-open="lucky"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-dices"></use></svg>Мне повезёт</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- ── Окна ── -->
         <section class="ds-section" id="overlays">
           <h2>Окна и уведомления</h2>
           <p>
-            Окно — нативный <code>&lt;dialog&gt;</code>: ловушка фокуса, Escape и возврат фокуса работают сами. На телефоне окно
-            становится нижней шторкой с ручкой. Уведомления появляются сверху под шапкой — внизу живут шторка, маршрут и кнопки форм.
+            Окно — нативный <code>&lt;dialog&gt;</code>: ловушка фокуса, Escape и возврат фокуса работают сами. Окно всегда
+            по центру экрана, на телефоне тоже. Высота — по содержимому, но не больше экрана минус отступы; длинное содержимое
+            прокручивается внутри, а кнопки остаются внизу. Если содержимое меняется на месте, как в «Мне повезёт», окну
+            задают постоянную высоту <code>.dialog--fixed</code>, чтобы оно не прыгало. Уведомления появляются сверху под шапкой — внизу живут шторка, маршрут и кнопки форм.
           </p>
           <div class="ds-stage ds-stage--subtle" style="align-items: flex-start">
             <div class="dialog-static">
@@ -510,6 +531,7 @@
             <button class="btn btn--outline" type="button" data-ds-open="dialog">Открыть окно</button>
             <button class="btn btn--outline" type="button" data-ds-open="toast">Показать уведомление</button>
             <button class="btn btn--outline" type="button" data-ds-open="auth">Окно входа</button>
+            <button class="btn btn--outline" type="button" data-ds-open="lucky">Окно «Мне повезёт»</button>
           </div>
         </section>
 

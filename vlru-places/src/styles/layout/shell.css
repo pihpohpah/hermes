@@ -251,9 +251,11 @@
   grid-template-columns: 2.5rem 1fr auto;
   align-items: center;
   gap: var(--space-3);
+  width: 100%;
   padding: var(--space-2);
   border-radius: var(--radius-md);
   color: var(--color-text);
+  text-align: left;
 }
 
 .mobile-menu__link:hover {
@@ -331,6 +333,18 @@
   .brand__divider,
   .brand__name {
     display: none;
+  }
+}
+
+/* «Мне повезёт» с подписью — только на широком экране, иначе квадратная кнопка с кубиком */
+@media (max-width: 99.99rem) {
+  .header__lucky-text {
+    display: none;
+  }
+
+  .header__lucky {
+    --btn-px: 0;
+    width: var(--control-md);
   }
 }
 

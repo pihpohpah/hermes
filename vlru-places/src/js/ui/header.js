@@ -1,5 +1,5 @@
 /**
- * Шапка продукта: бренд, навигация, глобальный сценарий, «Добавить», вход / профиль.
+ * Шапка продукта: бренд, навигация, глобальный сценарий, «Мне повезёт», «Добавить», вход / профиль.
  * На экранах < 80rem навигация уходит в выпадающую панель (кнопка-бургер).
  */
 
@@ -9,6 +9,7 @@ import { icon } from './icon.js';
 import { avatar } from './cards.js';
 import { bindMenu } from './menu.js';
 import { openAuthDialog } from './auth-dialog.js';
+import { openLuckyDialog } from './lucky-dialog.js';
 import { logout, formatPhone } from '../api/auth.js';
 import { toast } from './toast.js';
 import { navigate, parseLocation, setQuery } from '../core/router.js';
@@ -131,6 +132,9 @@ function paint() {
         </div>
         ${scenarioSwitcher()}
         <div class="header__actions">
+          <button type="button" class="btn btn--ghost header__lucky" data-action="lucky" aria-label="Мне повезёт: случайное место, событие или маршрут" title="Мне повезёт">
+            ${icon('dices')}<span class="header__lucky-text">Мне повезёт</span>
+          </button>
           <a class="btn btn--primary header__add" href="#/add" aria-label="Добавить место или событие">
             ${icon('plus')}<span class="header__add-text">Добавить</span>
           </a>
@@ -209,6 +213,11 @@ function openMobileMenu() {
             </a>
           `,
         )}
+        <button type="button" class="mobile-menu__link" data-action="lucky">
+          <span class="mobile-menu__icon">${icon('dices')}</span>
+          <span><strong>Мне повезёт</strong><small>Случайное место, событие или маршрут</small></span>
+          ${icon('chevron-right', 'icon--sm')}
+        </button>
         <a class="mobile-menu__link" href="#/add">
           <span class="mobile-menu__icon">${icon('circle-plus')}</span>
           <span><strong>Добавить</strong><small>Место, событие или правку</small></span>
@@ -229,6 +238,10 @@ function openMobileMenu() {
       closeMobileMenu();
       openAuthDialog();
     }
+    if (event.target.closest('[data-action="lucky"]')) {
+      closeMobileMenu();
+      openLuckyDialog();
+    }
   });
 
   document.body.append(backdrop, panel);
@@ -241,6 +254,7 @@ export function initHeader(target) {
   paint();
   on(root, 'click', '[data-action="scenario"]', (event, button) => selectScenario(button.dataset.scenario));
   on(root, 'click', '[data-action="login"]', () => openAuthDialog());
+  on(root, 'click', '[data-action="lucky"]', () => openLuckyDialog());
   on(root, 'click', '[data-action="mobile-menu"]', () => {
     if (document.getElementById('mobile-menu')) closeMobileMenu();
     else openMobileMenu();

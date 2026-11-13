@@ -128,3 +128,28 @@
     align-items: flex-start;
   }
 }
+
+/* Вкладка «Для вас» */
+.foryou__section {
+  margin-top: var(--space-10);
+}
+
+.foryou__title {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-snug);
+}
+
+.foryou__grid {
+  margin-top: 0;
+}
+
+.foryou__routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+  gap: var(--space-5);
+}
+
+.foryou__grid .place-card__body {
+  gap: var(--space-1-5);
+}

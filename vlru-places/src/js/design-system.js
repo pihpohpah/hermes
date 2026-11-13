@@ -4,13 +4,14 @@
  */
 
 import { html, render, $, $$ } from './core/dom.js';
-import { placeCard, resultRow, pinCard, collectionCard } from './ui/cards.js';
+import { placeCard, resultRow, pinCard, collectionCard, routeCard } from './ui/cards.js';
 import { listItems, getItem } from './api/places.js';
 import { listPins } from './api/pins.js';
 import { COLLECTIONS } from './data/taxonomy.js';
 import { openDialog } from './ui/dialog.js';
 import { toast } from './ui/toast.js';
 import { openAuthDialog } from './ui/auth-dialog.js';
+import { openLuckyDialog } from './ui/lucky-dialog.js';
 
 const css = getComputedStyle(document.documentElement);
 const token = (name) => css.getPropertyValue(name).trim();
@@ -155,6 +156,15 @@ async function paintCards() {
 
   const covers = await Promise.all(COLLECTIONS.map((c) => getItem(c.cover).catch(() => null)));
   render($('[data-ds="collections"]'), COLLECTIONS.map((c, i) => collectionCard(c, { count: 12 - i * 2, cover: covers[i], pressed: i === 1 })));
+
+  render(
+    $('[data-ds="recommendations"]'),
+    html`
+      ${placeCard(sea[1], { reason: 'Вы искали «закат»' })}
+      ${placeCard(city[2], { reason: 'Как «Маяк Токаревского», где вы были' })}
+      <div style="grid-column: 1 / -1; max-width: 32rem">${routeCard({ scenario: 'city', title: 'Прогулка по городу', reason: 'Собрали из того, что вам близко: закат, история', stops: city.slice(0, 3) })}</div>
+    `,
+  );
 }
 
 function bindDemos() {
@@ -171,6 +181,7 @@ function bindDemos() {
       }
       if (kind === 'toast') toast('Ссылка скопирована', { type: 'success', action: { label: 'Отменить', onClick: () => {} } });
       if (kind === 'auth') openAuthDialog({ reason: 'Пример окна входа — тот же компонент, что в продукте.' });
+      if (kind === 'lucky') openLuckyDialog();
       return;
     }
     // Витрина: кнопки внутри примеров не должны никуда вести

@@ -14,6 +14,7 @@ import { categoryOf, SCENARIO_BY_ID, ACCESS, DIFFICULTY, BEACH } from '../data/t
 import { placeCard, media, dateTile, itemUrl } from '../ui/cards.js';
 import { formatDistance, formatEventWhen, formatTime, formatDay } from '../core/format.js';
 import { toggleRoute, isInRoute } from '../ui/route-store.js';
+import { trackView, isVisited, toggleVisited } from '../api/history.js';
 import { shareItem } from '../ui/share.js';
 import { footer } from '../ui/footer.js';
 import { notFoundMarkup } from './not-found.js';
@@ -242,6 +243,14 @@ export const detailView = {
       `;
     }
 
+    const visitedLabel = (visited) => html`${icon(visited ? 'check' : 'footprints')}${visited ? 'Вы здесь были' : 'Уже были здесь'}`;
+
+    /** «Уже были здесь» — сигнал для ленты «Для вас» в профиле. */
+    function visitedButton() {
+      const visited = isVisited(item.id);
+      return html`<button type="button" class="btn btn--outline btn--block" data-action="visited" aria-pressed="${visited}">${visitedLabel(visited)}</button>`;
+    }
+
     async function paint() {
       const [similar, eventsHere] = await Promise.all([getSimilar(item), item.type === 'place' ? getEventsAt(item.id) : []]);
       if (!mounted) return;
@@ -349,7 +358,7 @@ export const detailView = {
                     ${infoRows(item)}
                     <div class="info-card__map" data-mini-map></div>
                     <div class="info-card__actions">
-                      ${item.type === 'event' ? html`<button type="button" class="btn btn--outline btn--block" data-action="ics">${icon('calendar-plus')}В календарь</button>` : ''}
+                      ${item.type === 'event' ? html`<button type="button" class="btn btn--outline btn--block" data-action="ics">${icon('calendar-plus')}В календарь</button>` : visitedButton()}
                       <a class="btn btn--ghost btn--block" href="#/add?fix=${item.id}">${icon('pencil')}Предложить правку</a>
                     </div>
                   </div>
@@ -391,6 +400,7 @@ export const detailView = {
           return;
         }
         item = loaded;
+        trackView(item.id);
         paint();
         window.scrollTo(0, 0);
       })
@@ -407,6 +417,12 @@ export const detailView = {
           const id = el.dataset.id || item.id;
           event.preventDefault();
           toggleRoute(id, peekItem(id)?.title);
+        }
+        if (action === 'visited') {
+          const visited = toggleVisited(item.id);
+          render(el, visitedLabel(visited));
+          el.setAttribute('aria-pressed', String(visited));
+          toast(visited ? 'Отметили. Подборка «Для вас» учтёт это место' : 'Отметку сняли');
         }
         if (action === 'share') shareItem(item);
         if (action === 'ics') downloadIcs(item);

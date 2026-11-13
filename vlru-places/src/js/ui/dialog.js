@@ -5,7 +5,7 @@ let counter = 0;
 
 /**
  * Модальное окно на нативном <dialog>: фокус-ловушка, Escape и возврат фокуса — средствами браузера.
- * На мобильных стили превращают его в нижнюю шторку.
+ * Окно всегда по центру экрана, высота — по содержимому в пределах экрана (src/styles/components/overlay.css).
  *
  * openDialog({ title, body, footer, wide, onMount(el, close), onClose }) → { el, close, setContent }
  * body / footer — SafeHtml (html`…`).
