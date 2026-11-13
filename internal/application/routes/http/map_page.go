@@ -52,18 +52,19 @@ func (h *MapAssetsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.files.ServeHTTP(w, r)
 }
 
-// MapStyleHandler отдаёт style.json с поправкой на режим сервера.
+// MapStyleHandler отдаёт style.json с поправкой на наличие архивов.
 //
-// Без рельефа растровый источник и слой удаляются: иначе MapLibre будет
-// запрашивать несуществующий /api/map/relief.pmtiles и сыпать ошибками на
-// каждый кадр, а статус карты станет «часть тайлов недоступна».
+// Без рельефа вырезаются растровый источник зон и его слой, без DEM —
+// источник raster-dem и hillshade: иначе MapLibre будет запрашивать
+// несуществующие /api/map/*.pmtiles и сыпать ошибками на каждый кадр.
 type MapStyleHandler struct {
 	stylePath string
 	relief    bool
+	dem       bool
 }
 
-func NewMapStyleHandler(mapDir string, relief bool) *MapStyleHandler {
-	return &MapStyleHandler{stylePath: filepath.Join(mapDir, "style.json"), relief: relief}
+func NewMapStyleHandler(mapDir string, relief, dem bool) *MapStyleHandler {
+	return &MapStyleHandler{stylePath: filepath.Join(mapDir, "style.json"), relief: relief, dem: dem}
 }
 
 func (h *MapStyleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -81,8 +82,8 @@ func (h *MapStyleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body := raw
-	if !h.relief {
-		stripped, stripErr := stripRelief(raw)
+	if !h.relief || !h.dem {
+		stripped, stripErr := stripSources(raw, h.relief, h.dem)
 		if stripErr != nil {
 			http.Error(w, "map style is invalid", http.StatusInternalServerError)
 
@@ -96,22 +97,32 @@ func (h *MapStyleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// stripRelief removes the raster source and its layer from the style document.
-func stripRelief(raw []byte) ([]byte, error) {
+// stripSources убирает источники и слои отсутствующих архивов из стиля.
+func stripSources(raw []byte, relief, dem bool) ([]byte, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("decode map style: %w", err)
 	}
 
+	drop := map[string]bool{}
+	if !relief {
+		drop[reliefSourceKey] = true
+	}
+	if !dem {
+		drop[demSourceKey] = true
+	}
+
 	if sources, ok := doc["sources"].(map[string]any); ok {
-		delete(sources, reliefSourceKey)
+		for key := range drop {
+			delete(sources, key)
+		}
 	}
 
 	if layers, ok := doc["layers"].([]any); ok {
 		kept := make([]any, 0, len(layers))
 		for _, item := range layers {
 			layer, isMap := item.(map[string]any)
-			if isMap && layer["source"] == reliefSourceKey {
+			if isMap && drop[fmt.Sprintf("%v", layer["source"])] {
 				continue
 			}
 			kept = append(kept, item)
@@ -122,4 +133,7 @@ func stripRelief(raw []byte) ([]byte, error) {
 	return json.Marshal(doc)
 }
 
-const reliefSourceKey = "relief"
+const (
+	reliefSourceKey = "relief"
+	demSourceKey    = "relief-dem"
+)

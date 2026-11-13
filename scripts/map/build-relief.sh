@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Собирает офлайн-рельеф Приморского края: PNG-тайлы отмывки (hillshade) в PMTiles.
+# Собирает офлайн-рельеф Приморского края в два PMTiles-архива:
 #
-# Зачем отдельный архив: векторные тайлы OSM рельефа не содержат. Отмывка
-# приходит из Copernicus DEM GLO-90 (90 м), читается по HTTP-range прямо из
-# COG-файла на S3 — качать гигабайты не нужно.
+#   primorsky-relief.pmtiles — дискретные высотные зоны (PNG, «лесенка»)
+#   primorsky-dem.pmtiles    — DEM в terrarium-RGB для объёма (terrain) и
+#                              клиентской отмывки MapLibre (raster-dem)
+#
+# Зачем два архива: цветовые ступени должны остаться чёткими (nearest, без
+# сглаживания), а объём и свет считаются на клиенте из DEM — MapLibre сам
+# драпирует растр по terrain и строит hillshade из raster-dem.
 #
 # Пайплайн:
-#   1. вырезать окно DEM из удалённого COG по bbox края (gdal_translate + /vsicurl)
+#   1. вырезать окно DEM из удалённого COG по bbox (gdal_translate + /vsicurl)
 #   2. посчитать диапазон высот и выбрать 8–20 равных зон («ступеней»)
-#   3. посчитать отмывку (gdaldem hillshade) и дискретную раскраску зон
-#   4. смешать их в один RGBA-растр, чтобы природа читалась по цвету
-#   5. нарезать в MBTiles и сконвертировать в PMTiles
+#   3. дискретная раскраска зон (gdaldem color-relief -nearest_color_entry)
+#   4. кодирование DEM в terrarium-RGB (h = R*256 + G + B/256 - 32768)
+#   5. нарезка обоих растров в MBTiles и конвертация в PMTiles
 #
-# Высотные зоны зависят от покрытия: для агломерации Владивостока (~650 м
-# перепад) выйдет ~13 зон по 50 м, для всего края (~1900 м) — ~19 по 100 м.
-# Рампа не зашита: подбирается шаг из «красивого» ряда так, чтобы зон было
-# от 8 до 20, цвета — дискретная гипсометрическая палитра.
+# Высотные зоны зависят от покрытия: подбирается шаг из «красивого» ряда так,
+# чтобы зон было от 8 до 20, цвета — дискретная гипсометрическая палитра.
 #
 # Внешние зависимости: docker (образ GDAL тянется автоматически).
 set -euo pipefail
@@ -26,14 +28,18 @@ WORK_DIR="$CACHE_DIR/relief"
 GDAL_IMAGE="${GDAL_IMAGE:-ghcr.io/osgeo/gdal:alpine-normal-latest}"
 PMTILES_IMAGE="${PMTILES_IMAGE:-ghcr.io/protomaps/go-pmtiles:latest}"
 
-MIN_ZOOM="${RELIEF_MINZOOM:-8}"
+MIN_ZOOM="${RELIEF_MINZOOM:-3}"
 MAX_ZOOM="${RELIEF_MAXZOOM:-13}"
+# 90-метровому DEM зум 13 не нужен (это ~20 м/px): держим его до z12 —
+# и terrain оверскейлится, и архив вчетверо меньше. Низкие зумы z3-7
+# добавляем, чтобы рельеф читался на обзоре всего края: тайлов там мало.
+DEM_MAX_ZOOM="${DEM_MAXZOOM:-12}"
 OUTPUT="${RELIEF_OUTPUT:-$ROOT_DIR/web/static/pmtiles/primorsky-relief.pmtiles}"
+OUTPUT_DEM="${DEM_OUTPUT:-$ROOT_DIR/web/static/pmtiles/primorsky-dem.pmtiles}"
 # docker run -v требует абсолютный путь; относительный путь он принимает за имя тома.
-case "$OUTPUT" in
-  /*) ;;
-  *) OUTPUT="$ROOT_DIR/$OUTPUT" ;;
-esac
+for var in OUTPUT OUTPUT_DEM; do
+  eval "case \"\$$var\" in /*) ;; *) $var=\"$ROOT_DIR/\$$var\" ;; esac"
+done
 
 # Bbox края совпадает с bounding_box в scripts/map/config.json.
 BBOX="${RELIEF_BBOX:-130.394,42.123,139.309,48.465}"
@@ -105,6 +111,17 @@ FETCH
   done
 
   [ -f "$WORK_DIR/dem/krai_dem.tif" ] || fail "DEM не создан"
+  # Маркер bbox: мозаика валидна только для того окна, под которое собрана.
+  printf '%s' "$BBOX" >"$WORK_DIR/dem/bbox.txt"
+}
+
+# Мозаика DEM дорогая (чтение COG по сети): повторные запуски для соседних
+# bbox или перекраски зон переиспользуют её. RELIEF_REBUILD_DEM=1 — заново.
+dem_ready() {
+  [ "${RELIEF_REBUILD_DEM:-0}" != "1" ] \
+    && [ -f "$WORK_DIR/dem/krai_dem.tif" ] \
+    && [ -f "$WORK_DIR/dem/bbox.txt" ] \
+    && [ "$(cat "$WORK_DIR/dem/bbox.txt")" = "$BBOX" ]
 }
 
 render_relief() {
@@ -118,8 +135,6 @@ render_relief() {
 для gdaldem color-relief -nearest_color_entry: входы по центрам зон, значение
 округляется до ближайшего центра, поэтому на тайлах читаются именно ступени.
 """
-import sys
-
 from osgeo import gdal
 
 gdal.UseExceptions()
@@ -127,16 +142,20 @@ gdal.UseExceptions()
 BAND_MIN, BAND_MAX = 8, 20
 NICE_STEPS = (10, 25, 50, 100, 150, 250, 500)
 
-# Позиция в нормированном диапазоне -> (r, g, b). Ниже нуля — глубокая вода.
+# Позиция в нормированном диапазоне -> (r, g, b). Ниже нуля — вода.
+# Соседние зоны специально разнесены по яркости/оттенку: «лесенка» должна
+# читаться даже там, где высот мало (низины края — это 2–4 зоны из 15).
 PALETTE = [
-    (0.00, (52, 96, 110)),
-    (0.04, (70, 122, 88)),
-    (0.18, (126, 158, 96)),
-    (0.36, (188, 178, 124)),
-    (0.54, (184, 150, 110)),
-    (0.72, (158, 146, 134)),
-    (0.86, (172, 172, 168)),
-    (1.00, (244, 244, 240)),
+    (0.00, (98, 144, 152)),
+    (0.06, (126, 172, 110)),
+    (0.16, (156, 186, 120)),
+    (0.28, (188, 200, 132)),
+    (0.40, (210, 194, 142)),
+    (0.52, (200, 172, 126)),
+    (0.66, (178, 156, 130)),
+    (0.78, (168, 160, 148)),
+    (0.90, (200, 200, 194)),
+    (1.00, (248, 248, 244)),
 ]
 
 
@@ -177,6 +196,8 @@ ZONES
 set -e
 cd /work/relief
 python3 zones.py
+# Отмывка запекается в растр: клиентский hillshade из raster-dem даёт
+# «acne» (шумную шахматку) на квантованном 90-метровом DEM.
 gdaldem hillshade -q -z 2 -s 1 -az 315 -alt 45 -compute_edges /work/dem/krai_dem.tif shade.tif
 # -nearest_color_entry: пиксель получает цвет ближайшей точки рампа,
 # поэтому вместо градиента на тайлах читаются дискретные высотные зоны.
@@ -184,7 +205,10 @@ gdaldem color-relief -q -nearest_color_entry /work/dem/krai_dem.tif ramp.txt col
 RENDER
 
   cat >"$WORK_DIR/relief/blend.py" <<'BLEND'
-"""Смешивает цвет высот с отмывкой: color * (0.45 + 0.55 * shade/255)."""
+"""Смешивает цвет высот с отмывкой: color * (0.62 + 0.38 * shade/255).
+
+Коэффициент приподнят: при жёстком (0.45 + 0.55) теневые склоны уходили
+в чёрный и «лесенка» зон переставала читаться."""
 import numpy as np
 from osgeo import gdal
 
@@ -199,7 +223,7 @@ for index in range(3):
     rgb[index] = color.GetRasterBand(index + 1).ReadAsArray().astype(np.float32)
 
 shade_arr = shade.GetRasterBand(1).ReadAsArray().astype(np.float32)
-factor = 0.45 + 0.55 * (shade_arr / 255.0)
+factor = 0.62 + 0.38 * (shade_arr / 255.0)
 mixed = np.clip(rgb * factor, 0, 255).astype(np.uint8)
 
 driver = gdal.GetDriverByName('GTiff')
@@ -214,52 +238,110 @@ for index in range(3):
 out.FlushCache()
 out = None
 
-print('relief blended:', width, 'x', height)
+print('relief blended:', width, 'x', height, flush=True)
 BLEND
 
   docker run --rm -v "$WORK_DIR:/work" "$GDAL_IMAGE" sh -c "
     set -e
     sh /work/relief/render.sh
     cd /work/relief && python3 blend.py
-  " || fail "не удалось посчитать отмывку"
+  " || fail "не удалось посчитать отмывку и зоны"
 
   [ -f "$WORK_DIR/relief/shaded_rgb.tif" ] || fail "растр рельефа не создан"
 }
 
+render_dem() {
+  log "Кодируем DEM в terrarium-RGB для terrain"
+  cat >"$WORK_DIR/dem/terrarium.py" <<'TERRARIUM'
+"""Кодирует DEM в terrarium-RGB: h = R*256 + G + B/256 - 32768.
+
+Кодируется уже перепроецированный в Web Mercator растр (bilinear применён к
+float-высотам, а не к байтам — иначе кодировка расплывётся). Яма за краем
+покрытия заливается нулём: -32768 м давало бы чёрные провалы в terrain.
+"""
+import numpy as np
+from osgeo import gdal
+
+gdal.UseExceptions()
+
+dem = gdal.Open('/work/dem/dem_merc.tif')
+band = dem.GetRasterBand(1)
+arr = band.ReadAsArray().astype(np.float32)
+nodata = band.GetNoDataValue()
+valid = np.ones(arr.shape, dtype=bool) if nodata is None else arr != nodata
+
+v = np.where(valid, np.clip(np.round(arr), -32768, 32767), 0).astype(np.int32) + 32768
+r = (v >> 8).astype(np.uint8)
+g = (v & 255).astype(np.uint8)
+b = np.zeros_like(r)
+
+out = gdal.GetDriverByName('GTiff').Create(
+    '/work/dem/dem_rgb.tif', dem.RasterXSize, dem.RasterYSize, 3, gdal.GDT_Byte,
+    options=['TILED=YES', 'COMPRESS=DEFLATE'],
+)
+out.SetGeoTransform(dem.GetGeoTransform())
+out.SetProjection(dem.GetProjection())
+for index, data in enumerate((r, g, b), 1):
+    out.GetRasterBand(index).WriteArray(data)
+out.FlushCache()
+out = None
+print('terrarium encoded:', dem.RasterXSize, 'x', dem.RasterYSize, flush=True)
+TERRARIUM
+
+  cat >"$WORK_DIR/dem/dem_tile.sh" <<'DEMTILE'
+set -e
+cd /work/dem
+# Сначала float-высоты в Mercator (bilinear нормален для высот)...
+gdalwarp -q -overwrite -t_srs EPSG:3857 -r bilinear -ot Float32 \
+  -co TILED=YES -co COMPRESS=DEFLATE krai_dem.tif dem_merc.tif
+# ...потом точное байтовое кодирование и нарезка без ресемплинга:
+# bilinear по закодированным байтам размазал бы terrarium-код.
+python3 terrarium.py
+rm -rf demtiles
+gdal2tiles.py -q --xyz -z "$1-$2" -r near --processes=2 --no-kml dem_rgb.tif demtiles
+echo "dem tiles produced: $(find demtiles -name '*.png' | wc -l)"
+DEMTILE
+
+  docker run --rm -v "$WORK_DIR:/work" "$GDAL_IMAGE" sh /work/dem/dem_tile.sh "$MIN_ZOOM" "$DEM_MAX_ZOOM" \
+    || fail "не удалось закодировать DEM"
+}
+
+# Нарезать растр в тайлы. $1 — входной растр (относительно /work), $2 — каталог тайлов.
 to_tiles() {
-  log "Нарезаем тайлы z$MIN_ZOOM-$MAX_ZOOM"
+  log "Нарезаем $1 в тайлы z$MIN_ZOOM-$MAX_ZOOM"
   cat >"$WORK_DIR/relief/tile.sh" <<'TILE'
 set -e
 cd /work/relief
-# Растр отмывки строим в Web Mercator и нарезаем gdal2tiles: он понимает
-# диапазон зумов напрямую, в отличие от gdal_translate+MBTiles, который сам
-# выбирает зум по разрешению исходника.
+# Растр строим в Web Mercator и нарезаем gdal2tiles: он понимает диапазон
+# зумов напрямую, в отличие от gdal_translate+MBTiles, который сам выбирает
+# зум по разрешению исходника.
 #
 # Ресемплинг только nearest: bilinear размывает границы дискретных высотных
 # зон в плавный градиент, а нужна читаемая «лесенка».
-rm -f shaded_merc.tif
+rm -f color_merc.tif
 gdalwarp -q -overwrite -t_srs EPSG:3857 -r near -co TILED=YES -co COMPRESS=DEFLATE \
-  shaded_rgb.tif shaded_merc.tif
+  "/work/relief/$1" color_merc.tif
 
-rm -rf tiles
-gdal2tiles.py -q --xyz -z "$1-$2" -r near --processes=2 --no-kml shaded_merc.tif tiles
-echo "tiles produced: $(find tiles -name '*.png' | wc -l)"
+rm -rf "$2"
+gdal2tiles.py -q --xyz -z "$3-$4" -r near --processes=2 --no-kml color_merc.tif "/work/relief/$2"
+echo "tiles produced: $(find "/work/relief/$2" -name '*.png' | wc -l)"
 TILE
 
-  docker run --rm -v "$WORK_DIR:/work" -e MIN_ZOOM="$MIN_ZOOM" -e MAX_ZOOM="$MAX_ZOOM"     "$GDAL_IMAGE" sh /work/relief/tile.sh "$MIN_ZOOM" "$MAX_ZOOM" \
-    || fail "не удалось нарезать тайлы"
+  docker run --rm -v "$WORK_DIR:/work" "$GDAL_IMAGE" sh /work/relief/tile.sh "$1" "$2" "$MIN_ZOOM" "$MAX_ZOOM" \
+    || fail "не удалось нарезать тайлы из $1"
 }
 
-# PNG-тайлы ссылками собираем в MBTiles, затем в PMTiles.
+# PNG-тайлы собираем в MBTiles, затем в PMTiles. gdal2tiles пишет XYZ, а
+# MBTiles хранит TMS, поэтому Y переворачивается.
+# $1 — каталог тайлов, $2 — выходной mbtiles, $3 — имя в метаданных.
 tiles_to_mbtiles() {
-  # PNG-тайлы собираем в MBTiles вручную: gdal2tiles пишет XYZ, а MBTiles
-  # хранит TMS, поэтому Y переворачивается.
   cat >"$WORK_DIR/relief/mbtiles.py" <<'PYTILES'
 import os
 import sqlite3
 
-tiles_root = '/work/relief/tiles'
-out = '/work/relief/relief.mbtiles'
+tiles_root = os.environ['TILES_ROOT']
+out = os.environ['MBTILES_OUT']
+name = os.environ.get('META_NAME', 'relief')
 if os.path.exists(out):
     os.remove(out)
 
@@ -277,11 +359,11 @@ for zoom in sorted(os.listdir(tiles_root)):
         xdir = os.path.join(tiles_root, zoom, x)
         if not os.path.isdir(xdir):
             continue
-        for name in os.listdir(xdir):
-            if not name.endswith('.png'):
+        for fname in os.listdir(xdir):
+            if not fname.endswith('.png'):
                 continue
-            y = int(name[:-4])
-            with open(os.path.join(xdir, name), 'rb') as handle:
+            y = int(fname[:-4])
+            with open(os.path.join(xdir, fname), 'rb') as handle:
                 data = handle.read()
             db.execute(
                 'INSERT INTO tiles VALUES (?, ?, ?, ?)',
@@ -292,7 +374,7 @@ for zoom in sorted(os.listdir(tiles_root)):
             max_zoom = z if max_zoom is None else max(max_zoom, z)
 
 meta = {
-    'name': 'Приморский край · рельеф',
+    'name': name,
     'format': 'png',
     'minzoom': str(min_zoom),
     'maxzoom': str(max_zoom),
@@ -305,40 +387,53 @@ for key, value in meta.items():
     db.execute('INSERT INTO metadata VALUES (?, ?)', (key, value))
 db.commit()
 db.close()
-print(f'mbtiles: {count} tiles, z{min_zoom}-{max_zoom}')
+print(f'{name}: {count} tiles, z{min_zoom}-{max_zoom}')
 PYTILES
 
-  docker run --rm -v "$WORK_DIR:/work" -e BBOX="$BBOX" "$GDAL_IMAGE" python3 /work/relief/mbtiles.py \
-    || fail "не удалось собрать MBTiles из тайлов"
+  docker run --rm -v "$WORK_DIR:/work" \
+    -e TILES_ROOT="/work/$1" -e MBTILES_OUT="/work/$2" -e META_NAME="$3" -e BBOX="$BBOX" \
+    "$GDAL_IMAGE" python3 /work/relief/mbtiles.py \
+    || fail "не удалось собрать MBTiles из $1"
 }
 
+# $1 — mbtiles относительно WORK_DIR, $2 — итоговый PMTiles.
 to_pmtiles() {
-  log "Конвертируем MBTiles -> PMTiles"
-  mkdir -p "$(dirname "$OUTPUT")"
-  docker run --rm -v "$WORK_DIR:/data" -v "$(dirname "$OUTPUT"):/out" "$PMTILES_IMAGE" \
-    convert --force /data/relief/relief.mbtiles "/out/$(basename "$OUTPUT")" >/dev/null
+  log "Конвертируем $1 -> PMTiles"
+  mkdir -p "$(dirname "$2")"
+  docker run --rm -v "$WORK_DIR:/data" -v "$(dirname "$2"):/out" "$PMTILES_IMAGE" \
+    convert --force "/data/$1" "/out/$(basename "$2")" >/dev/null
 
-  [ -f "$OUTPUT" ] || fail "PMTiles не создан: $OUTPUT"
+  [ -f "$2" ] || fail "PMTiles не создан: $2"
 
-  docker run --rm -v "$(dirname "$OUTPUT"):/out" "$PMTILES_IMAGE" verify "/out/$(basename "$OUTPUT")" >/dev/null \
-    || fail "архив рельефа не прошёл проверку"
+  docker run --rm -v "$(dirname "$2"):/out" "$PMTILES_IMAGE" verify "/out/$(basename "$2")" >/dev/null \
+    || fail "архив не прошёл проверку: $2"
 }
 
 report() {
-  local size
-  size=$(du -h "$OUTPUT" | cut -f1)
-  log "Готово: $OUTPUT ($size)"
-  docker run --rm -v "$(dirname "$OUTPUT"):/out" "$PMTILES_IMAGE" show "/out/$(basename "$OUTPUT")" \
-    | grep -E "bounds|min zoom|max zoom|addressed tiles|format"
+  local target
+  for target in "$OUTPUT" "$OUTPUT_DEM"; do
+    local size
+    size=$(du -h "$target" | cut -f1)
+    log "Готово: $target ($size)"
+    docker run --rm -v "$(dirname "$target"):/out" "$PMTILES_IMAGE" show "/out/$(basename "$target")" \
+      | grep -E "bounds|min zoom|max zoom|addressed tiles|format"
+  done
 }
 
 main() {
-  mkdir -p "$WORK_DIR/relief"
-  fetch_dem
+  mkdir -p "$WORK_DIR/relief" "$WORK_DIR/dem"
+  if dem_ready; then
+    log "DEM-мозаика уже собрана для bbox $BBOX — пропускаем (RELIEF_REBUILD_DEM=1 для пересборки)"
+  else
+    fetch_dem
+  fi
   render_relief
-  to_tiles
-  tiles_to_mbtiles
-  to_pmtiles
+  to_tiles shaded_rgb.tif tiles
+  tiles_to_mbtiles relief/tiles relief/relief.mbtiles 'Приморский край · рельеф'
+  to_pmtiles relief/relief.mbtiles "$OUTPUT"
+  render_dem
+  tiles_to_mbtiles dem/demtiles dem/dem.mbtiles 'Приморский край · DEM'
+  to_pmtiles dem/dem.mbtiles "$OUTPUT_DEM"
   report
 }
 

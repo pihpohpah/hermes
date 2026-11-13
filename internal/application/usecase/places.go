@@ -42,12 +42,12 @@ func NewGetPlaceUseCase(places placeGetter) *GetPlaceUseCase {
 }
 
 func (u *GetPlaceUseCase) Do(ctx context.Context, id string) (models.Place, error) {
-	validID, err := models.ValidateUUID("id", id)
-	if err != nil {
-		return models.Place{}, err
+	if id == "" {
+		return models.Place{}, models.Invalid("`id` is required")
 	}
 
-	return u.places.GetByID(ctx, validID)
+	// id may be a UUID or the human-readable slug from the URL.
+	return u.places.GetByID(ctx, id)
 }
 
 // CreatePlaceUseCase registers a new place. Input is already parsed by the
@@ -65,7 +65,74 @@ func NewCreatePlaceUseCase(places placeCreator) *CreatePlaceUseCase {
 }
 
 func (u *CreatePlaceUseCase) Do(ctx context.Context, in models.CreatePlaceInput) (models.Place, error) {
+	if err := validatePlaceScenario(in); err != nil {
+		return models.Place{}, err
+	}
+
 	return u.places.Create(ctx, in)
+}
+
+// validatePlaceScenario keeps the catalog coherent: a category must belong
+// to the place's scenario layer.
+func validatePlaceScenario(in models.CreatePlaceInput) error {
+	if in.Category == nil {
+		return nil
+	}
+	if in.Category.Scenario() != in.Layer {
+		return models.Invalidf(
+			"category `%s` does not belong to layer `%s`",
+			string(*in.Category),
+			string(in.Layer),
+		)
+	}
+
+	return nil
+}
+
+// ListSimilarPlacesUseCase returns the catalog entries most like one place.
+type ListSimilarPlacesUseCase struct {
+	places similarLister
+}
+
+type similarLister interface {
+	ListSimilar(ctx context.Context, id string, limit int) ([]models.Place, error)
+}
+
+func NewListSimilarPlacesUseCase(places similarLister) *ListSimilarPlacesUseCase {
+	return &ListSimilarPlacesUseCase{places: places}
+}
+
+func (u *ListSimilarPlacesUseCase) Do(ctx context.Context, id string, limit int) ([]models.Place, error) {
+	if id == "" {
+		return nil, models.Invalid("`id` is required")
+	}
+	if limit <= 0 || limit > maxSimilarPlaces {
+		limit = defaultSimilarPlaces
+	}
+
+	return u.places.ListSimilar(ctx, id, limit)
+}
+
+const (
+	defaultSimilarPlaces = 6
+	maxSimilarPlaces     = 24
+)
+
+// PlaceStatsUseCase aggregates catalog counters for the directory tabs.
+type PlaceStatsUseCase struct {
+	places placeStatsReader
+}
+
+type placeStatsReader interface {
+	Stats(ctx context.Context, layer *models.LayerCode) (models.PlaceStats, error)
+}
+
+func NewPlaceStatsUseCase(places placeStatsReader) *PlaceStatsUseCase {
+	return &PlaceStatsUseCase{places: places}
+}
+
+func (u *PlaceStatsUseCase) Do(ctx context.Context, layer *models.LayerCode) (models.PlaceStats, error) {
+	return u.places.Stats(ctx, layer)
 }
 
 // defaultPlaceListLimit mirrors the repository default so a missing `limit`

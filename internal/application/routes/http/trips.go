@@ -37,10 +37,17 @@ func (h *ListTripsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := r.URL.Query()
+	// The owner comes from the session, never from the query string: listing
+	// always returns the caller's own trips.
+	auth, ok := AuthFromContext(r.Context())
+	if !ok {
+		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
 
-	filter := models.TripFilter{UserID: query.Get("user_id")}
-	if raw := query.Get("limit"); raw != "" {
+		return
+	}
+
+	filter := models.TripFilter{UserID: auth.User.ID}
+	if raw := r.URL.Query().Get("limit"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
 			h.responseWriter.Error(w, http.StatusBadRequest, models.Invalid("`limit` must be an integer"))
@@ -80,6 +87,8 @@ func NewCreateTripHandler(logger *slog.Logger, uc CreateTripUC) *CreateTripHandl
 }
 
 type createTripRequest struct {
+	// UserID is accepted for backward compatibility and deliberately ignored:
+	// the owner is always the user from the session context.
 	UserID    string `json:"user_id"`
 	PlaceID   string `json:"place_id"`
 	PlannedAt string `json:"planned_at"`
@@ -116,8 +125,15 @@ func (h *CreateTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth, ok := AuthFromContext(r.Context())
+	if !ok {
+		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
+
+		return
+	}
+
 	trip, err := h.useCase.Do(r.Context(), models.CreateTripInput{
-		UserID:    body.UserID,
+		UserID:    auth.User.ID,
 		PlaceID:   body.PlaceID,
 		PlannedAt: plannedAt,
 		Activity:  activity,
@@ -169,9 +185,17 @@ func (h *UpdateTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth, ok := AuthFromContext(r.Context())
+	if !ok {
+		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
+
+		return
+	}
+
 	input := models.UpdateTripInput{
-		ID:    r.PathValue("id"),
-		Notes: body.Notes,
+		ID:     r.PathValue("id"),
+		UserID: auth.User.ID,
+		Notes:  body.Notes,
 	}
 
 	if body.Status != "" {

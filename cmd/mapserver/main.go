@@ -21,6 +21,7 @@ const (
 	defaultMapDir    = "./web/map"
 	defaultArchive   = "./web/static/pmtiles/primorsky-krai-z15.pmtiles"
 	defaultRelief    = "./web/static/pmtiles/primorsky-relief.pmtiles"
+	defaultDem       = "./web/static/pmtiles/primorsky-dem.pmtiles"
 	shutdownTimeout  = 10 * time.Second
 	readHeaderTimout = 10 * time.Second
 	idleTimeout      = time.Minute
@@ -34,6 +35,7 @@ func main() {
 	mapDir := flag.String("map-dir", envOr("MAP_DIR", defaultMapDir), "каталог со страницей карты")
 	archive := flag.String("archive", envOr("PMTILES_PATH", defaultArchive), "путь к PMTiles-архиву")
 	relief := flag.String("relief", envOr("RELIEF_PATH", defaultRelief), "путь к PMTiles-архиву рельефа")
+	dem := flag.String("dem", envOr("DEM_PATH", defaultDem), "путь к PMTiles-архиву DEM (terrarium)")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -69,9 +71,28 @@ func main() {
 		)
 	}
 
-	// Стиль отдаём с поправкой на наличие архива: без рельефа источник и
-	// слой вырезаются, иначе MapLibre будет 404-ить растровый источник.
-	styleHandler := httproutes.NewMapStyleHandler(*mapDir, reliefReady)
+	// DEM в terrarium-RGB: нужен MapLibre для объёма (terrain) и отмывки
+	// (hillshade из raster-dem). Без него природа рисуется плоско, но работает.
+	demReady := false
+	if demInfo, statErr := os.Stat(*dem); statErr == nil {
+		demReady = true
+		demHandler := httproutes.NewPMTilesHandler(logger, *dem)
+		mux.Handle("GET /api/map/dem.pmtiles", demHandler)
+		mux.Handle("HEAD /api/map/dem.pmtiles", demHandler)
+		logger.Info("dem terrain enabled",
+			slog.String("archive", *dem),
+			slog.Int64("size_bytes", demInfo.Size()),
+		)
+	} else {
+		logger.Warn("dem archive not found, nature mode will be flat (no terrain)",
+			slog.String("path", *dem),
+			slog.String("hint", "mise run map-relief (или map-relief-local)"),
+		)
+	}
+
+	// Стиль отдаём с поправкой на наличие архивов: без рельефа/DEM их
+	// источники и слои вырезаются, иначе MapLibre будет 404-ить.
+	styleHandler := httproutes.NewMapStyleHandler(*mapDir, reliefReady, demReady)
 	mux.Handle("GET /map/style.json", styleHandler)
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {

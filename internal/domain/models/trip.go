@@ -51,8 +51,11 @@ type CreateTripInput struct {
 }
 
 // UpdateTripInput carries the optional status change of PATCH /trips/{id}.
+// UserID is the owner from the session context: the update matches on both
+// id and owner, so one user can never touch another user's trip.
 type UpdateTripInput struct {
 	ID     string
+	UserID string
 	Status *TripStatus
 	Notes  *string
 }

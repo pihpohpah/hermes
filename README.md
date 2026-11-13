@@ -74,24 +74,32 @@ mise run elevations-enrich          # заполнить высоты точек
 mise run coverage-probe             # что реально приходит и какие точки делят одну ячейку
 ```
 
-Рельеф на карте — отдельный растровый архив отмывки (hillshade) из
-Copernicus DEM GLO-90, потому что векторные тайлы OSM высот не содержат:
+Рельеф на карте — два растровых архива из Copernicus DEM GLO-90, потому что
+векторные тайлы OSM высот не содержат:
+
+- `primorsky-relief.pmtiles` — дискретные высотные зоны с запечённой отмывкой
+  (z3–13, PNG, ресемплинг nearest: границы зон читаются «лесенкой»);
+- `primorsky-dem.pmtiles` — DEM в terrarium-RGB (z3–12): MapLibre строит из
+  него объём (terrain) и драпирует зоны по высотам.
 
 ```bash
-mise run map-relief                 # весь край, z8-13
+mise run map-relief                 # весь край
 mise run map-relief-local           # только агломерация (быстро)
 mise run map-serve                  # оба режима на :8080/map/ (переключатель «Город/Природа»)
 ```
 
 На странице карта работает в двух режимах: **Город** — обычная векторная
 карта, **Природа** — рельеф с высотными зонами (8–20 цветовых слоёв по
-минимуму/максимуму DEM) плюс вода, границы, вершины и подписи. Режимы
+минимуму/максимуму DEM) и 3D-объёмом (камера наклоняется, terrain
+экстраполирует высоты), плюс вода, границы, вершины и подписи. Режимы
 взаимоисключающие: растровый рельеф не накладывается на векторную карту.
-Без архива рельефа кнопка «Природа» выключена, «Город» работает как раньше.
+Без архива рельефа кнопка «Природа» выключена, «Город» работает как раньше;
+без DEM-архива природа рисуется плоско.
 
-Рельеф отдаётся как `GET /api/map/relief.pmtiles` и подключается в
-`web/map/style.json` слоем `relief-zones` (тег `hermes:mode: nature`).
-Подробности о том, какие данные реально получаются и для каких точек — в
+Архивы отдаются как `GET /api/map/relief.pmtiles` и `GET /api/map/dem.pmtiles`
+и подключаются в `web/map/style.json` источниками `relief` и `relief-dem`
+(слой `relief-zones`, тег `hermes:mode: nature`). Подробности о том, какие
+данные реально получаются и для каких точек — в
 [docs/weather-data-coverage.md](docs/weather-data-coverage.md).
 
 ### Консольные команды
@@ -106,8 +114,45 @@ go run ./cmd/server coverage_probe [-day YYYY-MM-DD] [-place UUID]
 go run ./cmd/server elevations_enrich [-place UUID] [-overwrite]
 go run ./cmd/server conditions_assess [-day YYYY-MM-DD] [-activity walk,sup,hike,run] [-place UUID]
 go run ./cmd/server forecast_refresh [-day YYYY-MM-DD] [-activity ...]
+go run ./cmd/server pins_cleanup [-grace_hours 24]   # удалить просроченные метки «Сейчас»
 WEATHER_MODE=mock go run ./cmd/server weather_load   # явный demo-режим
 ```
+
+## Радар «Сейчас» и каталог
+
+Радар — быстрые временные метки жителей (встречи, спорт, помощь). Метка живёт
+от `starts_at` до `ends_at`, автор идёт по определению (`going_total = count(pin_goings) + 1`).
+Мутации требуют сессии; чтение доступно анонимно и декорируется для своих
+(`joined`, `mine`, `going_total`).
+
+- `GET /pins?bbox=minLon,minLat,maxLon,maxLat&kind=sport` — активные метки во вьюпорте
+- `GET /pins/{id}` · `POST /pins` · `DELETE /pins/{id}` (автор)
+- `PUT /pins/{id}/going` / `DELETE` — «Я приду»
+- `POST /pins/{id}/reports` — жалоба; при `PINS_REPORT_HIDE_THRESHOLD` жалобах метка скрывается
+
+Модерация задаётся окружением (по умолчанию: 5 живых меток на пользователя,
+10 в час, скрытие после 3 жалоб, максимум 12 ч жизни метки):
+
+| Переменная | Значение по умолчанию |
+| :--- | :--- |
+| `PINS_MAX_ACTIVE_PER_USER` | `5` (0 — без лимита) |
+| `PINS_MAX_PER_HOUR` | `10` (0 — без лимита) |
+| `PINS_STOP_WORDS` | пусто, список через запятую |
+| `PINS_NIGHT_BAN_FROM` / `PINS_NIGHT_BAN_TO` | пусто (выкл), локальное время `HH:MM` |
+| `PINS_REPORT_HIDE_THRESHOLD` | `3` (0 — выкл) |
+| `PINS_MAX_DURATION_H` | `12` |
+| `PINS_PURGE_GRACE_H` | `24`, используется `pins_cleanup` |
+
+Каталог мест расширен карточкой из дизайна (категория по сценарию, район, адрес,
+часы, цена, сезон, доступ, теги, фото с атрибуцией, тип берега). Место и событие
+адресуются UUID или slug.
+
+- `GET /places?q=&category=&layer=&type=&lat=&lon=&radius_m=` — поиск по названию, описанию, адресу, району и тегам
+- `GET /places/{id}` (UUID или slug) · `GET /places/{id}/similar?limit=6`
+- `GET /places/stats?scenario=sea` — агрегаты вкладок: `category_counts`, `type_counts`
+- `GET /events?place_id=&category=&q=&all=1` — предстоящие по умолчанию, `all=1` включает прошедшие
+- `GET /events/{id}` (UUID или slug)
+- `GET /collections?scenario=` · `GET /collections/{id}` — редакционные подборки с элементами
 
 API: `GET /forecast/place/{id}?activity=sup&date=YYYY-MM-DD` возвращает
 почасовые оценки, `sources` (источник, доступность, demo), `contributions`,

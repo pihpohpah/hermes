@@ -195,12 +195,30 @@ func ConditionAssessmentsToHTTP(in []models.ConditionAssessment) []ConditionAsse
 
 type Place struct {
 	ID          string                  `json:"id"`
+	Slug        string                  `json:"slug,omitempty"`
 	Name        string                  `json:"name"`
+	Subtitle    string                  `json:"subtitle,omitempty"`
+	Short       string                  `json:"short,omitempty"`
 	Description string                  `json:"description"`
 	Type        models.PlaceType        `json:"type"`
 	Layer       models.LayerCode        `json:"layer"`
+	Category    string                  `json:"category,omitempty"`
+	District    string                  `json:"district,omitempty"`
+	Address     string                  `json:"address,omitempty"`
 	Lat         float64                 `json:"lat"`
 	Lon         float64                 `json:"lon"`
+	Hours       string                  `json:"hours,omitempty"`
+	PriceFree   *bool                   `json:"price_free,omitempty"`
+	PriceLabel  string                  `json:"price_label,omitempty"`
+	Duration    string                  `json:"duration,omitempty"`
+	Season      string                  `json:"season,omitempty"`
+	Access      []string                `json:"access"`
+	HowToGet    string                  `json:"how_to_get,omitempty"`
+	Facts       []string                `json:"facts"`
+	Tags        []string                `json:"tags"`
+	Photos      []models.Photo          `json:"photos"`
+	Beach       string                  `json:"beach,omitempty"`
+	SwimSeason  string                  `json:"swim_season,omitempty"`
 	DistanceM   *float64                `json:"distance_m,omitempty"`
 	Elevation   *int                    `json:"elevation,omitempty"`
 	Difficulty  *models.Difficulty      `json:"difficulty,omitempty"`
@@ -216,14 +234,34 @@ func PlaceToHTTP(in models.Place) Place {
 		latest = &mapped
 	}
 
-	return Place{
+	access := make([]string, 0, len(in.Access))
+	for _, mode := range in.Access {
+		access = append(access, string(mode))
+	}
+
+	out := Place{
 		ID:          in.ID,
 		Name:        in.Name,
+		Subtitle:    in.Subtitle,
+		Short:       in.Short,
 		Description: in.Description,
 		Type:        in.Type,
 		Layer:       in.Layer,
+		District:    in.District,
+		Address:     in.Address,
 		Lat:         in.Location.Lat,
 		Lon:         in.Location.Lon,
+		Hours:       in.Hours,
+		PriceFree:   in.PriceFree,
+		PriceLabel:  in.PriceLabel,
+		Duration:    in.Duration,
+		Season:      in.Season,
+		Access:      access,
+		HowToGet:    in.HowToGet,
+		Facts:       in.Facts,
+		Tags:        in.Tags,
+		Photos:      in.Photos,
+		SwimSeason:  in.SwimSeason,
 		DistanceM:   in.DistanceM,
 		Elevation:   in.Elevation,
 		Difficulty:  in.Difficulty,
@@ -231,6 +269,17 @@ func PlaceToHTTP(in models.Place) Place {
 		LatestScore: latest,
 		CreatedAt:   in.CreatedAt.UTC().Format(time.RFC3339),
 	}
+	if in.Slug != nil {
+		out.Slug = *in.Slug
+	}
+	if in.Category != nil {
+		out.Category = string(*in.Category)
+	}
+	if in.Beach != nil {
+		out.Beach = string(*in.Beach)
+	}
+
+	return out
 }
 
 func PlacesToHTTP(in []models.Place) []Place {

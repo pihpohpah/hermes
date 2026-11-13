@@ -15,7 +15,18 @@
       "type": "raster",
       "url": "pmtiles:///api/map/relief.pmtiles",
       "tileSize": 256,
+      "minzoom": 3,
+      "maxzoom": 13,
       "attribution": "© OpenStreetMap contributors · рельеф Copernicus DEM"
+    },
+    "relief-dem": {
+      "type": "raster-dem",
+      "url": "pmtiles:///api/map/dem.pmtiles",
+      "tileSize": 256,
+      "minzoom": 3,
+      "maxzoom": 12,
+      "encoding": "terrarium",
+      "attribution": "рельеф Copernicus DEM"
     }
   },
   "layers": [
@@ -43,7 +54,6 @@
       "type": "raster",
       "source": "relief",
       "hermes:mode": "nature",
-      "minzoom": 8,
       "layout": {
         "visibility": "none"
       },

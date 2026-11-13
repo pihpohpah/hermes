@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pihpohpah/hermes/internal/application/presenter"
 	"github.com/pihpohpah/hermes/internal/domain/models"
@@ -75,6 +76,20 @@ func parsePlaceFilter(r *http.Request) (models.PlaceFilter, error) {
 		}
 
 		filter.Layer = &parsed
+	}
+
+	if raw := query.Get("category"); raw != "" {
+		parsed, err := models.NewCategoryCode(raw)
+		if err != nil {
+			return filter, err
+		}
+
+		filter.Category = &parsed
+	}
+
+	if raw := query.Get("q"); raw != "" {
+		trimmed := strings.TrimSpace(raw)
+		filter.Q = &trimmed
 	}
 
 	if raw := query.Get("limit"); raw != "" {
@@ -186,16 +201,34 @@ func NewCreatePlaceHandler(logger *slog.Logger, uc CreatePlaceUC) *CreatePlaceHa
 }
 
 type createPlaceRequest struct {
-	Name            string  `json:"name"`
-	Description     string  `json:"description"`
-	Type            string  `json:"type"`
-	Layer           string  `json:"layer"`
-	Lat             float64 `json:"lat"`
-	Lon             float64 `json:"lon"`
-	Elevation       *int    `json:"elevation"`
-	ElevationSource string  `json:"elevation_source"`
-	Difficulty      *int    `json:"difficulty"`
-	OSMID           *int64  `json:"osm_id"`
+	Name            string         `json:"name"`
+	Slug            *string        `json:"slug"`
+	Subtitle        string         `json:"subtitle"`
+	Short           string         `json:"short"`
+	Description     string         `json:"description"`
+	Type            string         `json:"type"`
+	Layer           string         `json:"layer"`
+	Category        *string        `json:"category"`
+	District        string         `json:"district"`
+	Address         string         `json:"address"`
+	Lat             float64        `json:"lat"`
+	Lon             float64        `json:"lon"`
+	Hours           string         `json:"hours"`
+	PriceFree       *bool          `json:"price_free"`
+	PriceLabel      string         `json:"price_label"`
+	Duration        string         `json:"duration"`
+	Season          string         `json:"season"`
+	Access          []string       `json:"access"`
+	HowToGet        string         `json:"how_to_get"`
+	Facts           []string       `json:"facts"`
+	Tags            []string       `json:"tags"`
+	Photos          []models.Photo `json:"photos"`
+	Beach           *string        `json:"beach"`
+	SwimSeason      string         `json:"swim_season"`
+	Elevation       *int           `json:"elevation"`
+	ElevationSource string         `json:"elevation_source"`
+	Difficulty      *int           `json:"difficulty"`
+	OSMID           *int64         `json:"osm_id"`
 }
 
 func (h *CreatePlaceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -264,15 +297,155 @@ func (b createPlaceRequest) toDomain() (models.CreatePlaceInput, error) {
 		difficulty = &parsed
 	}
 
+	var category *models.CategoryCode
+	if b.Category != nil && strings.TrimSpace(*b.Category) != "" {
+		parsed, catErr := models.NewCategoryCode(*b.Category)
+		if catErr != nil {
+			return models.CreatePlaceInput{}, catErr
+		}
+		category = &parsed
+	}
+
+	access := make([]models.AccessMode, 0, len(b.Access))
+	for _, raw := range b.Access {
+		mode, modeErr := models.NewAccessMode(raw)
+		if modeErr != nil {
+			return models.CreatePlaceInput{}, modeErr
+		}
+		access = append(access, mode)
+	}
+
+	var beach *models.BeachType
+	if b.Beach != nil && strings.TrimSpace(*b.Beach) != "" {
+		parsed, beachErr := models.NewBeachType(*b.Beach)
+		if beachErr != nil {
+			return models.CreatePlaceInput{}, beachErr
+		}
+		beach = &parsed
+	}
+
 	return models.CreatePlaceInput{
 		Name:            b.Name,
+		Slug:            b.Slug,
+		Subtitle:        b.Subtitle,
+		Short:           b.Short,
 		Description:     b.Description,
 		Type:            placeType,
 		Layer:           layer,
+		Category:        category,
+		District:        b.District,
+		Address:         b.Address,
 		Location:        location,
+		Hours:           b.Hours,
+		PriceFree:       b.PriceFree,
+		PriceLabel:      b.PriceLabel,
+		Duration:        b.Duration,
+		Season:          b.Season,
+		Access:          access,
+		HowToGet:        b.HowToGet,
+		Facts:           b.Facts,
+		Tags:            b.Tags,
+		Photos:          b.Photos,
+		Beach:           beach,
+		SwimSeason:      b.SwimSeason,
 		Elevation:       b.Elevation,
 		ElevationSource: elevationSource,
 		Difficulty:      difficulty,
 		OSMID:           b.OSMID,
 	}, nil
+}
+
+type ListSimilarPlacesUC interface {
+	Do(ctx context.Context, id string, limit int) ([]models.Place, error)
+}
+
+type ListSimilarPlacesHandler struct {
+	logger         *slog.Logger
+	responseWriter *APIResponseWriter[[]presenter.Place]
+	useCase        ListSimilarPlacesUC
+}
+
+func NewListSimilarPlacesHandler(logger *slog.Logger, uc ListSimilarPlacesUC) *ListSimilarPlacesHandler {
+	return &ListSimilarPlacesHandler{
+		logger:         logger,
+		responseWriter: NewAPIResponseWriter[[]presenter.Place](logger),
+		useCase:        uc,
+	}
+}
+
+// GET /places/{id}/similar?limit=6
+func (h *ListSimilarPlacesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.responseWriter.Error(w, http.StatusMethodNotAllowed, errors.New("method GET expected"))
+
+		return
+	}
+
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			h.responseWriter.Error(w, http.StatusBadRequest, models.Invalid("`limit` must be a positive integer"))
+
+			return
+		}
+		limit = parsed
+	}
+
+	places, err := h.useCase.Do(r.Context(), r.PathValue("id"), limit)
+	if err != nil {
+		h.responseWriter.Error(w, statusCode(err), err)
+
+		return
+	}
+
+	h.responseWriter.Success(w, presenter.PlacesToHTTP(places))
+}
+
+type PlaceStatsUC interface {
+	Do(ctx context.Context, layer *models.LayerCode) (models.PlaceStats, error)
+}
+
+type PlaceStatsHandler struct {
+	logger         *slog.Logger
+	responseWriter *APIResponseWriter[presenter.PlaceStats]
+	useCase        PlaceStatsUC
+}
+
+func NewPlaceStatsHandler(logger *slog.Logger, uc PlaceStatsUC) *PlaceStatsHandler {
+	return &PlaceStatsHandler{
+		logger:         logger,
+		responseWriter: NewAPIResponseWriter[presenter.PlaceStats](logger),
+		useCase:        uc,
+	}
+}
+
+// GET /places/stats?scenario=sea — catalog aggregates for the directory
+// tabs: entry counts by category, plus the place/event split.
+func (h *PlaceStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.responseWriter.Error(w, http.StatusMethodNotAllowed, errors.New("method GET expected"))
+
+		return
+	}
+
+	var scenario *models.LayerCode
+	if raw := r.URL.Query().Get("scenario"); raw != "" {
+		layer, err := models.NewLayerCode(raw)
+		if err != nil {
+			h.responseWriter.Error(w, http.StatusBadRequest, err)
+
+			return
+		}
+		scenario = &layer
+	}
+
+	stats, err := h.useCase.Do(r.Context(), scenario)
+	if err != nil {
+		h.responseWriter.Error(w, statusCode(err), err)
+
+		return
+	}
+
+	h.responseWriter.Success(w, presenter.PlaceStatsToHTTP(stats))
 }

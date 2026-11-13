@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/pihpohpah/hermes/internal/application/commands"
 	"github.com/pihpohpah/hermes/internal/application/usecase"
 	"github.com/pihpohpah/hermes/internal/domain/models"
@@ -27,6 +29,8 @@ const (
 	weatherLoadCommand      = "weather_load"
 	conditionsAssessCommand = "conditions_assess"
 	forecastRefreshCommand  = "forecast_refresh"
+	userCreateCommand       = "user_create"
+	pinsCleanupCommand      = "pins_cleanup"
 )
 
 type Command interface {
@@ -35,9 +39,14 @@ type Command interface {
 
 type commandDeps struct {
 	logger          *slog.Logger
+	pool            *pgxpool.Pool
 	places          *repository.PlaceRepository
 	weather         *repository.WeatherRepository
 	forecast        *repository.ForecastRepository
+	users           *repository.UserRepository
+	sessions        *repository.SessionRepository
+	idempotency     *repository.IdempotencyRepository
+	txManager       *repository.TxManager
 	provider        openmeteo.HourlyProvider
 	openMeteoConfig openmeteo.Config
 }
@@ -95,6 +104,19 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 	case forecastRefreshCommand:
 		refresh := usecase.NewRefreshForecastUseCase(deps.places, deps.forecast, deps.weather, deps.provider)
 		cmd = commands.NewForecastRefreshCommand(deps.logger, refresh, rng, opts.activities)
+	case userCreateCommand:
+		createUser := usecase.NewCreateUserUseCase(
+			deps.users,
+			deps.sessions,
+			deps.idempotency,
+			deps.txManager,
+			30*24*time.Hour,
+		)
+		cmd = commands.NewUserCreateCommand(deps.logger, createUser, opts.userName, opts.userTimezone)
+	case pinsCleanupCommand:
+		pinRepo := repository.NewPinRepository(deps.pool)
+		purger := usecase.NewPurgeExpiredPinsUseCase(pinRepo)
+		cmd = commands.NewPinsCleanupCommand(deps.logger, purger, opts.pinPurgeGrace)
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownCommand, commandName)
 	}
@@ -107,16 +129,20 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 }
 
 type commandOptions struct {
-	day        string
-	placeID    string
-	activities []models.Activity
-	overwrite  bool
+	day           string
+	placeID       string
+	activities    []models.Activity
+	overwrite     bool
+	userName      string
+	userTimezone  string
+	pinPurgeGrace time.Duration
 }
 
 func parseCommandOptions(commandName string, args []string) (commandOptions, error) {
 	var (
-		opts   commandOptions
-		actRaw string
+		opts       commandOptions
+		actRaw     string
+		graceHours float64
 	)
 
 	fs := flag.NewFlagSet(commandName, flag.ContinueOnError)
@@ -124,6 +150,9 @@ func parseCommandOptions(commandName string, args []string) (commandOptions, err
 	fs.StringVar(&opts.placeID, "place", "", "limit the run to one place UUID")
 	fs.StringVar(&actRaw, "activity", "", "comma separated activities: walk,sup,hike,run")
 	fs.BoolVar(&opts.overwrite, "overwrite", false, "recompute values that already exist (elevations)")
+	fs.StringVar(&opts.userName, "name", "", "display name of the new user (user_create)")
+	fs.StringVar(&opts.userTimezone, "timezone", "", "IANA timezone of the new user, defaults to Asia/Vladivostok (user_create)")
+	fs.Float64Var(&graceHours, "grace_hours", 24, "hours after ends_at before a pin is purged (pins_cleanup)")
 
 	if err := fs.Parse(args); err != nil {
 		return commandOptions{}, fmt.Errorf("parse flags for %s: %w", commandName, err)
@@ -134,6 +163,10 @@ func parseCommandOptions(commandName string, args []string) (commandOptions, err
 		return commandOptions{}, err
 	}
 	opts.activities = activities
+
+	if graceHours > 0 {
+		opts.pinPurgeGrace = time.Duration(graceHours * float64(time.Hour))
+	}
 
 	return opts, nil
 }

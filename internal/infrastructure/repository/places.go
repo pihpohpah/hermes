@@ -31,6 +31,73 @@ const (
 	geoArgCount     = 3
 )
 
+// placeColumns is the shared SELECT list of the place row with its latest
+// assessment lateral join. %s is the distance expression.
+const placeColumns = `
+	p.id::text,
+	p.slug,
+	p.name,
+	p.subtitle,
+	p.short,
+	p.description,
+	p.type,
+	p.layer_code,
+	p.category,
+	p.district,
+	p.address,
+	ST_Y(p.location::geometry) AS lat,
+	ST_X(p.location::geometry) AS lon,
+	%s,
+	p.hours,
+	p.price_free,
+	p.price_label,
+	p.duration,
+	p.season,
+	p.access,
+	p.how_to_get,
+	p.facts,
+	p.tags,
+	p.photos,
+	p.beach,
+	p.swim_season,
+	p.elevation,
+	p.elevation_source,
+	p.difficulty,
+	p.osm_id,
+	p.created_at,
+	c.forecast_time,
+	c.activity,
+	c.score,
+	c.verdict,
+	c.confidence,
+	c.factors,
+	c.contributions,
+	c.warnings,
+	c.summary
+`
+
+// latestAssessmentJoin is bound by the two leading lateral-join arguments:
+// preferred activity and preferred algorithm version.
+const latestAssessmentJoin = `
+	LEFT JOIN LATERAL (
+		SELECT
+			forecast_time, activity, score, verdict, confidence,
+			factors, contributions, warnings, summary
+		FROM conditions_cache cc
+		WHERE cc.place_id = p.id
+		ORDER BY
+			CASE WHEN cc.activity = $1 THEN 0 ELSE 1 END,
+			CASE WHEN cc.algorithm_version = $2 THEN 0 ELSE 1 END,
+			cc.forecast_time DESC
+		LIMIT 1
+	) c ON true
+`
+
+// listLeadingArgs are bound by the latest-assessment lateral join.
+func listLeadingArgs() []any {
+	return []any{string(models.ActivityWalk), scoring.AlgorithmVersion}
+}
+
 func (r *PlaceRepository) List(ctx context.Context, filter models.PlaceFilter) ([]models.Place, error) {
 	query, args := buildPlaceListQuery(filter)
 
@@ -55,46 +122,15 @@ func (r *PlaceRepository) List(ctx context.Context, filter models.PlaceFilter) (
 	return result, nil
 }
 
+// GetByID resolves a place by UUID or by its unique slug, so both the API
+// identifiers and the human-readable URL part work.
 func (r *PlaceRepository) GetByID(ctx context.Context, id string) (models.Place, error) {
-	const query = `
-		SELECT
-			p.id::text,
-			p.name,
-			p.description,
-			p.type,
-			p.layer_code,
-			ST_Y(p.location::geometry) AS lat,
-			ST_X(p.location::geometry) AS lon,
-			NULL::double precision AS distance_m,
-			p.elevation,
-			p.elevation_source,
-			p.difficulty,
-			p.osm_id,
-			p.created_at,
-			c.forecast_time,
-			c.activity,
-			c.score,
-			c.verdict,
-			c.confidence,
-			c.factors,
-			c.contributions,
-			c.warnings,
-			c.summary
+	query := fmt.Sprintf(`
+		SELECT %s
 		FROM places p
-		LEFT JOIN LATERAL (
-			SELECT
-				forecast_time, activity, score, verdict, confidence,
-				factors, contributions, warnings, summary
-			FROM conditions_cache cc
-			WHERE cc.place_id = p.id
-			ORDER BY
-				CASE WHEN cc.activity = $1 THEN 0 ELSE 1 END,
-				CASE WHEN cc.algorithm_version = $2 THEN 0 ELSE 1 END,
-				cc.forecast_time DESC
-			LIMIT 1
-		) c ON true
-		WHERE p.id = $3::uuid
-	`
+		%s
+		WHERE p.id = $3::uuid OR p.slug = $3
+	`, fmt.Sprintf(placeColumns, "NULL::double precision AS distance_m"), latestAssessmentJoin)
 
 	place, err := scanPlace(
 		r.pool.QueryRow(ctx, query, string(models.ActivityWalk), scoring.AlgorithmVersion, id),
@@ -110,84 +146,257 @@ func (r *PlaceRepository) GetByID(ctx context.Context, id string) (models.Place,
 	return place, nil
 }
 
+// ListSimilar returns places of the same scenario, preferring the same
+// category, then the same type, then closest by straight-line distance.
+// Placeholders $1/$2 belong to the lateral join, the place key is $3.
+func (r *PlaceRepository) ListSimilar(ctx context.Context, id string, limit int) ([]models.Place, error) {
+	origin, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	const rawQuery = `
+		WITH origin AS (
+			SELECT id, location, layer_code, category, type
+			FROM places
+			WHERE id = $3::uuid OR slug = $3
+		)
+		SELECT ` + placeColumns + `
+		FROM places p
+		CROSS JOIN origin o
+	` + latestAssessmentJoin + `
+		WHERE p.id <> o.id
+			AND p.layer_code = o.layer_code
+			AND (
+				(o.category IS NOT NULL AND p.category = o.category)
+				OR p.type = o.type
+			)
+		ORDER BY
+			CASE
+				WHEN o.category IS NOT NULL AND p.category = o.category THEN 0
+				WHEN p.type = o.type THEN 1
+				ELSE 2
+			END,
+			ST_Distance(p.location, o.location) ASC
+		LIMIT $4
+	`
+
+	query := fmt.Sprintf(rawQuery, "NULL::double precision AS distance_m")
+
+	rows, err := r.pool.Query(
+		ctx,
+		query,
+		string(models.ActivityWalk),
+		scoring.AlgorithmVersion,
+		origin.ID,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query similar places: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]models.Place, 0)
+	for rows.Next() {
+		place, scanErr := scanPlace(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		result = append(result, place)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate similar places rows: %w", err)
+	}
+
+	return result, nil
+}
+
+// Stats counts catalog entries for one scenario layer (nil = all layers).
+func (r *PlaceRepository) Stats(ctx context.Context, layer *models.LayerCode) (models.PlaceStats, error) {
+	stats := models.PlaceStats{
+		CategoryCounts:      make(map[string]int),
+		EventCategoryCounts: make(map[string]int),
+	}
+
+	placeQuery := `SELECT category, count(*) FROM places`
+	eventQuery := `
+		SELECT e.category, count(*)
+		FROM events e
+		LEFT JOIN places p ON p.id = e.place_id
+		WHERE e.ends_at > now()
+	`
+	args := make([]any, 0, 1)
+
+	if layer != nil {
+		args = append(args, string(*layer))
+		placeQuery += fmt.Sprintf(" WHERE layer_code = $%d", len(args))
+		eventQuery += fmt.Sprintf(" AND p.layer_code = $%d", len(args))
+	}
+
+	placeQuery += " GROUP BY category"
+	eventQuery += " GROUP BY e.category"
+
+	placeRows, err := r.pool.Query(ctx, placeQuery, args...)
+	if err != nil {
+		return models.PlaceStats{}, fmt.Errorf("query place stats: %w", err)
+	}
+	for placeRows.Next() {
+		var category *string
+		var count int
+		if err := placeRows.Scan(&category, &count); err != nil {
+			placeRows.Close()
+
+			return models.PlaceStats{}, fmt.Errorf("scan place stats: %w", err)
+		}
+		if category != nil {
+			stats.CategoryCounts[*category] = count
+			stats.Places += count
+		}
+	}
+	placeRows.Close()
+	if err := placeRows.Err(); err != nil {
+		return models.PlaceStats{}, fmt.Errorf("iterate place stats: %w", err)
+	}
+
+	eventRows, err := r.pool.Query(ctx, eventQuery, args...)
+	if err != nil {
+		return models.PlaceStats{}, fmt.Errorf("query event stats: %w", err)
+	}
+	for eventRows.Next() {
+		var category string
+		var count int
+		if err := eventRows.Scan(&category, &count); err != nil {
+			eventRows.Close()
+
+			return models.PlaceStats{}, fmt.Errorf("scan event stats: %w", err)
+		}
+		stats.EventCategoryCounts[category] = count
+		stats.Events += count
+	}
+	eventRows.Close()
+	if err := eventRows.Err(); err != nil {
+		return models.PlaceStats{}, fmt.Errorf("iterate event stats: %w", err)
+	}
+
+	return stats, nil
+}
+
+// GetManyByIDs loads a set of places for collection hydration. Unknown ids
+// are silently skipped.
+func (r *PlaceRepository) GetManyByIDs(ctx context.Context, ids []string) ([]models.Place, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM places p
+		%s
+		WHERE p.id::text = ANY($1::text[])
+	`, fmt.Sprintf(placeColumns, "NULL::double precision AS distance_m"), latestAssessmentJoin)
+
+	rows, err := r.pool.Query(ctx, query, ids)
+	if err != nil {
+		return nil, fmt.Errorf("query places by ids: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]models.Place, 0, len(ids))
+	for rows.Next() {
+		place, scanErr := scanPlace(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		result = append(result, place)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate places by ids rows: %w", err)
+	}
+
+	return result, nil
+}
+
 func (r *PlaceRepository) Create(ctx context.Context, in models.CreatePlaceInput) (models.Place, error) {
 	const query = `
 		INSERT INTO places (
-			name,
-			description,
-			type,
-			layer_code,
-			location,
-			elevation,
-			elevation_source,
-			difficulty,
-			osm_id
+			slug, name, subtitle, short, description,
+			type, layer_code, category, district, address, location,
+			hours, price_free, price_label, duration, season,
+			access, how_to_get, facts, tags, photos, beach, swim_season,
+			elevation, elevation_source, difficulty, osm_id
 		)
 		VALUES (
-			$1,
-			$2,
-			$3,
-			$4,
-			ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography,
-			$7,
-			$8,
-			$9,
-			$10
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10, ST_SetSRID(ST_MakePoint($11, $12), 4326)::geography,
+			$13, $14, $15, $16, $17,
+			$18, $19, $20, $21, $22, $23, $24,
+			$25, $26, $27, $28
 		)
 		ON CONFLICT (osm_id) DO UPDATE SET
 			name = EXCLUDED.name,
+			subtitle = EXCLUDED.subtitle,
+			short = EXCLUDED.short,
 			description = EXCLUDED.description,
 			type = EXCLUDED.type,
 			layer_code = EXCLUDED.layer_code,
+			category = EXCLUDED.category,
+			district = EXCLUDED.district,
+			address = EXCLUDED.address,
 			location = EXCLUDED.location,
+			hours = EXCLUDED.hours,
+			price_free = EXCLUDED.price_free,
+			price_label = EXCLUDED.price_label,
+			duration = EXCLUDED.duration,
+			season = EXCLUDED.season,
+			access = EXCLUDED.access,
+			how_to_get = EXCLUDED.how_to_get,
+			facts = EXCLUDED.facts,
+			tags = EXCLUDED.tags,
+			photos = EXCLUDED.photos,
+			beach = EXCLUDED.beach,
+			swim_season = EXCLUDED.swim_season,
 			elevation = COALESCE(places.elevation, EXCLUDED.elevation),
 			elevation_source = COALESCE(places.elevation_source, EXCLUDED.elevation_source),
 			difficulty = EXCLUDED.difficulty
-		RETURNING
-			id::text,
-			name,
-			description,
-			type,
-			layer_code,
-			ST_Y(location::geometry) AS lat,
-			ST_X(location::geometry) AS lon,
-			NULL::double precision AS distance_m,
-			elevation,
-			elevation_source,
-			difficulty,
-			osm_id,
-			created_at,
-			NULL::timestamptz AS forecast_time,
-			NULL::text AS activity,
-			NULL::int AS score,
-			NULL::text AS verdict,
-			NULL::text AS confidence,
-			NULL::jsonb AS factors,
-			NULL::jsonb AS contributions,
-			NULL::jsonb AS warnings,
-			NULL::text AS summary
-	`
+		RETURNING ` + placeColumns
 
-	var diffPtr *int
-	if in.Difficulty != nil {
-		d := int(*in.Difficulty)
-		diffPtr = &d
+	accessModes := make([]string, 0, len(in.Access))
+	for _, mode := range in.Access {
+		accessModes = append(accessModes, string(mode))
 	}
 
-	row := r.pool.QueryRow(
-		ctx,
-		query,
+	args := []any{
+		in.SlugOrDefault(),
 		in.Name,
+		in.Subtitle,
+		in.Short,
 		in.Description,
 		string(in.Type),
 		string(in.Layer),
+		categoryValue(in.Category),
+		in.District,
+		in.Address,
 		in.Location.Lon,
 		in.Location.Lat,
+		in.Hours,
+		in.PriceFree,
+		in.PriceLabel,
+		in.Duration,
+		in.Season,
+		accessModes,
+		in.HowToGet,
+		in.Facts,
+		in.Tags,
+		photosValue(in.Photos),
+		beachValue(in.Beach),
+		in.SwimSeason,
 		in.Elevation,
 		elevationSourceValue(in),
-		diffPtr,
+		difficultyValue(in.Difficulty),
 		in.OSMID,
-	)
+	}
+
+	row := r.pool.QueryRow(ctx, fmt.Sprintf(query, "NULL::double precision AS distance_m"), args...)
 
 	place, err := scanPlace(row)
 	if err != nil {
@@ -204,13 +413,31 @@ type rowScanner interface {
 func scanPlace(row rowScanner) (models.Place, error) {
 	var (
 		id               string
+		slug             *string
 		name             string
+		subtitle         string
+		short            string
 		description      string
 		typeRaw          string
 		layerRaw         string
+		categoryRaw      *string
+		district         string
+		address          string
 		lat              float64
 		lon              float64
 		distanceM        *float64
+		hours            string
+		priceFree        *bool
+		priceLabel       string
+		duration         string
+		season           string
+		accessRaw        []string
+		howToGet         string
+		facts            []string
+		tags             []string
+		photosRaw        []byte
+		beachRaw         *string
+		swimSeason       string
 		elevation        *int
 		elevationSource  *string
 		difficulty       *int
@@ -229,13 +456,31 @@ func scanPlace(row rowScanner) (models.Place, error) {
 
 	if err := row.Scan(
 		&id,
+		&slug,
 		&name,
+		&subtitle,
+		&short,
 		&description,
 		&typeRaw,
 		&layerRaw,
+		&categoryRaw,
+		&district,
+		&address,
 		&lat,
 		&lon,
 		&distanceM,
+		&hours,
+		&priceFree,
+		&priceLabel,
+		&duration,
+		&season,
+		&accessRaw,
+		&howToGet,
+		&facts,
+		&tags,
+		&photosRaw,
+		&beachRaw,
+		&swimSeason,
 		&elevation,
 		&elevationSource,
 		&difficulty,
@@ -267,6 +512,40 @@ func scanPlace(row rowScanner) (models.Place, error) {
 		return models.Place{}, fmt.Errorf("parse place location: %w", err)
 	}
 
+	var category *models.CategoryCode
+	if categoryRaw != nil {
+		code, cErr := models.NewCategoryCode(*categoryRaw)
+		if cErr != nil {
+			return models.Place{}, fmt.Errorf("parse category from db: %w", cErr)
+		}
+		category = &code
+	}
+
+	access := make([]models.AccessMode, 0, len(accessRaw))
+	for _, raw := range accessRaw {
+		mode, mErr := models.NewAccessMode(raw)
+		if mErr != nil {
+			return models.Place{}, fmt.Errorf("parse access mode from db: %w", mErr)
+		}
+		access = append(access, mode)
+	}
+
+	var beach *models.BeachType
+	if beachRaw != nil {
+		parsed, bErr := models.NewBeachType(*beachRaw)
+		if bErr != nil {
+			return models.Place{}, fmt.Errorf("parse beach type from db: %w", bErr)
+		}
+		beach = &parsed
+	}
+
+	var photos []models.Photo
+	if len(photosRaw) > 0 {
+		if err := json.Unmarshal(photosRaw, &photos); err != nil {
+			return models.Place{}, fmt.Errorf("decode place photos: %w", err)
+		}
+	}
+
 	var diffPtr *models.Difficulty
 	if difficulty != nil {
 		d, dErr := models.NewDifficulty(*difficulty)
@@ -293,11 +572,29 @@ func scanPlace(row rowScanner) (models.Place, error) {
 
 	return models.Place{
 		ID:              id,
+		Slug:            slug,
 		Name:            name,
+		Subtitle:        subtitle,
+		Short:           short,
 		Description:     description,
 		Type:            pt,
 		Layer:           layer,
+		Category:        category,
+		District:        district,
+		Address:         address,
 		Location:        loc,
+		Hours:           hours,
+		PriceFree:       priceFree,
+		PriceLabel:      priceLabel,
+		Duration:        duration,
+		Season:          season,
+		Access:          access,
+		HowToGet:        howToGet,
+		Facts:           facts,
+		Tags:            tags,
+		Photos:          photos,
+		Beach:           beach,
+		SwimSeason:      swimSeason,
 		DistanceM:       distanceM,
 		Elevation:       elevation,
 		ElevationSource: elevationSourceOf(elevationSource),
@@ -386,11 +683,6 @@ func decodeJSONInto[T any](raw []byte, dst *T) error {
 	return json.Unmarshal(raw, dst)
 }
 
-// listLeadingArgs are bound by the latest-assessment lateral join.
-func listLeadingArgs() []any {
-	return []any{string(models.ActivityWalk), scoring.AlgorithmVersion}
-}
-
 // buildPlaceListQuery builds the filtered place list SQL together with its
 // arguments. Placeholders are numbered dynamically, so the number of leading
 // lateral-join arguments is added to every offset exactly once.
@@ -436,6 +728,25 @@ func buildPlaceListQuery(filter models.PlaceFilter) (string, []any) {
 		argPos++
 	}
 
+	if filter.Category != nil {
+		where = append(where, fmt.Sprintf("p.category = $%d", argPos))
+		args = append(args, string(*filter.Category))
+		argPos++
+	}
+
+	if filter.Q != nil && strings.TrimSpace(*filter.Q) != "" {
+		where = append(where, fmt.Sprintf(`(
+			p.name ILIKE $%[1]d
+			OR p.subtitle ILIKE $%[1]d
+			OR p.description ILIKE $%[1]d
+			OR p.address ILIKE $%[1]d
+			OR p.district ILIKE $%[1]d
+			OR EXISTS (SELECT 1 FROM unnest(p.tags) tag WHERE tag ILIKE $%[1]d)
+		)`, argPos))
+		args = append(args, "%"+strings.TrimSpace(*filter.Q)+"%")
+		argPos++
+	}
+
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = defaultPlaceListLimit
@@ -444,43 +755,10 @@ func buildPlaceListQuery(filter models.PlaceFilter) (string, []any) {
 	limitPos := argPos
 
 	query := fmt.Sprintf(`
-		SELECT
-			p.id::text,
-			p.name,
-			p.description,
-			p.type,
-			p.layer_code,
-			ST_Y(p.location::geometry) AS lat,
-			ST_X(p.location::geometry) AS lon,
-			%s,
-			p.elevation,
-			p.elevation_source,
-			p.difficulty,
-			p.osm_id,
-			p.created_at,
-			c.forecast_time,
-			c.activity,
-			c.score,
-			c.verdict,
-			c.confidence,
-			c.factors,
-			c.contributions,
-			c.warnings,
-			c.summary
+		SELECT %s
 		FROM places p
-		LEFT JOIN LATERAL (
-			SELECT
-				forecast_time, activity, score, verdict, confidence,
-				factors, contributions, warnings, summary
-			FROM conditions_cache cc
-			WHERE cc.place_id = p.id
-			ORDER BY
-				CASE WHEN cc.activity = $1 THEN 0 ELSE 1 END,
-				CASE WHEN cc.algorithm_version = $2 THEN 0 ELSE 1 END,
-				cc.forecast_time DESC
-			LIMIT 1
-		) c ON true
-	`, distSelect)
+		%s
+	`, fmt.Sprintf(placeColumns, distSelect), latestAssessmentJoin)
 
 	if len(where) > 0 {
 		query = fmt.Sprintf("%s WHERE %s", query, strings.Join(where, " AND "))
@@ -513,6 +791,45 @@ func (r *PlaceRepository) SetElevation(
 	}
 
 	return nil
+}
+
+func categoryValue(category *models.CategoryCode) *string {
+	if category == nil {
+		return nil
+	}
+	value := string(*category)
+
+	return &value
+}
+
+func beachValue(beach *models.BeachType) *string {
+	if beach == nil {
+		return nil
+	}
+	value := string(*beach)
+
+	return &value
+}
+
+func difficultyValue(difficulty *models.Difficulty) *int {
+	if difficulty == nil {
+		return nil
+	}
+	value := int(*difficulty)
+
+	return &value
+}
+
+func photosValue(photos []models.Photo) []byte {
+	if len(photos) == 0 {
+		return []byte("[]")
+	}
+	raw, err := json.Marshal(photos)
+	if err != nil {
+		return []byte("[]")
+	}
+
+	return raw
 }
 
 func elevationSourceValue(in models.CreatePlaceInput) *string {

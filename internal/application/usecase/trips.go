@@ -88,7 +88,13 @@ func (u *UpdateTripUseCase) Do(ctx context.Context, in models.UpdateTripInput) (
 		return models.Trip{}, err
 	}
 
+	userID, err := models.ValidateUUID("user_id", in.UserID)
+	if err != nil {
+		return models.Trip{}, err
+	}
+
 	in.ID = validID
+	in.UserID = userID
 
 	return u.trips.Update(ctx, in)
 }

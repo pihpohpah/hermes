@@ -75,6 +75,12 @@ func statusCode(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, models.ErrNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, models.ErrUnauthorized):
+		return http.StatusUnauthorized
+	case errors.Is(err, models.ErrForbidden):
+		return http.StatusForbidden
+	case errors.Is(err, models.ErrConflict):
+		return http.StatusConflict
 	case errors.Is(err, context.Canceled):
 		return statusClientClosed
 	case errors.Is(err, context.DeadlineExceeded):
@@ -90,6 +96,12 @@ func errorCode(httpStatus int, err error) string {
 		return "INVALID_ARGUMENT"
 	case errors.Is(err, models.ErrNotFound) || httpStatus == http.StatusNotFound:
 		return "NOT_FOUND"
+	case errors.Is(err, models.ErrUnauthorized) || httpStatus == http.StatusUnauthorized:
+		return "UNAUTHORIZED"
+	case errors.Is(err, models.ErrForbidden) || httpStatus == http.StatusForbidden:
+		return "FORBIDDEN"
+	case errors.Is(err, models.ErrConflict) || httpStatus == http.StatusConflict:
+		return "CONFLICT"
 	case httpStatus == http.StatusMethodNotAllowed:
 		return "METHOD_NOT_ALLOWED"
 	case errors.Is(err, context.DeadlineExceeded) || httpStatus == http.StatusGatewayTimeout:

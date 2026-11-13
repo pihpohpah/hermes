@@ -312,13 +312,15 @@ mise run map-serve          # http://127.0.0.1:8080/map/
 
 Флаги: `-addr :8080`, `-map-dir ./web/map`,
 `-archive ./web/static/pmtiles/primorsky-krai-z15.pmtiles`,
-`-relief ./web/static/pmtiles/primorsky-relief.pmtiles`
-(или переменные `MAP_ADDR`, `MAP_DIR`, `PMTILES_PATH`, `RELIEF_PATH`).
+`-relief ./web/static/pmtiles/primorsky-relief.pmtiles`,
+`-dem ./web/static/pmtiles/primorsky-dem.pmtiles`
+(или переменные `MAP_ADDR`, `MAP_DIR`, `PMTILES_PATH`, `RELIEF_PATH`, `DEM_PATH`).
 
-Оба режима отдаются одним сервером: если архив рельефа собран, эндпоинт
-`/api/map/relief.pmtiles` поднимается автоматически и на странице работает
-переключатель «Город/Природа». Без архива стиль вырезает растровый слой,
-а кнопка «Природа» выключена — флаги режимов не нужны.
+Оба режима отдаются одним сервером: если архивы рельефа собраны, эндпоинты
+`/api/map/relief.pmtiles` и `/api/map/dem.pmtiles` поднимаются автоматически
+и на странице работает переключатель «Город/Природа». Без архивов стиль
+вырезает соответствующие источники и слои, а кнопка «Природа» выключена —
+флаги режимов не нужны.
 
 ## Известные ограничения
 

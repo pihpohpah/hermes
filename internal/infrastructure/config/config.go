@@ -32,6 +32,12 @@ const (
 	defaultReadHeaderTimeout = 10 * time.Second
 	defaultShutdownTimeout   = 15 * time.Second
 	defaultPingTimeout       = 5 * time.Second
+	defaultSessionTTL        = 30 * 24 * time.Hour
+	defaultPinsMaxActive     = 5
+	defaultPinsMaxPerHour    = 10
+	defaultPinsHideThreshold = 3
+	defaultPinsMaxDurationH  = 12.0
+	defaultPinsPurgeGraceH   = 24.0
 )
 
 // WeatherMode selects where weather data comes from. A failing real API never
@@ -53,6 +59,64 @@ type Config struct {
 	OpenMeteoConfig
 	LoggerConfig
 	SentryConfig
+	SessionConfig
+	PinsConfig
+}
+
+// PinsConfig is the moderation policy of the radar «Сейчас»: per-user
+// limits, rate limiting, stop words and night hours. Open questions from the
+// design TODO are resolved here, per deployment, without code changes.
+type PinsConfig struct {
+	// MaxActivePerUser caps the number of live pins one author may hold (0 = unlimited).
+	MaxActivePerUser int `koanf:"PINS_MAX_ACTIVE_PER_USER"`
+	// MaxPerHour caps creations per user in the trailing hour (0 = unlimited).
+	MaxPerHour int `koanf:"PINS_MAX_PER_HOUR"`
+	// StopWords is a comma-separated list rejected in pin title/note.
+	StopWords string `koanf:"PINS_STOP_WORDS"`
+	// NightBanFrom/NightBanTo (local HH:MM) reject pin creation in the night
+	// window; empty disables the rule.
+	NightBanFrom string `koanf:"PINS_NIGHT_BAN_FROM"`
+	NightBanTo   string `koanf:"PINS_NIGHT_BAN_TO"`
+	// ReportHideThreshold hides a pin after that many distinct complaints (0 = off).
+	ReportHideThreshold int `koanf:"PINS_REPORT_HIDE_THRESHOLD"`
+	// MaxDurationH caps a pin lifetime in hours.
+	MaxDurationH float64 `koanf:"PINS_MAX_DURATION_H"`
+	// PurgeGraceH is how long after ends_at a pin is physically deleted.
+	PurgeGraceH float64 `koanf:"PINS_PURGE_GRACE_H"`
+}
+
+// StopWordList splits the configured stop words, dropping empties.
+func (c PinsConfig) StopWordList() []string {
+	parts := strings.Split(c.StopWords, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	return out
+}
+
+type SessionConfig struct {
+	// TTL is how long a server-side session stays valid.
+	TTL time.Duration `koanf:"SESSION_TTL" validate:"required"`
+	// AllowedOrigins is a comma-separated list of origins that may make
+	// credentialed cross-origin requests. Empty = same-origin only.
+	AllowedOrigins string `koanf:"CORS_ALLOWED_ORIGINS"`
+}
+
+// AllowedOriginList splits the configured origins, dropping empties.
+func (c SessionConfig) AllowedOriginList() []string {
+	parts := strings.Split(c.AllowedOrigins, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	return out
 }
 
 type AppConfig struct {
@@ -173,6 +237,16 @@ func defaultCfg() Config {
 		},
 		LoggerConfig: LoggerConfig{
 			Level: slog.LevelDebug,
+		},
+		SessionConfig: SessionConfig{
+			TTL: defaultSessionTTL,
+		},
+		PinsConfig: PinsConfig{
+			MaxActivePerUser:    defaultPinsMaxActive,
+			MaxPerHour:          defaultPinsMaxPerHour,
+			ReportHideThreshold: defaultPinsHideThreshold,
+			MaxDurationH:        defaultPinsMaxDurationH,
+			PurgeGraceH:         defaultPinsPurgeGraceH,
 		},
 	}
 }

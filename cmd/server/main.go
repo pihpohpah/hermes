@@ -55,6 +55,10 @@ func main() {
 	forecastRepo := repository.NewForecastRepository(pool)
 	tripRepo := repository.NewTripRepository(pool)
 	reportRepo := repository.NewReportRepository(pool)
+	userRepo := repository.NewUserRepository(pool)
+	sessionRepo := repository.NewSessionRepository(pool)
+	idempotencyRepo := repository.NewIdempotencyRepository(pool)
+	txManager := repository.NewTxManager(pool)
 	provider := newWeatherProvider(cfg, logger)
 	openMeteoConfig := openmeteo.Config{
 		WeatherBaseURL:    cfg.BaseURL,
@@ -68,9 +72,14 @@ func main() {
 
 	deps := commandDeps{
 		logger:          logger,
+		pool:            pool,
 		places:          placeRepo,
 		weather:         weatherRepo,
 		forecast:        forecastRepo,
+		users:           userRepo,
+		sessions:        sessionRepo,
+		idempotency:     idempotencyRepo,
+		txManager:       txManager,
 		provider:        provider,
 		openMeteoConfig: openMeteoConfig,
 	}

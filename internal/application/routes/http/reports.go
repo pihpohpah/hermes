@@ -79,10 +79,12 @@ func NewCreateReportHandler(logger *slog.Logger, uc CreateReportUC) *CreateRepor
 }
 
 type createReportRequest struct {
-	PlaceID string  `json:"place_id"`
-	UserID  *string `json:"user_id"`
-	Type    string  `json:"type"`
-	Comment string  `json:"comment"`
+	PlaceID string `json:"place_id"`
+	// UserID is accepted for backward compatibility and deliberately ignored:
+	// the author is always the user from the session context.
+	UserID  string `json:"user_id"`
+	Type    string `json:"type"`
+	Comment string `json:"comment"`
 }
 
 func (h *CreateReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -106,9 +108,18 @@ func (h *CreateReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	auth, ok := AuthFromContext(r.Context())
+	if !ok {
+		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
+
+		return
+	}
+
+	userID := auth.User.ID
+
 	report, err := h.useCase.Do(r.Context(), models.CreateReportInput{
 		PlaceID: body.PlaceID,
-		UserID:  body.UserID,
+		UserID:  &userID,
 		Type:    reportType,
 		Comment: body.Comment,
 	})

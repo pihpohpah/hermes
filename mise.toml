@@ -51,6 +51,14 @@ DB_NAME="${POSTGRES_DB:-hermes}"
 DB_USER="${POSTGRES_USER:-postgres}"
 CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
 docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
+DROP TABLE IF EXISTS collection_items;
+DROP TABLE IF EXISTS collections;
+DROP TABLE IF EXISTS pin_reports;
+DROP TABLE IF EXISTS pin_goings;
+DROP TABLE IF EXISTS pins;
+DROP TABLE IF EXISTS pin_kinds;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS event_categories;
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS conditions_cache;
 DROP TABLE IF EXISTS weather_source_status;
@@ -58,7 +66,12 @@ DROP TABLE IF EXISTS weather_observations;
 DROP TABLE IF EXISTS trips;
 DROP TABLE IF EXISTS place_sources;
 DROP TABLE IF EXISTS places;
+DROP TABLE IF EXISTS place_categories;
 DROP TABLE IF EXISTS place_layers;
+DROP TABLE IF EXISTS idempotency_keys;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS user_identities;
+DROP TABLE IF EXISTS users;
 SQL
 """
 
@@ -77,6 +90,20 @@ fi
 [tasks.seed]
 description = "Наполнить БД тестовыми местами вокруг Владивостока (43.1155, 131.8855)"
 run = "go run ./cmd/server seed"
+
+[tasks.user-create]
+description = "Создать пользователя локально: NAME=Имя [TIMEZONE=Europe/Moscow]"
+run = "go run ./cmd/server user_create -name ${NAME:?укажите NAME=...} -timezone ${TIMEZONE:-Asia/Vladivostok}"
+
+[tasks.pins-cleanup]
+description = "Удалить просроченные метки «Сейчас» (после grace-периода, по умолчанию 24 ч)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+if [ -n "${GRACE_HOURS:-}" ]; then args+=(-grace_hours "$GRACE_HOURS"); fi
+go run ./cmd/server pins_cleanup "${args[@]}"
+"""
 
 [tasks.weather-load]
 description = "Загрузить почасовую погоду Open-Meteo для seed-мест (WEATHER_MODE=real|mock)"
@@ -145,12 +172,12 @@ go run ./cmd/server conditions_assess "$@"
 """
 
 [tasks.design]
-description = "Открыть дизайн-прототип (статический сервер на :6666)"
-dir = "design"
+description = "Открыть дизайн-прототип (статический сервер на :1666)"
+dir = "vlru-places"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-port="${PORT:-6666}"
+port="${PORT:-1666}"
 url="http://127.0.0.1:${port}"
 python3 -m http.server "$port" --bind 127.0.0.1 &
 server=$!

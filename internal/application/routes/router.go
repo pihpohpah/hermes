@@ -5,6 +5,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // trigger init
 	"runtime/debug"
+	"strings"
 	"time"
 
 	httproutes "github.com/pihpohpah/hermes/internal/application/routes/http"
@@ -17,11 +18,28 @@ type Handlers struct {
 	CreatePlace        *httproutes.CreatePlaceHandler
 	GetPlaceForecast   *httproutes.GetPlaceForecastHandler
 	RefreshForecast    *httproutes.RefreshForecastHandler
+	ListSimilarPlaces  *httproutes.ListSimilarPlacesHandler
+	PlaceStats         *httproutes.PlaceStatsHandler
+	ListEvents         *httproutes.ListEventsHandler
+	GetEvent           *httproutes.GetEventHandler
+	ListCollections    *httproutes.ListCollectionsHandler
+	GetCollection      *httproutes.GetCollectionHandler
+	ListPins           *httproutes.ListPinsHandler
+	GetPin             *httproutes.GetPinHandler
+	CreatePin          *httproutes.CreatePinHandler
+	DeletePin          *httproutes.DeletePinHandler
+	SetPinGoing        *httproutes.SetPinGoingHandler
+	ReportPin          *httproutes.ReportPinHandler
 	ListTrips          *httproutes.ListTripsHandler
 	CreateTrip         *httproutes.CreateTripHandler
 	UpdateTrip         *httproutes.UpdateTripHandler
 	ListReports        *httproutes.ListReportsHandler
 	CreateReport       *httproutes.CreateReportHandler
+	CreateUser         *httproutes.CreateUserHandler
+	GetCurrentUser     *httproutes.GetCurrentUserHandler
+	RequireAuth        func(http.Handler) http.Handler
+	LoadAuth           func(http.Handler) http.Handler
+	AllowedOrigins     []string
 	PlacesListFragment *httproutes.PlacesListFragmentHandler
 	PlaceCardFragment  *httproutes.PlaceCardFragmentHandler
 	IndexPage          *httproutes.IndexPageHandler
@@ -38,22 +56,55 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	mux.Handle("GET /health", h.Health)
 	mux.Handle("HEAD /health", h.Health)
 
+	mux.Handle("POST /users", h.CreateUser)
+
+	requireAuth := h.RequireAuth
+	if requireAuth == nil {
+		requireAuth = func(next http.Handler) http.Handler { return next }
+	}
+	loadAuth := h.LoadAuth
+	if loadAuth == nil {
+		loadAuth = func(next http.Handler) http.Handler { return next }
+	}
+
+	mux.Handle("GET /users/me", requireAuth(h.GetCurrentUser))
+
 	mux.Handle("GET /places", h.ListPlaces)
 	mux.Handle("POST /places", h.CreatePlace)
+	mux.Handle("GET /places/stats", h.PlaceStats)
 	mux.Handle("GET /places/{id}", h.GetPlace)
+	mux.Handle("GET /places/{id}/similar", h.ListSimilarPlaces)
+
+	mux.Handle("GET /events", h.ListEvents)
+	mux.Handle("GET /events/{id}", h.GetEvent)
+
+	mux.Handle("GET /collections", h.ListCollections)
+	mux.Handle("GET /collections/{id}", h.GetCollection)
+
+	// Радар «Сейчас»: чтение доступно анонимно (с декорированием для своих),
+	// мутации — только после входа.
+	mux.Handle("GET /pins", loadAuth(h.ListPins))
+	mux.Handle("GET /pins/{id}", loadAuth(h.GetPin))
+	mux.Handle("POST /pins", requireAuth(h.CreatePin))
+	mux.Handle("DELETE /pins/{id}", requireAuth(h.DeletePin))
+	mux.Handle("PUT /pins/{id}/going", requireAuth(h.SetPinGoing))
+	mux.Handle("DELETE /pins/{id}/going", requireAuth(h.SetPinGoing))
+	mux.Handle("POST /pins/{id}/reports", requireAuth(h.ReportPin))
 
 	mux.Handle("GET /forecast/place/{id}", h.GetPlaceForecast)
 	mux.Handle("POST /forecast/refresh", h.RefreshForecast)
 
-	mux.Handle("GET /trips", h.ListTrips)
-	mux.Handle("POST /trips", h.CreateTrip)
-	mux.Handle("PATCH /trips/{id}", h.UpdateTrip)
+	// Trips and report creation are personal: the owner comes from the
+	// session, so every mutation (and the personal listing) requires auth.
+	mux.Handle("GET /trips", requireAuth(h.ListTrips))
+	mux.Handle("POST /trips", requireAuth(h.CreateTrip))
+	mux.Handle("PATCH /trips/{id}", requireAuth(h.UpdateTrip))
 
 	if h.ListReports != nil {
 		mux.Handle("GET /reports", h.ListReports)
 	}
 	if h.CreateReport != nil {
-		mux.Handle("POST /reports", h.CreateReport)
+		mux.Handle("POST /reports", requireAuth(h.CreateReport))
 	}
 
 	mux.Handle("GET /fragments/places-list", h.PlacesListFragment)
@@ -87,7 +138,7 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 		mux.Handle("GET /", http.FileServer(http.Dir(h.WebDir)))
 	}
 
-	return withRecover(logger, withCORS(withRequestLog(logger, mux)))
+	return withRecover(logger, withCORS(h.AllowedOrigins, withRequestLog(logger, mux)))
 }
 
 type statusRecorder struct {
@@ -118,12 +169,30 @@ func withRequestLog(logger *slog.Logger, next http.Handler) http.Handler {
 	})
 }
 
-func withCORS(next http.Handler) http.Handler {
+// withCORS reflects the request origin only when it is on the trusted list,
+// so credentialed cross-origin access works for known frontends and is denied
+// everywhere else. An empty trusted list means "same-origin only": no CORS
+// headers are emitted at all, which is the safe default for local dev.
+func withCORS(allowed []string, next http.Handler) http.Handler {
+	trusted := make(map[string]struct{}, len(allowed))
+	for _, origin := range allowed {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			trusted[origin] = struct{}{}
+		}
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, HX-Request, HX-Target, HX-Trigger, Range")
-		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, HX-Trigger")
+		origin := r.Header.Get("Origin")
+		_, ok := trusted[origin]
+		if origin != "" && ok {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers",
+				"Accept, Content-Type, HX-Request, HX-Target, HX-Trigger, Range, Idempotency-Key, X-CSRF-Token")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, HX-Trigger")
+			w.Header().Add("Vary", "Origin")
+		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

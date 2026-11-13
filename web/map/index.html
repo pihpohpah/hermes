@@ -220,6 +220,7 @@
     (async () => {
       const ARCHIVE_URL = '/api/map/region.pmtiles';
       const RELIEF_URL = '/api/map/relief.pmtiles';
+      const DEM_URL = '/api/map/dem.pmtiles';
       const SOURCE_ID = 'region';
       const PROTOCOL_ID = 'pmtiles';
       const statusEl = document.getElementById('status');
@@ -227,6 +228,12 @@
       const overlayBody = document.getElementById('overlay-body');
       const modeButtons = Array.from(document.querySelectorAll('.mode-switch button'));
       const natureButton = document.getElementById('mode-nature');
+
+      // DEM нужен для объёма (terrain): без архива природа рисуется плоско.
+      let hasDem = false;
+      fetch(DEM_URL, { method: 'HEAD' })
+        .then((response) => { hasDem = response.ok; })
+        .catch(() => { /* офлайн не отключает уже загруженный архив */ });
 
       // Природа доступна только когда собран архив рельефа. Стиль при этом
       // вырезает растровый источник (иначе MapLibre 404-ит каждый кадр),
@@ -262,6 +269,15 @@
             // Слой может отсутствовать: сервер вырезал рельеф из стиля.
           }
         }
+        // Объём: terrain драпирует зоны по высотам DEM, камера плавно
+        // наклоняется. Без DEM-архива природа остаётся плоской.
+        const withTerrain = mode === 'nature' && hasDem;
+        try {
+          map.setTerrain(withTerrain ? { source: 'relief-dem', exaggeration: 1.7 } : null);
+        } catch (error) {
+          console.warn('terrain недоступен:', error.message);
+        }
+        map.easeTo({ pitch: withTerrain ? 50 : 0, bearing: 0, duration: 900 });
       };
 
       // Режим можно задать ссылкой: /map/?mode=nature.

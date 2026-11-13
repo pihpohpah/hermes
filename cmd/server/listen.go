@@ -15,12 +15,33 @@ import (
 	"github.com/pihpohpah/hermes/internal/application/routes"
 	httproutes "github.com/pihpohpah/hermes/internal/application/routes/http"
 	"github.com/pihpohpah/hermes/internal/application/usecase"
+	"github.com/pihpohpah/hermes/internal/domain/models"
 	"github.com/pihpohpah/hermes/internal/infrastructure/config"
 	"github.com/pihpohpah/hermes/internal/infrastructure/openmeteo"
 	"github.com/pihpohpah/hermes/internal/infrastructure/repository"
 )
 
 const idleTimeout = time.Minute
+
+// pinRulesFromConfig maps the PINS_* deployment settings onto the radar
+// moderation policy. The night window is evaluated in Asia/Vladivostok.
+func pinRulesFromConfig(cfg config.Config) usecase.PinRules {
+	location, err := models.PrimoryeLocation()
+	if err != nil {
+		location = time.UTC
+	}
+
+	return usecase.PinRules{
+		MaxActivePerUser:    cfg.PinsConfig.MaxActivePerUser,
+		MaxPerHour:          cfg.PinsConfig.MaxPerHour,
+		StopWords:           cfg.PinsConfig.StopWordList(),
+		NightBanFrom:        cfg.PinsConfig.NightBanFrom,
+		NightBanTo:          cfg.PinsConfig.NightBanTo,
+		ReportHideThreshold: cfg.PinsConfig.ReportHideThreshold,
+		MaxDuration:         time.Duration(cfg.PinsConfig.MaxDurationH * float64(time.Hour)),
+		Location:            location,
+	}
+}
 
 func runListen(
 	ctx context.Context,
@@ -37,6 +58,24 @@ func runListen(
 	listPlacesUC := usecase.NewListPlacesUseCase(placeRepo)
 	getPlaceUC := usecase.NewGetPlaceUseCase(placeRepo)
 	createPlaceUC := usecase.NewCreatePlaceUseCase(placeRepo)
+	listSimilarUC := usecase.NewListSimilarPlacesUseCase(placeRepo)
+	placeStatsUC := usecase.NewPlaceStatsUseCase(placeRepo)
+
+	eventRepo := repository.NewEventRepository(pool)
+	collectionRepo := repository.NewCollectionRepository(pool)
+	listEventsUC := usecase.NewListEventsUseCase(eventRepo, time.Now)
+	getEventUC := usecase.NewGetEventUseCase(eventRepo)
+	listCollectionsUC := usecase.NewListCollectionsUseCase(collectionRepo)
+	getCollectionUC := usecase.NewGetCollectionUseCase(collectionRepo)
+
+	pinRepo := repository.NewPinRepository(pool)
+	pinRules := pinRulesFromConfig(cfg)
+	listPinsUC := usecase.NewListPinsUseCase(pinRepo, time.Now)
+	getPinUC := usecase.NewGetPinUseCase(pinRepo, time.Now)
+	createPinUC := usecase.NewCreatePinUseCase(pinRepo, pinRules, time.Now)
+	deletePinUC := usecase.NewDeletePinUseCase(pinRepo)
+	setPinGoingUC := usecase.NewSetPinGoingUseCase(pinRepo, time.Now)
+	reportPinUC := usecase.NewReportPinUseCase(pinRepo, pinRules, time.Now)
 
 	getForecastUC := usecase.NewGetPlaceForecastUseCase(placeRepo, forecastRepo, weatherRepo, provider)
 	refreshForecastUC := usecase.NewRefreshForecastUseCase(placeRepo, forecastRepo, weatherRepo, provider)
@@ -48,6 +87,14 @@ func runListen(
 	listReportsUC := usecase.NewListReportsUseCase(reportRepo)
 	createReportUC := usecase.NewCreateReportUseCase(reportRepo)
 
+	userRepo := repository.NewUserRepository(pool)
+	sessionRepo := repository.NewSessionRepository(pool)
+	idempotencyRepo := repository.NewIdempotencyRepository(pool)
+	txManager := repository.NewTxManager(pool)
+
+	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
+	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
+
 	router := routes.NewHTTPRouter(logger, routes.Handlers{
 		Health:             httproutes.NewHealthCheckHandler(logger, pool),
 		ListPlaces:         httproutes.NewListPlacesHandler(logger, listPlacesUC),
@@ -55,11 +102,28 @@ func runListen(
 		CreatePlace:        httproutes.NewCreatePlaceHandler(logger, createPlaceUC),
 		GetPlaceForecast:   httproutes.NewGetPlaceForecastHandler(logger, getForecastUC),
 		RefreshForecast:    httproutes.NewRefreshForecastHandler(logger, refreshForecastUC),
+		ListSimilarPlaces:  httproutes.NewListSimilarPlacesHandler(logger, listSimilarUC),
+		PlaceStats:         httproutes.NewPlaceStatsHandler(logger, placeStatsUC),
+		ListEvents:         httproutes.NewListEventsHandler(logger, listEventsUC),
+		GetEvent:           httproutes.NewGetEventHandler(logger, getEventUC),
+		ListCollections:    httproutes.NewListCollectionsHandler(logger, listCollectionsUC),
+		GetCollection:      httproutes.NewGetCollectionHandler(logger, getCollectionUC, placeRepo, eventRepo),
+		ListPins:           httproutes.NewListPinsHandler(logger, listPinsUC),
+		GetPin:             httproutes.NewGetPinHandler(logger, getPinUC),
+		CreatePin:          httproutes.NewCreatePinHandler(logger, createPinUC),
+		DeletePin:          httproutes.NewDeletePinHandler(logger, deletePinUC),
+		SetPinGoing:        httproutes.NewSetPinGoingHandler(logger, setPinGoingUC),
+		ReportPin:          httproutes.NewReportPinHandler(logger, reportPinUC),
 		ListTrips:          httproutes.NewListTripsHandler(logger, listTripsUC),
 		CreateTrip:         httproutes.NewCreateTripHandler(logger, createTripUC),
 		UpdateTrip:         httproutes.NewUpdateTripHandler(logger, updateTripUC),
 		ListReports:        httproutes.NewListReportsHandler(logger, listReportsUC),
 		CreateReport:       httproutes.NewCreateReportHandler(logger, createReportUC),
+		CreateUser:         httproutes.NewCreateUserHandler(logger, createUserUC, cfg.IsProd()),
+		GetCurrentUser:     httproutes.NewGetCurrentUserHandler(logger),
+		RequireAuth:        authMiddleware.Require,
+		LoadAuth:           authMiddleware.Load,
+		AllowedOrigins:     cfg.AllowedOriginList(),
 		PlacesListFragment: httproutes.NewPlacesListFragmentHandler(logger, listPlacesUC),
 		PlaceCardFragment:  httproutes.NewPlaceCardFragmentHandler(logger, getPlaceUC),
 		IndexPage:          httproutes.NewIndexPageHandler(logger),

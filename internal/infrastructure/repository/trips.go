@@ -84,6 +84,7 @@ func (r *TripRepository) Update(ctx context.Context, in models.UpdateTripInput) 
 		SET status = COALESCE($2, status),
 		    notes  = COALESCE($3, notes)
 		WHERE id = $1::uuid
+		  AND user_id = $4::uuid
 		RETURNING id::text, user_id::text, place_id::text, planned_at, activity, status, notes, created_at
 	`
 
@@ -93,7 +94,7 @@ func (r *TripRepository) Update(ctx context.Context, in models.UpdateTripInput) 
 		status = &value
 	}
 
-	row := r.pool.QueryRow(ctx, query, in.ID, status, in.Notes)
+	row := r.pool.QueryRow(ctx, query, in.ID, status, in.Notes, in.UserID)
 
 	trip, err := scanTrip(row)
 	if err != nil {

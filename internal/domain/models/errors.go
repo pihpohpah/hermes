@@ -10,6 +10,9 @@ import (
 var (
 	ErrInvalidArgument = errors.New("invalid argument")
 	ErrNotFound        = errors.New("not found")
+	ErrUnauthorized    = errors.New("unauthorized")
+	ErrForbidden       = errors.New("forbidden")
+	ErrConflict        = errors.New("conflict")
 )
 
 // invalidError carries the human-readable detail while still matching
