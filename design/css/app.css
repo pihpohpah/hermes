@@ -704,6 +704,16 @@
   gap: var(--space-3);
 }
 
+.catalog-controls > *,
+.catalog-controls__main > *,
+.catalog-controls__bottom > * {
+  min-width: 0;
+}
+
+.catalog-controls__bottom .chip-list {
+  min-width: 0;
+}
+
 .active-filters {
   display: flex;
   margin-bottom: var(--space-5);
@@ -1272,6 +1282,8 @@
 
 .guide-content {
   min-width: 0;
+  overflow-wrap: anywhere;
+  container-type: inline-size;
 }
 
 .guide-section {
@@ -1301,6 +1313,10 @@
 .guide-block h3 {
   margin-bottom: var(--space-4);
   font-size: var(--text-base);
+}
+
+.guide-block .map-legend {
+  flex-wrap: wrap;
 }
 
 .guide-swatches {
@@ -1341,6 +1357,13 @@
   grid-template-columns: 9rem minmax(0, 1fr);
   align-items: baseline;
   gap: var(--space-4);
+}
+
+@container (max-width: 48rem) {
+  .type-sample {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
 }
 
 .type-sample:last-child {

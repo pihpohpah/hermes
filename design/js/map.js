@@ -175,6 +175,7 @@
 
     onPointerDown(event) {
       if (event.button !== undefined && event.button !== 0) return;
+      if (event.target.closest('.map-marker')) return;
       this.viewport.setPointerCapture(event.pointerId);
       this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       this.dragStart = { x: event.clientX, y: event.clientY, mapX: this.x, mapY: this.y };
