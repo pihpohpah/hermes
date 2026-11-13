@@ -290,3 +290,75 @@ func coverageToHTTP(in []models.SourceCoverage) []CoverageDTO {
 
 	return out
 }
+
+// ForecastRefreshResult is the payload of POST /forecast/refresh.
+// RefreshedAt is already an RFC3339 string: the use case formats it once so the
+// API and the logs agree on the timestamp.
+type ForecastRefreshResult struct {
+	UpdatedSlots int    `json:"updated_slots"`
+	RefreshedAt  string `json:"refreshed_at"`
+}
+
+// Trip is the HTTP representation of a planned outing.
+type Trip struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	PlaceID   string `json:"place_id"`
+	PlannedAt string `json:"planned_at"`
+	Activity  string `json:"activity"`
+	Status    string `json:"status"`
+	Notes     string `json:"notes"`
+	CreatedAt string `json:"created_at"`
+}
+
+func TripToHTTP(in models.Trip) Trip {
+	return Trip{
+		ID:        in.ID,
+		UserID:    in.UserID,
+		PlaceID:   in.PlaceID,
+		PlannedAt: in.PlannedAt.UTC().Format(time.RFC3339),
+		Activity:  string(in.Activity),
+		Status:    string(in.Status),
+		Notes:     in.Notes,
+		CreatedAt: in.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func TripsToHTTP(in []models.Trip) []Trip {
+	out := make([]Trip, len(in))
+	for i := range in {
+		out[i] = TripToHTTP(in[i])
+	}
+
+	return out
+}
+
+// Report is the HTTP representation of a crowd-sourced observation.
+type Report struct {
+	ID        string  `json:"id"`
+	PlaceID   string  `json:"place_id"`
+	UserID    *string `json:"user_id,omitempty"`
+	Type      string  `json:"type"`
+	Comment   string  `json:"comment"`
+	CreatedAt string  `json:"created_at"`
+}
+
+func ReportToHTTP(in models.Report) Report {
+	return Report{
+		ID:        in.ID,
+		PlaceID:   in.PlaceID,
+		UserID:    in.UserID,
+		Type:      string(in.Type),
+		Comment:   in.Comment,
+		CreatedAt: in.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func ReportsToHTTP(in []models.Report) []Report {
+	out := make([]Report, len(in))
+	for i := range in {
+		out[i] = ReportToHTTP(in[i])
+	}
+
+	return out
+}
