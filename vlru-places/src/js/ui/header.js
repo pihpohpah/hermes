@@ -1,9 +1,9 @@
 /**
- * Шапка продукта: знак VL.ru, название «Места», навигация, «Добавить», вход / профиль.
- * На экранах < 48rem навигация уходит в выпадающую панель (кнопка-бургер).
+ * Шапка продукта: бренд, навигация, глобальный сценарий, «Добавить», вход / профиль.
+ * На экранах < 80rem навигация уходит в выпадающую панель (кнопка-бургер).
  */
 
-import { html, render, $, on } from '../core/dom.js';
+import { html, render, $, $$, on } from '../core/dom.js';
 import { store } from '../core/store.js';
 import { icon } from './icon.js';
 import { avatar } from './cards.js';
@@ -11,7 +11,8 @@ import { bindMenu } from './menu.js';
 import { openAuthDialog } from './auth-dialog.js';
 import { logout, formatPhone } from '../api/auth.js';
 import { toast } from './toast.js';
-import { navigate } from '../core/router.js';
+import { navigate, parseLocation, setQuery } from '../core/router.js';
+import { SCENARIOS, SCENARIO_BY_ID } from '../data/taxonomy.js';
 
 const NAV = [
   { id: 'map', href: '#/map', label: 'Карта', icon: 'map', description: 'Все места на одной карте' },
@@ -69,6 +70,49 @@ function navLink(item) {
   `;
 }
 
+const SCENARIO_ICONS = { city: 'house', nature: 'tree-pine', sea: 'shell' };
+
+function scenarioSwitcher() {
+  const current = store.get().scenario;
+  return html`
+    <div class="scenario-switcher" data-scenarios data-scenario="${current}" role="group" aria-label="Сценарий">
+      ${SCENARIOS.map(
+        (scenario) => html`
+          <button
+            type="button"
+            class="scenario-switcher__item"
+            data-action="scenario"
+            data-scenario="${scenario.id}"
+            aria-label="${scenario.label}"
+            aria-pressed="${String(scenario.id === current)}"
+            title="${scenario.description}"
+          >
+            ${icon(SCENARIO_ICONS[scenario.id])}<span>${scenario.label}</span>
+          </button>
+        `,
+      )}
+    </div>
+  `;
+}
+
+function paintScenario() {
+  const current = store.get().scenario;
+  const switcher = $('[data-scenarios]', root);
+  if (!switcher) return;
+  switcher.dataset.scenario = current;
+  $$('button[data-scenario]', switcher).forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.scenario === current));
+  });
+}
+
+function selectScenario(scenario) {
+  if (!SCENARIO_BY_ID[scenario] || scenario === store.get().scenario) return;
+  store.set({ scenario });
+  const { path } = parseLocation();
+  if (path === '/map') setQuery({ s: scenario, cat: '', place: '', panel: '' });
+  if (path === '/catalog') setQuery({ s: scenario, cat: '', type: '' });
+}
+
 function paint() {
   const { user } = store.get();
   userMenu?.destroy();
@@ -77,12 +121,15 @@ function paint() {
     root,
     html`
       <div class="header__inner">
-        <a class="brand" href="#/map" aria-label="VL.ru Места — на главную">
-          <img class="brand__logo" src="assets/brand/vlru-logo.svg" alt="" width="58" height="30" />
-          <span class="brand__divider" aria-hidden="true"></span>
-          <span class="brand__name">Места</span>
-        </a>
-        <nav class="nav" aria-label="Разделы">${NAV.map(navLink)}</nav>
+        <div class="header__main">
+          <a class="brand" href="#/map" aria-label="VL.ru Места — на главную">
+            <img class="brand__logo" src="assets/brand/vlru-logo.svg" alt="" width="58" height="30" />
+            <span class="brand__divider" aria-hidden="true"></span>
+            <span class="brand__name">Места</span>
+          </a>
+          <nav class="nav" aria-label="Разделы">${NAV.map(navLink)}</nav>
+        </div>
+        ${scenarioSwitcher()}
         <div class="header__actions">
           <a class="btn btn--primary header__add" href="#/add" aria-label="Добавить место или событие">
             ${icon('plus')}<span class="header__add-text">Добавить</span>
@@ -192,13 +239,15 @@ function openMobileMenu() {
 export function initHeader(target) {
   root = target;
   paint();
+  on(root, 'click', '[data-action="scenario"]', (event, button) => selectScenario(button.dataset.scenario));
   on(root, 'click', '[data-action="login"]', () => openAuthDialog());
   on(root, 'click', '[data-action="mobile-menu"]', () => {
     if (document.getElementById('mobile-menu')) closeMobileMenu();
     else openMobileMenu();
   });
   store.subscribe(paint, ['user']);
-  window.matchMedia('(min-width: 48rem)').addEventListener('change', () => closeMobileMenu());
+  store.subscribe(paintScenario, ['scenario']);
+  window.matchMedia('(min-width: 80rem)').addEventListener('change', () => closeMobileMenu());
 }
 
 export function setHeaderSection(id) {

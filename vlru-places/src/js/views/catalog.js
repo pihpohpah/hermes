@@ -1,16 +1,16 @@
 /**
- * Справочник (#/catalog): поиск, сценарии, подборки, категории, фильтры, сортировка, сетка или список.
+ * Справочник (#/catalog): поиск, подборки, категории, фильтры, сортировка, сетка или список.
  *
- * Параметры URL: s (all | city | nature | sea), q, cat, col (подборка), type, sort, view (grid | list).
- * В отличие от карты справочник умеет показывать все сценарии сразу.
+ * Параметры URL: s (city | nature | sea), q, cat, col (подборка), type, sort, view (grid | list).
+ * Без параметра s используется глобальный сценарий из store.
  */
 
 import { html, render, $, on, debounce, createDisposer } from '../core/dom.js';
 import { store } from '../core/store.js';
 import { setQuery } from '../core/router.js';
 import { icon } from '../ui/icon.js';
-import { SCENARIOS, SCENARIO_BY_ID, CATEGORIES, COLLECTIONS, SORTS, TYPE_FILTERS } from '../data/taxonomy.js';
-import { listItems, getItem, getScenarioCounts, getCollectionCounts, countActiveFilters, peekItem } from '../api/places.js';
+import { SCENARIO_BY_ID, CATEGORIES, COLLECTIONS, SORTS } from '../data/taxonomy.js';
+import { listItems, getItem, getCollectionCounts, countActiveFilters, peekItem } from '../api/places.js';
 import { placeCard, placeCardSkeleton, collectionCard } from '../ui/cards.js';
 import { openFiltersDialog, activeFilterChips, removeFilter } from '../ui/filters-dialog.js';
 import { toggleRoute } from '../ui/route-store.js';
@@ -21,7 +21,7 @@ const PAGE_SIZE = 12;
 
 function readQuery(query) {
   return {
-    scenario: SCENARIO_BY_ID[query.s] ? query.s : 'all',
+    scenario: SCENARIO_BY_ID[query.s] ? query.s : store.get().scenario,
     q: query.q || '',
     cat: query.cat || '',
     collection: COLLECTIONS.some((c) => c.id === query.col) ? query.col : '',
@@ -41,11 +41,10 @@ export const catalogView = {
     let items = [];
     let visible = PAGE_SIZE;
     let requestId = 0;
-    let scenarioCounts = {};
     let collectionCounts = {};
     let collectionCovers = {};
 
-    const filters = () => (state.scenario === 'all' ? {} : store.get().filters[state.scenario] || {});
+    const filters = () => store.get().filters[state.scenario] || {};
     let mounted = true;
 
     render(
@@ -68,7 +67,6 @@ export const catalogView = {
                   <button type="button" class="icon-btn icon-btn--sm input-group__action" data-action="clear-search" aria-label="Очистить поиск" hidden>${icon('x')}</button>
                 </div>
               </form>
-              <div class="tabs catalog__tabs" role="group" aria-label="Сценарий" data-tabs></div>
             </header>
 
             <section class="catalog__collections" aria-labelledby="collections-title">
@@ -88,7 +86,6 @@ export const catalogView = {
 
     const searchInput = $('.catalog__search-input', target);
     const els = {
-      tabs: $('[data-tabs]', target),
       collections: $('[data-collections]', target),
       toolbar: $('[data-toolbar]', target),
       active: $('[data-active]', target),
@@ -96,22 +93,6 @@ export const catalogView = {
       announce: $('[data-announce]', target),
       clear: $('[data-action="clear-search"]', target),
     };
-
-    function paintTabs() {
-      const total = Object.values(scenarioCounts).reduce((sum, n) => sum + n, 0);
-      const tabs = [{ id: 'all', label: 'Все', icon: 'layers' }, ...SCENARIOS];
-      render(
-        els.tabs,
-        tabs.map(
-          (tab) => html`
-            <button type="button" class="tab" data-action="scenario" data-id="${tab.id}" aria-pressed="${state.scenario === tab.id}">
-              ${icon(tab.icon)}${tab.label}
-              <span class="tab__count">${tab.id === 'all' ? total : scenarioCounts[tab.id] ?? ''}</span>
-            </button>
-          `,
-        ),
-      );
-    }
 
     function paintCollections() {
       // Пустые подборки не показываем — кроме выбранной, чтобы её можно было снять
@@ -128,30 +109,20 @@ export const catalogView = {
     }
 
     function paintToolbar(loading = false) {
-      const categories = state.scenario === 'all' ? [] : CATEGORIES[state.scenario];
+      const categories = CATEGORIES[state.scenario];
       const active = countActiveFilters(filters());
       render(
         els.toolbar,
         html`
           <div class="catalog__toolbar-main">
-            ${categories.length
-              ? html`
-                  <div class="chip-row" role="group" aria-label="Категории">
-                    <button type="button" class="chip" data-action="category" data-id="" aria-pressed="${!state.cat}">Все категории</button>
-                    ${categories.map((c) => html`<button type="button" class="chip" data-action="category" data-id="${c.id}" aria-pressed="${state.cat === c.id}">${icon(c.icon)}${c.label}</button>`)}
-                  </div>
-                `
-              : html`
-                  <div class="segmented catalog__type" role="group" aria-label="Тип">
-                    ${TYPE_FILTERS.map((t) => html`<button type="button" class="segmented__item" data-action="type" data-id="${t.id}" aria-pressed="${state.type === t.id}">${t.label}</button>`)}
-                  </div>
-                `}
+            <div class="chip-row" role="group" aria-label="Категории">
+              <button type="button" class="chip" data-action="category" data-id="" aria-pressed="${!state.cat}">Все категории</button>
+              ${categories.map((c) => html`<button type="button" class="chip" data-action="category" data-id="${c.id}" aria-pressed="${state.cat === c.id}">${icon(c.icon)}${c.label}</button>`)}
+            </div>
           </div>
           <div class="catalog__toolbar-side">
             <span class="catalog__count" aria-hidden="true">${loading ? 'Ищем…' : countLabel(items.length, ['результат', 'результата', 'результатов'])}</span>
-            ${state.scenario !== 'all'
-              ? html`<button type="button" class="btn btn--sm btn--outline filter-btn" data-action="filters">${icon('sliders-horizontal', 'icon--sm')}Фильтры${active ? html`<span class="filter-btn__count">${active}</span>` : ''}</button>`
-              : ''}
+            <button type="button" class="btn btn--sm btn--outline filter-btn" data-action="filters">${icon('sliders-horizontal', 'icon--sm')}Фильтры${active ? html`<span class="filter-btn__count">${active}</span>` : ''}</button>
             <label class="visually-hidden" for="catalog-sort">Сортировка</label>
             <select class="select select--sm" id="catalog-sort" data-action="sort">
               ${SORTS.map((s) => html`<option value="${s.id}" ${state.sort === s.id ? 'selected' : ''}>${s.label}</option>`)}
@@ -163,7 +134,7 @@ export const catalogView = {
           </div>
         `,
       );
-      const chips = state.scenario === 'all' ? [] : activeFilterChips(state.scenario, filters());
+      const chips = activeFilterChips(state.scenario, filters());
       els.active.hidden = !chips.length && !state.collection;
       render(
         els.active,
@@ -222,7 +193,7 @@ export const catalogView = {
       try {
         const response = await listItems({
           scenario: state.scenario,
-          type: state.scenario === 'all' ? state.type : 'all',
+          type: state.type,
           q: state.q,
           category: state.cat,
           filters: filters(),
@@ -255,20 +226,17 @@ export const catalogView = {
 
     let metaId = 0;
 
-    /** Счётчики вкладок и подборок; ответ для уже неактуального сценария отбрасывается. */
+    /** Счётчики подборок; ответ для уже неактуального сценария отбрасывается. */
     async function loadMeta() {
       const id = ++metaId;
       try {
-        const [scenarios, collections, covers] = await Promise.all([
-          getScenarioCounts(),
+        const [collections, covers] = await Promise.all([
           getCollectionCounts(state.scenario),
           Promise.all(COLLECTIONS.map((c) => getItem(c.cover).catch(() => null))),
         ]);
         if (id !== metaId || !mounted) return;
-        scenarioCounts = scenarios;
         collectionCounts = collections;
         collectionCovers = Object.fromEntries(COLLECTIONS.map((c, i) => [c.id, covers[i]]));
-        paintTabs();
         paintCollections();
       } catch (error) {
         console.warn('Не удалось загрузить счётчики справочника', error);
@@ -277,7 +245,6 @@ export const catalogView = {
 
     searchInput.value = state.q;
     els.clear.hidden = !state.q;
-    paintTabs();
     paintToolbar(true);
     paintSkeleton();
     loadMeta();
@@ -298,14 +265,8 @@ export const catalogView = {
       on(target, 'click', '[data-action]', (event, el) => {
         const { action, id } = el.dataset;
         switch (action) {
-          case 'scenario':
-            setQuery({ s: id === 'all' ? '' : id, cat: '', type: '' });
-            break;
           case 'category':
             setQuery({ cat: id });
-            break;
-          case 'type':
-            setQuery({ type: id === 'all' ? '' : id });
             break;
           case 'collection':
             setQuery({ col: state.collection === id ? '' : id });
@@ -342,7 +303,7 @@ export const catalogView = {
             load();
             break;
           case 'reset': {
-            if (state.scenario !== 'all') store.set((s) => ({ filters: { ...s.filters, [state.scenario]: {} } }));
+            store.set((s) => ({ filters: { ...s.filters, [state.scenario]: {} } }));
             searchInput.value = '';
             const urlChanges = state.q || state.cat || state.collection || state.type !== 'all';
             setQuery({ q: '', cat: '', col: '', type: '' });
@@ -370,7 +331,6 @@ export const catalogView = {
         const prev = state;
         state = readQuery(next.query);
         if (document.activeElement !== searchInput) searchInput.value = state.q;
-        paintTabs();
         if (prev.scenario !== state.scenario) {
           items = [];
           loadMeta();

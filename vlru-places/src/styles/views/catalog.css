@@ -38,15 +38,6 @@
   padding-left: 3rem;
 }
 
-.catalog__tabs {
-  margin-top: var(--space-1);
-}
-
-.catalog__tabs .tab .icon {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
 .catalog__collections {
   margin-top: var(--space-6);
 }

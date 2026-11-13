@@ -6,6 +6,7 @@
  * Предложение уходит редакции; публикации без проверки нет.
  *
  * Параметры: type (place | event | fix), fix (id исправляемого объекта), scenario.
+ * Без scenario новый черновик наследует глобальный режим; дальше раздел независим от шапки.
  */
 
 import { html, render, $, $$, on, createDisposer } from '../core/dom.js';
@@ -40,7 +41,7 @@ let draft = null;
 function emptyDraft(query) {
   return {
     type: TYPES.some((t) => t.id === query.type) ? query.type : query.fix ? 'fix' : 'place',
-    scenario: SCENARIO_BY_ID[query.scenario] ? query.scenario : 'city',
+    scenario: SCENARIO_BY_ID[query.scenario] ? query.scenario : store.get().scenario,
     category: '',
     fixId: query.fix || '',
     fixReasons: [],

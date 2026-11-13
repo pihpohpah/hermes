@@ -21,6 +21,7 @@ import { rulesView } from './views/rules.js';
 import { notFoundView } from './views/not-found.js';
 import { countActivePins } from './api/pins.js';
 import { store } from './core/store.js';
+import { SCENARIO_BY_ID } from './data/taxonomy.js';
 
 const APP_TITLE = 'Места — VL.ru';
 const STAGE_VIEWS = {
@@ -96,6 +97,10 @@ function show(next, previous) {
 }
 
 onRouteChange((next, previous) => {
+  if (['/map', '/catalog'].includes(next.path) && SCENARIO_BY_ID[next.query.s]) {
+    store.set({ scenario: next.query.s });
+  }
+
   const samePage = previous && previous.pattern === next.pattern && previous.params.id === next.params.id;
 
   if (samePage && activePage?.instance?.update) {

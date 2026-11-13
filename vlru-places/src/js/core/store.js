@@ -1,18 +1,19 @@
 /**
  * Глобальное состояние приложения.
  *
- * Хранит только то, что переживает смену экрана: пользователя, маршрут, отметки «Я приду»,
- * созданные метки и отправленные предложения. Состояние конкретного экрана (поиск, выбранная
- * точка) живёт в URL — так ссылки остаются рабочими.
+ * Хранит только то, что переживает смену экрана: сценарий, пользователя, маршрут, отметки
+ * «Я приду», созданные метки и отправленные предложения. Состояние конкретного экрана
+ * (поиск, выбранная точка) живёт в URL — так ссылки остаются рабочими.
  *
  * Часть полей сохраняется в localStorage (ключ STORAGE_KEY), чтобы демо переживало перезагрузку.
  * В продакшене пользователь и его данные приходят с сервера, а localStorage не нужен.
  */
 
 const STORAGE_KEY = 'vlru-places:v1';
-const PERSISTED = ['user', 'accounts', 'joinedPins', 'myPins', 'submissions', 'route', 'routeMode'];
+const PERSISTED = ['scenario', 'user', 'accounts', 'joinedPins', 'myPins', 'submissions', 'route', 'routeMode'];
 
 const initialState = {
+  scenario: 'city',
   user: null,
   accounts: {},
   joinedPins: [],
@@ -26,7 +27,9 @@ const initialState = {
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return { ...initialState, ...saved };
+    const restored = { ...initialState, ...saved };
+    if (!['city', 'nature', 'sea'].includes(restored.scenario)) restored.scenario = initialState.scenario;
+    return restored;
   } catch (error) {
     console.warn('Не удалось прочитать сохранённое состояние, используется начальное', error);
     return { ...initialState };

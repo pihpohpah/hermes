@@ -2,7 +2,7 @@
  * Экран «Карта» (#/map): сценарии, поиск, категории, фильтры, список и превью выбранного объекта.
  *
  * Состояние экрана живёт в URL:
- *   s      — сценарий (city | nature | sea)
+ *   s      — сценарий (city | nature | sea); без него используется store.scenario
  *   q      — поиск
  *   cat    — категория
  *   type   — all | place | event
@@ -16,7 +16,7 @@ import { store } from '../core/store.js';
 import { setQuery } from '../core/router.js';
 import { icon } from '../ui/icon.js';
 import { toast } from '../ui/toast.js';
-import { SCENARIOS, SCENARIO_BY_ID, CATEGORIES, TYPE_FILTERS, ACCESS, DIFFICULTY, BEACH, categoryOf } from '../data/taxonomy.js';
+import { SCENARIO_BY_ID, CATEGORIES, TYPE_FILTERS, ACCESS, DIFFICULTY, BEACH, categoryOf } from '../data/taxonomy.js';
 import { listItems, getItem, peekItem, countActiveFilters } from '../api/places.js';
 import { countActivePins } from '../api/pins.js';
 import { resultRow, resultRowSkeleton, media, itemUrl } from '../ui/cards.js';
@@ -51,18 +51,6 @@ export function createExplorePanel(stage) {
   /* ── Постоянные элементы шапки (переезжают в .map-top на мобильном) ── */
 
   function createSlots() {
-    const scenarios = fragment(html`
-      <div class="segmented segmented--lg" role="group" aria-label="Сценарий" data-top-slot="scenarios">
-        ${SCENARIOS.map(
-          (s) => html`
-            <button type="button" class="segmented__item" data-scenario="${s.id}" data-action="scenario" aria-pressed="false" title="${s.description}">
-              ${icon(s.icon)}<span>${s.label}</span>
-            </button>
-          `,
-        )}
-      </div>
-    `);
-
     const search = fragment(html`
       <form class="map-panel__search" role="search" data-top-slot="search">
         <div class="input-group">
@@ -91,14 +79,13 @@ export function createExplorePanel(stage) {
       input.blur();
     });
 
-    return { scenarios, search, chips, input };
+    return { search, chips, input };
   }
 
   function paintHeadShell() {
     render(
       els.head,
       html`
-        <div data-slot-home="scenarios"></div>
         <div data-slot-home="search"></div>
         <div data-slot-home="chips"></div>
         <div class="map-panel__toolbar" data-toolbar>
@@ -108,16 +95,12 @@ export function createExplorePanel(stage) {
         <div class="chip-row" data-active-filters hidden></div>
       `,
     );
-    $('[data-slot-home="scenarios"]', els.head).append(slots.scenarios);
     $('[data-slot-home="search"]', els.head).append(slots.search);
     $('[data-slot-home="chips"]', els.head).append(slots.chips);
     els.head.style.padding = '';
   }
 
   function paintSlots() {
-    $$('[data-action="scenario"]', slots.scenarios).forEach((tab) => {
-      tab.setAttribute('aria-pressed', String(tab.dataset.scenario === state.scenario));
-    });
     if (document.activeElement !== slots.input) slots.input.value = state.q;
     $('[data-action="clear-search"]', slots.search).hidden = !state.q;
 
@@ -390,11 +373,6 @@ export function createExplorePanel(stage) {
       on(els.root, 'click', '[data-action]', (event, el) => {
         const { action, id } = el.dataset;
         switch (action) {
-          case 'scenario':
-            if (el.dataset.scenario !== state.scenario) {
-              setQuery({ s: el.dataset.scenario, cat: '', place: '', panel: '' });
-            }
-            break;
           case 'category':
             setQuery({ cat: id || '', place: '' });
             break;
@@ -484,7 +462,7 @@ export function createExplorePanel(stage) {
 
   function readQuery(query) {
     return {
-      scenario: SCENARIO_BY_ID[query.s] ? query.s : 'city',
+      scenario: SCENARIO_BY_ID[query.s] ? query.s : store.get().scenario,
       q: query.q || '',
       cat: query.cat || '',
       type: ['place', 'event'].includes(query.type) ? query.type : 'all',
