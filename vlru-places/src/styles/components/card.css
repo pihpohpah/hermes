@@ -1,0 +1,504 @@
+/*
+ * Карточки контента.
+ * .media        — контейнер фото с фиксированным соотношением сторон и заглушкой.
+ * .place-card   — карточка места/события в справочнике (вертикальная).
+ * .result-row   — строка результата в панели карты (горизонтальная, компактная).
+ * .pin-card     — карточка быстрой метки «Сейчас».
+ * .collection-card — подборка в справочнике.
+ */
+
+.media {
+  position: relative;
+  aspect-ratio: var(--media-ratio, 4 / 3);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-muted);
+  isolation: isolate;
+}
+
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* Заглушка, если фото нет: иконка категории на мягком фоне сценария */
+.media--placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+}
+
+.media--placeholder[data-scenario="city"] { background: var(--color-city-soft); color: var(--color-city-text); }
+.media--placeholder[data-scenario="nature"] { background: var(--color-nature-soft); color: var(--color-nature-text); }
+.media--placeholder[data-scenario="sea"] { background: var(--color-sea-soft); color: var(--color-sea-text); }
+.media--placeholder[data-scenario="timed"] { background: var(--color-timed-soft); color: var(--color-timed-text); }
+
+.media--placeholder > .icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke-width: 1.25;
+  opacity: 0.7;
+}
+
+.media__badges {
+  position: absolute;
+  inset: var(--space-3) 3.25rem auto var(--space-3);
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  pointer-events: none;
+}
+
+/* ── Карточка места / события ── */
+
+.place-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--color-text);
+}
+
+.place-card__link {
+  color: inherit;
+}
+
+.place-card__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius-lg);
+}
+
+.place-card__link:hover {
+  color: inherit;
+}
+
+.place-card__link:focus-visible {
+  outline: none;
+}
+
+.place-card__link:focus-visible::after {
+  box-shadow: var(--focus-ring);
+}
+
+.place-card:hover .media img {
+  transform: scale(1.03);
+}
+
+.place-card__body {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.place-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.place-card__meta .sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.place-card__category {
+  font-weight: var(--weight-semibold);
+}
+
+.place-card__category[data-scenario="city"] { color: var(--color-city-text); }
+.place-card__category[data-scenario="nature"] { color: var(--color-nature-text); }
+.place-card__category[data-scenario="sea"] { color: var(--color-sea-text); }
+.place-card__category[data-scenario="timed"] { color: var(--color-timed-text); }
+
+.place-card__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.place-card__text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.place-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.place-card__facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.place-card__facts .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--color-text-tertiary);
+}
+
+/*
+ * Фото и кнопка «В маршрут» лежат в общей обёртке без собственного контекста наложения:
+ * кнопка (z-index 2) должна оказаться выше растянутой ссылки карточки (z-index 1).
+ * У .media есть isolation для скругления при масштабировании фото, поэтому кнопку внутрь .media класть нельзя.
+ */
+.place-card__media {
+  position: relative;
+}
+
+.place-card__action {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+}
+
+/* Горизонтальный вариант (режим «Список» в справочнике) */
+.place-card--row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 15rem) 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.place-card--row .place-card__body {
+  padding-top: var(--space-1);
+}
+
+@media (max-width: 35.99rem) {
+  .place-card--row {
+    grid-template-columns: 7rem 1fr;
+    gap: var(--space-3);
+  }
+
+  .place-card--row .media {
+    border-radius: var(--radius-md);
+  }
+
+  .place-card--row .place-card__text,
+  .place-card--row .media__badges {
+    display: none;
+  }
+}
+
+/* ── Строка результата в панели карты ── */
+
+.result-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2-5) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-align: left;
+  width: 100%;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.result-row:hover,
+.result-row.is-hovered {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.result-row[aria-current="true"] {
+  background: var(--color-bg-muted);
+}
+
+.result-row__open {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.result-row__open:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.result-row .media {
+  --media-ratio: 1;
+  border-radius: var(--radius-sm);
+}
+
+.result-row .media--placeholder > .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.result-row__body {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.result-row__title {
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-row__meta > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-row__meta .sep {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.result-row__category {
+  flex: none;
+  font-weight: var(--weight-semibold);
+}
+
+.result-row__category[data-scenario="city"] { color: var(--color-city-text); }
+.result-row__category[data-scenario="nature"] { color: var(--color-nature-text); }
+.result-row__category[data-scenario="sea"] { color: var(--color-sea-text); }
+.result-row__category[data-scenario="timed"] { color: var(--color-timed-text); }
+
+.result-row__facts {
+  display: flex;
+  gap: var(--space-2-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.result-row__facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.result-row__facts .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--color-text-tertiary);
+}
+
+.result-row__aside {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Карточка метки «Сейчас» ── */
+
+.pin-card {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.pin-card:hover,
+.pin-card.is-hovered {
+  border-color: var(--color-border-hover);
+}
+
+.pin-card[aria-current="true"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.pin-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  min-width: 0;
+}
+
+.pin-card__author {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.pin-card__author strong {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.pin-card__author span {
+  color: var(--color-text-tertiary);
+}
+
+.pin-card__time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin-left: auto;
+  flex: none;
+}
+
+.pin-card__open {
+  color: inherit;
+  text-align: left;
+}
+
+.pin-card__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.pin-card__open:hover {
+  color: inherit;
+}
+
+.pin-card__open:focus-visible {
+  outline: none;
+}
+
+.pin-card__open:focus-visible::after {
+  box-shadow: var(--focus-ring);
+}
+
+.pin-card__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+.pin-card__note {
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.pin-card__place {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.pin-card__place .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--color-text-tertiary);
+}
+
+.pin-card__foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pin-card__foot .meter {
+  flex: 1;
+}
+
+.pin-card--mine {
+  background: var(--violet-50);
+  border-color: var(--violet-200);
+}
+
+/* ── Подборка ── */
+
+.collection-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  padding-right: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  transition: border-color var(--dur-fast), background-color var(--dur-fast);
+}
+
+.collection-card:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
+}
+
+.collection-card[aria-pressed="true"] {
+  border-color: var(--color-bg-inverse);
+  box-shadow: 0 0 0 1px var(--color-bg-inverse);
+}
+
+.collection-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.collection-card .media {
+  --media-ratio: 1;
+  border-radius: var(--radius-md);
+}
+
+.collection-card__title {
+  display: block;
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.collection-card__count {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}

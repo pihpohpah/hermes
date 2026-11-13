@@ -1,0 +1,22 @@
+/*
+ * Порядок подключения: токены → база → компоненты → каркас → экраны.
+ * В продакшене файлы собираются бандлером в один; для прототипа хватает @import.
+ */
+@import url("tokens.css");
+@import url("base.css");
+
+@import url("components/button.css");
+@import url("components/form.css");
+@import url("components/selection.css");
+@import url("components/feedback.css");
+@import url("components/overlay.css");
+@import url("components/card.css");
+
+@import url("layout/shell.css");
+
+@import url("views/map.css");
+@import url("views/pages.css");
+@import url("views/catalog.css");
+@import url("views/detail.css");
+@import url("views/add.css");
+@import url("views/profile.css");

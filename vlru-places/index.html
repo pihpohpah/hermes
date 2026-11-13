@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Места — VL.ru</title>
+    <meta name="description" content="Места, события и быстрые метки Владивостока и Приморья на одной карте: город, природа и море." />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" href="assets/brand/vlru-seagull.svg" type="image/svg+xml" />
+    <link rel="preload" href="assets/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css" />
+    <link rel="stylesheet" href="src/styles/main.css" />
+    <script type="module" src="src/js/main.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Перейти к содержимому</a>
+    <div class="app">
+      <header class="header" id="header"></header>
+      <main class="main" id="main" tabindex="-1">
+        <section class="map-stage" id="map-stage" aria-label="Карта" hidden></section>
+        <div class="view" id="view"></div>
+      </main>
+    </div>
+    <div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+
+    <noscript>
+      <div class="boot-note">Для работы карты включите JavaScript.</div>
+    </noscript>
+    <script>
+      // Модули ES не загружаются с file:// — подсказываем, как запустить прототип
+      if (location.protocol === 'file:') {
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.insertAdjacentHTML(
+            'afterbegin',
+            '<div class="boot-note"><strong>Прототип нужно открыть через локальный сервер.</strong> В папке проекта выполните <code>python3 -m http.server 8080</code> и откройте <code>http://localhost:8080</code>.</div>'
+          );
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,256 @@
+/*
+ * Design tokens — единственный источник значений для всего интерфейса.
+ * Два уровня:
+ *   1. Палитра (--orange-500, --gray-200 …) — сырые цвета. В компонентах напрямую не используются.
+ *   2. Семантика (--color-*, --space-*, --radius-* …) — роли. Компоненты используют только их.
+ * Палитра основана на открытых токенах экосистемы Farpost / VL.ru (www.farpost.ru, www.vl.ru),
+ * подробности и контрасты — docs/design-system.md и design-system.html.
+ */
+
+:root {
+  /* ── Палитра ─────────────────────────────────────────────── */
+
+  /* Нейтральные с лёгким фиолетовым подтоном — как в новой системе Farpost */
+  --gray-0: #ffffff;
+  --gray-25: #fafafb;
+  --gray-50: #f7f6f9;
+  --gray-100: #f2f2f4;
+  --gray-150: #ebeaee;
+  --gray-200: #e6e4e9;
+  --gray-300: #d3d0d8;
+  --gray-400: #c0bdc8;
+  --gray-500: #9c97a9;
+  --gray-600: #6f6a7b;
+  --gray-700: #55515e;
+  --gray-800: #2f2d33;
+  --gray-900: #1e1d20;
+
+  /* Оранжевый — фирменный цвет VL.ru / Farpost */
+  --orange-50: #fff6f0;
+  --orange-100: #fff0e7;
+  --orange-200: #ffe1cf;
+  --orange-300: #ffcbac;
+  --orange-400: #ff9a5c;
+  --orange-500: #ff6408;
+  --orange-600: #ee5a08;
+  --orange-700: #d94f00;
+  --orange-800: #c7510f;
+  --orange-900: #8f3a0b;
+
+  /* Фиолетовый — акцент Farpost. В продукте: всё, что привязано ко времени (события, метки «Сейчас»), и фокус */
+  --violet-50: #f7f0fe;
+  --violet-100: #eedffd;
+  --violet-200: #e8d2fb;
+  --violet-300: #cfa6f6;
+  --violet-500: #730ae2;
+  --violet-600: #6108c0;
+  --violet-700: #4e069b;
+
+  --blue-50: #eceefb;
+  --blue-100: #dadef7;
+  --blue-500: #1564d4;
+  --blue-600: #1052b0;
+
+  --green-50: #edf9e9;
+  --green-100: #d5f0cb;
+  --green-500: #23801a;
+  --green-600: #1b6614;
+
+  --red-50: #ffebe6;
+  --red-100: #ffd7cd;
+  --red-500: #ac1417;
+
+  --yellow-50: #fffaeb;
+  --yellow-100: #ffecb9;
+  --yellow-500: #9b7f21;
+
+  /* VL.ru логотип — не используются в UI, только для знака */
+  --vlru-letters: #f97d41;
+  --vlru-seagull: #0f9aef;
+
+  /* ── Семантические цвета ────────────────────────────────── */
+
+  --color-bg: var(--gray-0);
+  --color-bg-subtle: var(--gray-50);
+  --color-bg-muted: var(--gray-100);
+  --color-bg-muted-hover: var(--gray-200);
+  --color-bg-inverse: var(--gray-900);
+  --color-surface: var(--gray-0);
+  --color-overlay: rgb(30 29 32 / 0.48);
+
+  --color-border: var(--gray-200);
+  --color-border-strong: var(--gray-300);
+  --color-border-hover: var(--gray-400);
+
+  --color-text: var(--gray-900);
+  --color-text-secondary: var(--gray-700);
+  --color-text-tertiary: var(--gray-600);
+  --color-text-disabled: var(--gray-500);
+  --color-text-inverse: var(--gray-0);
+
+  --color-primary: var(--orange-600);
+  --color-primary-hover: var(--orange-700);
+  --color-primary-active: var(--orange-800);
+  --color-primary-soft: var(--orange-100);
+  --color-primary-soft-hover: var(--orange-200);
+  --color-primary-text: var(--orange-800);
+  --color-on-primary: var(--gray-0);
+  --color-brand: var(--orange-500);
+
+  --color-accent: var(--violet-500);
+  --color-accent-hover: var(--violet-600);
+  --color-accent-soft: var(--violet-50);
+  --color-accent-soft-hover: var(--violet-100);
+  --color-on-accent: var(--gray-0);
+
+  --color-link: var(--blue-500);
+  --color-link-hover: var(--orange-700);
+  --color-focus: var(--violet-500);
+
+  --color-success: var(--green-500);
+  --color-success-soft: var(--green-50);
+  --color-danger: var(--red-500);
+  --color-danger-soft: var(--red-50);
+  --color-warning: var(--yellow-500);
+  --color-warning-soft: var(--yellow-50);
+  --color-info: var(--blue-500);
+  --color-info-soft: var(--blue-50);
+
+  /* Сценарии. Цвет всегда дублируется иконкой и подписью */
+  --color-city: var(--orange-600);
+  --color-city-soft: var(--orange-100);
+  --color-city-text: var(--orange-800);
+  --color-nature: var(--green-500);
+  --color-nature-soft: var(--green-50);
+  --color-nature-text: var(--green-600);
+  --color-sea: var(--blue-500);
+  --color-sea-soft: var(--blue-50);
+  --color-sea-text: var(--blue-600);
+  --color-timed: var(--violet-500);
+  --color-timed-soft: var(--violet-50);
+  --color-timed-text: var(--violet-600);
+
+  /* Карта (используются и в CSS, и в стиле MapLibre через src/js/map/style.js) */
+  --map-land: #f4f3ef;
+  --map-water: #cfe3f1;
+  --map-park: #e1eed6;
+  --map-wood: #d8e8cc;
+  --map-residential: #efede8;
+  --map-building: #e7e4df;
+  --map-road: #ffffff;
+  --map-road-casing: #e3e0e8;
+  --map-road-major: #ffffff;
+  --map-motorway: #ffe3d1;
+  --map-label: #55515e;
+  --map-water-label: #4a7aa3;
+  --map-route: var(--orange-600);
+
+  /* ── Типографика ─────────────────────────────────────────── */
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-features: "cv11", "calt", "kern";
+
+  --text-xs: 0.75rem;      /* 12 — подписи, бейджи */
+  --text-sm: 0.8125rem;    /* 13 — мета, вторичное */
+  --text-md: 0.9375rem;    /* 15 — основной текст интерфейса */
+  --text-lg: 1.0625rem;    /* 17 — лид, заголовки карточек */
+  --text-xl: 1.25rem;      /* 20 — заголовки секций */
+  --text-2xl: 1.5rem;      /* 24 — заголовок панели */
+  --text-3xl: 1.875rem;    /* 30 — заголовок страницы, мобильный */
+  --text-4xl: 2.5rem;      /* 40 — заголовок страницы, десктоп */
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-caps: 0.04em;
+
+  /* ── Пространство и форма ───────────────────────────────── */
+
+  --space-0: 0;
+  --space-0-5: 0.125rem; /* 2 */
+  --space-1: 0.25rem;    /* 4 */
+  --space-1-5: 0.375rem; /* 6 */
+  --space-2: 0.5rem;     /* 8 */
+  --space-2-5: 0.625rem; /* 10 */
+  --space-3: 0.75rem;    /* 12 */
+  --space-3-5: 0.875rem; /* 14 */
+  --space-4: 1rem;       /* 16 */
+  --space-5: 1.25rem;    /* 20 */
+  --space-6: 1.5rem;     /* 24 */
+  --space-8: 2rem;       /* 32 */
+  --space-10: 2.5rem;    /* 40 */
+  --space-12: 3rem;      /* 48 */
+  --space-16: 4rem;      /* 64 */
+  --space-20: 5rem;      /* 80 */
+
+  --radius-xs: 0.375rem; /* 6 — бейджи, мелкие метки */
+  --radius-sm: 0.5rem;   /* 8 — мелкие кнопки, миниатюры */
+  --radius-md: 0.75rem;  /* 12 — кнопки, поля, карточки списка */
+  --radius-lg: 1rem;     /* 16 — карточки, фото */
+  --radius-xl: 1.25rem;  /* 20 — плавающие панели, диалоги, шторка */
+  --radius-full: 999px;
+
+  --border-width: 1px;
+
+  --shadow-xs: 0 1px 2px rgb(45 19 75 / 0.06);
+  --shadow-sm: 0 1px 3px rgb(45 19 75 / 0.08), 0 1px 2px rgb(45 19 75 / 0.04);
+  --shadow-md: 0 4px 16px rgb(45 19 75 / 0.1), 0 1px 3px rgb(45 19 75 / 0.06);
+  --shadow-lg: 0 12px 40px rgb(45 19 75 / 0.16), 0 2px 6px rgb(45 19 75 / 0.06);
+  --shadow-marker: 0 2px 6px rgb(30 29 32 / 0.28);
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus);
+
+  /* ── Размеры элементов ──────────────────────────────────── */
+
+  --control-sm: 2rem;      /* 32 */
+  --control-md: 2.5rem;    /* 40 */
+  --control-lg: 3rem;      /* 48 */
+  --touch-target: 2.75rem; /* 44 — минимум для касаний */
+
+  --header-h: 4rem;        /* 64 */
+  --container: 80rem;      /* 1280 */
+  --container-narrow: 45rem; /* 720 — формы, текст */
+  --gutter: var(--space-6);
+  --panel-w: 26rem;        /* 416 — боковая панель карты */
+
+  /* ── Движение ───────────────────────────────────────────── */
+
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Слои ───────────────────────────────────────────────── */
+
+  --z-map-ui: 10;
+  --z-panel: 20;
+  --z-sheet: 30;
+  --z-header: 50;
+  --z-dropdown: 60;
+  --z-toast: 80;
+
+  /*
+   * Контрольные точки (CSS-переменные нельзя использовать в @media, значения продублированы в правилах):
+   *   sm  ≥ 30rem  (480)  — крупные телефоны
+   *   md  ≥ 48rem  (768)  — планшет, мобильная карта сменяется десктопной
+   *   lg  ≥ 64rem  (1024) — десктоп
+   *   xl  ≥ 80rem  (1280) — широкий десктоп
+   *   2xl ≥ 100rem (1600) — очень широкие экраны
+   */
+}
+
+@media (max-width: 47.99rem) {
+  :root {
+    --header-h: 3.5rem;
+    --gutter: var(--space-4);
+  }
+}

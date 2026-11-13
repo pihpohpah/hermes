@@ -1,0 +1,277 @@
+/*
+ * Элементы выбора режима и фильтров.
+ * .chip — фильтр-«таблетка»; выбранное состояние через aria-pressed="true" (кнопка) или :checked (input внутри).
+ * .chip-row — горизонтальная прокручиваемая строка чипов.
+ * .segmented — переключатель режимов (сценарии, «Карта/Список», «Пешком/Авто»), роль tablist или radiogroup.
+ * .tabs — вкладки с подчёркиванием (профиль, разделы страниц).
+ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  flex: none;
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--color-border-hover);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chip .icon {
+  width: 1rem;
+  height: 1rem;
+  margin-left: calc(var(--space-1) * -1);
+  color: var(--color-text-secondary);
+}
+
+.chip[aria-pressed="true"],
+.chip:has(input:checked) {
+  border-color: var(--color-bg-inverse);
+  background: var(--color-bg-inverse);
+  color: var(--color-text-inverse);
+}
+
+.chip[aria-pressed="true"] .icon,
+.chip:has(input:checked) .icon {
+  color: inherit;
+}
+
+.chip:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip__count {
+  margin-left: var(--space-0-5);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[aria-pressed="true"] .chip__count,
+.chip:has(input:checked) .chip__count {
+  color: var(--gray-400);
+}
+
+.chip--lg {
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  font-size: var(--text-md);
+}
+
+/* Убираемый фильтр: «Бесплатно ×» */
+.chip--removable {
+  padding-right: var(--space-1-5);
+  border-color: transparent;
+  background: var(--color-bg-muted);
+}
+
+.chip--removable .icon {
+  margin: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.chip--removable:hover {
+  border-color: transparent;
+  background: var(--color-bg-muted-hover);
+}
+
+/* Чип на карте/фото — с тенью */
+.chip--floating {
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+
+.chip-row {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  scroll-padding-inline: var(--space-4);
+  /* место для фокус-кольца, чтобы его не обрезал overflow */
+  padding: var(--space-1);
+  margin: calc(var(--space-1) * -1);
+}
+
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-row--wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+/* ── Сегментированный переключатель ── */
+
+.segmented {
+  display: flex;
+  gap: var(--space-0-5);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+}
+
+.segmented__item {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1-5);
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: calc(var(--radius-md) - var(--space-1));
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.segmented__item:hover {
+  color: var(--color-text);
+  background: rgb(255 255 255 / 0.55);
+}
+
+.segmented__item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.segmented__item[aria-selected="true"],
+.segmented__item[aria-checked="true"],
+.segmented__item[aria-pressed="true"],
+.segmented__item:has(input:checked) {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented__item input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented__item:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.segmented__item .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.segmented__count {
+  font-weight: var(--weight-medium);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Сценарии: иконка активного пункта окрашивается в цвет сценария */
+.segmented__item[data-scenario="city"]:is([aria-selected="true"], [aria-pressed="true"], :has(input:checked)) .icon { color: var(--color-city); }
+.segmented__item[data-scenario="nature"]:is([aria-selected="true"], [aria-pressed="true"], :has(input:checked)) .icon { color: var(--color-nature); }
+.segmented__item[data-scenario="sea"]:is([aria-selected="true"], [aria-pressed="true"], :has(input:checked)) .icon { color: var(--color-sea); }
+
+.segmented--lg .segmented__item {
+  min-height: 2.75rem;
+  font-size: var(--text-md);
+}
+
+/* ── Вкладки с подчёркиванием ── */
+
+.tabs {
+  display: flex;
+  gap: var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  flex: none;
+  padding: var(--space-3) 0;
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background-color var(--dur-fast);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab:is([aria-selected="true"], [aria-pressed="true"]) {
+  color: var(--color-text);
+}
+
+.tab:is([aria-selected="true"], [aria-pressed="true"])::after {
+  background: var(--color-primary);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-xs);
+}
+
+.tab__count {
+  padding: 0 var(--space-1-5);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,256 @@
+/*
+ * Кнопки.
+ * .btn — базовая кнопка; модификаторы цвета: --primary, --secondary, --outline, --ghost, --accent, --inverse, --danger.
+ * Размеры: --sm (32), по умолчанию (40), --lg (48). --block растягивает на ширину контейнера.
+ * .icon-btn — квадратная/круглая кнопка только с иконкой; обязательно aria-label.
+ * Состояния: :hover, :active, :focus-visible, :disabled / [aria-disabled="true"], .is-loading.
+ */
+
+.btn {
+  --btn-bg: var(--color-bg-muted);
+  --btn-bg-hover: var(--color-bg-muted-hover);
+  --btn-bg-active: var(--gray-300);
+  --btn-fg: var(--color-text);
+  --btn-border: transparent;
+  --btn-h: var(--control-md);
+  --btn-px: var(--space-4);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--btn-h);
+  padding: 0 var(--btn-px);
+  border: var(--border-width) solid var(--btn-border);
+  border-radius: var(--radius-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.btn:hover {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+}
+
+.btn:active {
+  background: var(--btn-bg-active);
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.btn .icon {
+  margin-inline: -0.125rem;
+}
+
+.btn--primary {
+  --btn-bg: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-hover);
+  --btn-bg-active: var(--color-primary-active);
+  --btn-fg: var(--color-on-primary);
+}
+
+.btn--secondary {
+  --btn-bg: var(--color-primary-soft);
+  --btn-bg-hover: var(--color-primary-soft-hover);
+  --btn-bg-active: var(--orange-300);
+  --btn-fg: var(--color-primary-text);
+}
+
+.btn--outline {
+  --btn-bg: var(--color-surface);
+  --btn-bg-hover: var(--color-bg-subtle);
+  --btn-bg-active: var(--color-bg-muted);
+  --btn-border: var(--color-border-strong);
+}
+
+.btn--outline:hover {
+  border-color: var(--color-border-hover);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--color-bg-muted);
+  --btn-bg-active: var(--color-bg-muted-hover);
+}
+
+.btn--accent {
+  --btn-bg: var(--color-accent);
+  --btn-bg-hover: var(--color-accent-hover);
+  --btn-bg-active: var(--violet-700);
+  --btn-fg: var(--color-on-accent);
+}
+
+.btn--accent-soft {
+  --btn-bg: var(--color-accent-soft);
+  --btn-bg-hover: var(--color-accent-soft-hover);
+  --btn-bg-active: var(--violet-200);
+  --btn-fg: var(--color-timed-text);
+}
+
+.btn--inverse {
+  --btn-bg: var(--color-bg-inverse);
+  --btn-bg-hover: var(--gray-800);
+  --btn-bg-active: var(--gray-700);
+  --btn-fg: var(--color-text-inverse);
+}
+
+.btn--danger {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--color-danger-soft);
+  --btn-bg-active: var(--red-100);
+  --btn-fg: var(--color-danger);
+}
+
+.btn--sm {
+  --btn-h: var(--control-sm);
+  --btn-px: var(--space-3);
+  gap: var(--space-1-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.btn--lg {
+  --btn-h: var(--control-lg);
+  --btn-px: var(--space-5);
+  font-size: var(--text-lg);
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+/* Переключаемая кнопка: «Я приду», «В маршруте» */
+.btn[aria-pressed="true"].btn--accent-soft {
+  --btn-bg: var(--color-accent);
+  --btn-bg-hover: var(--color-accent-hover);
+  --btn-fg: var(--color-on-accent);
+}
+
+.btn[aria-pressed="true"].btn--outline {
+  --btn-bg: var(--color-bg-inverse);
+  --btn-bg-hover: var(--gray-800);
+  --btn-fg: var(--color-text-inverse);
+  --btn-border: var(--color-bg-inverse);
+}
+
+/* Загрузка: текст скрыт, ширина сохраняется */
+.btn.is-loading {
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.is-loading > * {
+  visibility: hidden;
+}
+
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid var(--btn-fg);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Иконочная кнопка ── */
+
+.icon-btn {
+  --ib-size: var(--control-md);
+  --ib-bg: transparent;
+  --ib-bg-hover: var(--color-bg-muted);
+  --ib-fg: var(--color-text);
+
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--ib-size);
+  height: var(--ib-size);
+  border-radius: var(--radius-md);
+  background: var(--ib-bg);
+  color: var(--ib-fg);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.icon-btn:hover {
+  background: var(--ib-bg-hover);
+  color: var(--ib-fg);
+}
+
+.icon-btn:active {
+  transform: scale(0.96);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+}
+
+.icon-btn--sm {
+  --ib-size: var(--control-sm);
+  border-radius: var(--radius-sm);
+}
+
+.icon-btn--round {
+  border-radius: var(--radius-full);
+}
+
+.icon-btn--muted {
+  --ib-bg: var(--color-bg-muted);
+  --ib-bg-hover: var(--color-bg-muted-hover);
+}
+
+/* Плавающая над картой или фото */
+.icon-btn--floating {
+  --ib-bg: var(--color-surface);
+  --ib-bg-hover: var(--color-bg-subtle);
+  box-shadow: var(--shadow-md);
+}
+
+.icon-btn[aria-pressed="true"] {
+  --ib-bg: var(--color-bg-inverse);
+  --ib-bg-hover: var(--gray-800);
+  --ib-fg: var(--color-text-inverse);
+}
+
+@media (pointer: coarse) {
+  .icon-btn--sm {
+    --ib-size: 2.25rem;
+  }
+}

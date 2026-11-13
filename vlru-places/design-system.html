@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Дизайн-система — Места VL.ru</title>
+    <link rel="icon" href="assets/brand/vlru-seagull.svg" type="image/svg+xml" />
+    <link rel="preload" href="assets/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="src/styles/main.css" />
+    <link rel="stylesheet" href="src/styles/design-system.css" />
+    <script type="module" src="src/js/design-system.js"></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__inner">
+        <a class="brand" href="index.html#/map" aria-label="VL.ru Места — к прототипу">
+          <img class="brand__logo" src="assets/brand/vlru-logo.svg" alt="" width="58" height="30" />
+          <span class="brand__divider" aria-hidden="true"></span>
+          <span class="brand__name">Места</span>
+        </a>
+        <span class="badge">Дизайн-система 1.0</span>
+        <div class="header__actions">
+          <a class="btn btn--outline" href="index.html#/map">Открыть прототип</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="ds">
+      <nav class="ds-nav" aria-label="Разделы дизайн-системы">
+        <ol>
+          <li class="ds-nav__group">Основа</li>
+          <li><a href="#principles">Принципы</a></li>
+          <li><a href="#logo">Логотип</a></li>
+          <li><a href="#color">Цвет</a></li>
+          <li><a href="#type">Типографика</a></li>
+          <li><a href="#space">Отступы и форма</a></li>
+          <li><a href="#icons">Иконки</a></li>
+          <li><a href="#motion">Движение</a></li>
+          <li class="ds-nav__group">Компоненты</li>
+          <li><a href="#buttons">Кнопки</a></li>
+          <li><a href="#fields">Поля и выбор</a></li>
+          <li><a href="#filters">Фильтры и режимы</a></li>
+          <li><a href="#status">Статусы</a></li>
+          <li><a href="#cards">Карточки</a></li>
+          <li><a href="#overlays">Окна и уведомления</a></li>
+          <li><a href="#states">Пустые и служебные</a></li>
+          <li class="ds-nav__group">Продукт</li>
+          <li><a href="#map">Карта</a></li>
+          <li><a href="#layout">Сетка и адаптив</a></li>
+          <li><a href="#voice">Тексты</a></li>
+          <li><a href="#a11y">Доступность</a></li>
+          <li><a href="#dev">Для разработки</a></li>
+        </ol>
+      </nav>
+
+      <main class="ds-main" id="main">
+        <section class="ds-hero">
+          <span class="ds-label">Места · VL.ru · ноябрь 2026</span>
+          <h1>Дизайн-система «Места»</h1>
+          <p>
+            Правила и компоненты продукта: карта, справочник, быстрые метки «Сейчас», добавление мест и профиль.
+            Всё на этой странице — живые компоненты из того же CSS и JS, что и прототип. Значения берутся из
+            <code>src/styles/tokens.css</code>.
+          </p>
+          <div class="ds-hero__meta">
+            <span class="badge badge--city">Светлая тема</span>
+            <span class="badge">Inter</span>
+            <span class="badge">Mobile и desktop равнозначны</span>
+            <span class="badge">WCAG 2.1 AA — ориентир</span>
+          </div>
+        </section>
+
+        <!-- ── Принципы ── -->
+        <section class="ds-section" id="principles">
+          <h2>Принципы</h2>
+          <div class="ds-principles">
+            <div class="ds-principle">
+              <svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-map"></use></svg>
+              <strong>Карта — главное</strong>
+              <p>Карта занимает весь экран, интерфейс плавает поверх. Ничто не закрывает её без причины, а состояние карты не сбрасывается при переходах.</p>
+            </div>
+            <div class="ds-principle">
+              <svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-layers"></use></svg>
+              <strong>Один сценарий за раз</strong>
+              <p>Город, природа и море не смешиваются на карте. Так точек меньше, а фильтры подходят именно к выбранному сценарию.</p>
+            </div>
+            <div class="ds-principle">
+              <svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-list"></use></svg>
+              <strong>Плотно, но спокойно</strong>
+              <p>Много информации на экране, но без рамок вокруг всего. Иерархию задают вес шрифта, отступы и фон, а не декор.</p>
+            </div>
+            <div class="ds-principle">
+              <svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-clock"></use></svg>
+              <strong>Время — фиолетовое</strong>
+              <p>Всё, что привязано ко времени, — события и метки «Сейчас» — фиолетовое. Оранжевый — действия и бренд. Цвет никогда не единственный носитель смысла.</p>
+            </div>
+            <div class="ds-principle">
+              <svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-accessibility"></use></svg>
+              <strong>Доступно по умолчанию</strong>
+              <p>Видимый фокус, клавиатура, подписи у иконок, крупные мишени на телефоне, учёт настройки «уменьшить движение».</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Логотип ── -->
+        <section class="ds-section" id="logo">
+          <h2>Логотип и название</h2>
+          <p>
+            Продукт живёт внутри VL.ru, поэтому используется действующий знак портала без изменений и рядом — название продукта
+            «Места», набранное Inter Bold. Своего знака у продукта пока нет. Файл знака: <code>assets/brand/vlru-logo.svg</code>
+            (геометрия 115 × 60, взят из открытых материалов vl.ru).
+          </p>
+          <div class="ds-stage">
+            <div class="ds-specimen">
+              <span class="ds-label">Охранное поле — не меньше высоты буквы «V» (≈ 30 px при высоте знака 30 px)</span>
+              <div class="ds-logo-area">
+                <span class="brand">
+                  <img class="brand__logo" src="assets/brand/vlru-logo.svg" alt="VL.ru" width="58" height="30" />
+                  <span class="brand__divider" aria-hidden="true"></span>
+                  <span class="brand__name">Места</span>
+                </span>
+              </div>
+            </div>
+            <div class="ds-specimen">
+              <span class="ds-label">Минимальная высота знака: 24 px на экране</span>
+              <span class="brand">
+                <img src="assets/brand/vlru-logo.svg" alt="VL.ru" width="46" height="24" style="height: 1.5rem; width: auto" />
+                <span class="brand__divider" aria-hidden="true"></span>
+                <span class="brand__name" style="font-size: var(--text-md)">Места</span>
+              </span>
+            </div>
+            <div class="ds-specimen">
+              <span class="ds-label">Фавикон — чайка из знака</span>
+              <img src="assets/brand/vlru-seagull.svg" alt="Чайка VL.ru" width="40" height="16" />
+            </div>
+          </div>
+          <div class="ds-dodont">
+            <div class="ds-rule">
+              <span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg>Знак на белом или светлом фоне</span>
+              <div class="ds-rule__demo"><img src="assets/brand/vlru-logo.svg" alt="" width="70" height="36" /></div>
+            </div>
+            <div class="ds-rule ds-rule--dont">
+              <span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-x"></use></svg>Не перекрашивать и не менять пропорции</span>
+              <div class="ds-rule__demo"><img src="assets/brand/vlru-logo.svg" alt="" width="110" height="30" style="height: 30px; width: 110px; filter: hue-rotate(160deg)" /></div>
+            </div>
+            <div class="ds-rule ds-rule--dont">
+              <span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-x"></use></svg>Не ставить на фото и цветные плашки, не добавлять тени</span>
+              <div class="ds-rule__demo" style="background: var(--color-primary)"><img src="assets/brand/vlru-logo.svg" alt="" width="70" height="36" style="filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.5))" /></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Цвет ── -->
+        <section class="ds-section" id="color">
+          <h2>Цвет</h2>
+          <p>
+            Палитра — из открытой системы токенов Farpost / VL.ru: белый фон, нейтральные с лёгким фиолетовым подтоном,
+            фирменный оранжевый и фиолетовый акцент. Градиентов нет. В компонентах используются только семантические токены
+            (<code>--color-*</code>), палитра — источник для них.
+          </p>
+          <div class="ds-sub">
+            <h3>Палитра</h3>
+            <div data-ds="palette"></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Роли</h3>
+            <div class="ds-table-wrap"><table class="ds-table" data-ds="roles"></table></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Сценарии и время</h3>
+            <p>Цвет сценария окрашивает маркеры, иконку активного сценария и подпись категории. Он всегда дублируется иконкой и текстом.</p>
+            <div class="ds-stage">
+              <span class="badge badge--city"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-building-2"></use></svg>Город</span>
+              <span class="badge badge--nature"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-trees"></use></svg>Природа</span>
+              <span class="badge badge--sea"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-waves"></use></svg>Море</span>
+              <span class="badge badge--timed"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-calendar"></use></svg>Событие или метка</span>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Контраст</h3>
+            <p>
+              Посчитан по формуле WCAG 2.1. Текст основного размера — не ниже 4.5:1. Оранжевая кнопка с белым текстом даёт 3.4:1:
+              это проходит порог для элементов интерфейса и полужирного текста 15 px+, как у Farpost. Мелкий текст оранжевым
+              не набирается — для него есть <code>--color-primary-text</code>.
+            </p>
+            <div class="ds-table-wrap"><table class="ds-table" data-ds="contrast"></table></div>
+          </div>
+        </section>
+
+        <!-- ── Типографика ── -->
+        <section class="ds-section" id="type">
+          <h2>Типографика</h2>
+          <p>
+            Inter (variable, OFL) — тот же шрифт, что на vl.ru. Включён альтернативный однокомнатный «а» (<code>cv11</code>):
+            он делает текст мягче и моложе без смены гарнитуры. Заголовки — Bold с трекингом −0.02em; основной текст интерфейса —
+            15 px. Шрифт хранится локально: <code>assets/fonts/InterVariable.woff2</code>.
+          </p>
+          <div>
+            <div class="ds-type-row"><span class="ds-label">--text-4xl · 40/48 · 700</span><span style="font-size: var(--text-4xl); font-weight: 700; letter-spacing: var(--tracking-tight); line-height: 1.2">Куда пойти во Владивостоке</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-3xl · 30/36 · 700</span><span style="font-size: var(--text-3xl); font-weight: 700; letter-spacing: var(--tracking-tight); line-height: 1.2">Маяк Токаревского</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-2xl · 24/30 · 700</span><span style="font-size: var(--text-2xl); font-weight: 700; letter-spacing: var(--tracking-tight); line-height: 1.25">Похожие у моря</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-xl · 20/26 · 700</span><span style="font-size: var(--text-xl); font-weight: 700; letter-spacing: var(--tracking-snug)">Что важно знать</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-lg · 17/24 · 600</span><span style="font-size: var(--text-lg); font-weight: 600">Джем на гитарах у фонтана на Фокина</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-md · 15/22 · 400</span><span>Основной текст интерфейса: описания, поля, списки. Читается и на телефоне, и на широком мониторе.</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-sm · 13/18 · 400</span><span style="font-size: var(--text-sm); color: var(--color-text-secondary)">Мета: Центр · 350 м от центра · Бесплатно</span></div>
+            <div class="ds-type-row"><span class="ds-label">--text-xs · 12/16 · 600</span><span style="font-size: var(--text-xs); font-weight: 600">Бейджи, подписи маркеров</span></div>
+          </div>
+          <div class="ds-dodont">
+            <div class="ds-rule"><span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg>Иерархия весом и размером</span><p>Не больше трёх размеров на одном экране-панели. Вторичный текст — цветом <code>--color-text-secondary</code>, а не мельче 13 px.</p></div>
+            <div class="ds-rule ds-rule--dont"><span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-x"></use></svg>Без капса в заголовках и разрядки</span><p>Заглавные буквы — только в коротких групповых подписях списка («СКОРО», «МЕСТА») размером 12 px.</p></div>
+          </div>
+        </section>
+
+        <!-- ── Отступы ── -->
+        <section class="ds-section" id="space">
+          <h2>Отступы, радиусы, тени</h2>
+          <div class="ds-sub">
+            <h3>Шаг 4 px</h3>
+            <p>Внутри компонентов — 4–16 px, между блоками — 24–48 px, между секциями страницы — 48–64 px.</p>
+            <div class="ds-stage ds-stage--column" data-ds="spacing"></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Радиусы</h3>
+            <p>Мягкие, но не «пузыри»: чем крупнее поверхность, тем больше радиус. Чипы и аватары — полностью скруглённые.</p>
+            <div class="ds-stage">
+              <div class="ds-box" style="border-radius: var(--radius-xs)">6 · xs<br />бейдж</div>
+              <div class="ds-box" style="border-radius: var(--radius-sm)">8 · sm<br />мелкая кнопка</div>
+              <div class="ds-box" style="border-radius: var(--radius-md)">12 · md<br />кнопка, поле</div>
+              <div class="ds-box" style="border-radius: var(--radius-lg)">16 · lg<br />карточка, фото</div>
+              <div class="ds-box" style="border-radius: var(--radius-xl)">20 · xl<br />панель, окно</div>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Тени</h3>
+            <p>Тени только у того, что лежит поверх: панели над картой, меню, окна, плавающие кнопки. Карточки на странице — без тени, с обводкой или без неё.</p>
+            <div class="ds-stage ds-stage--subtle">
+              <div class="ds-box" style="border: 0; border-radius: var(--radius-md); box-shadow: var(--shadow-sm)">sm<br />информ. карточка</div>
+              <div class="ds-box" style="border: 0; border-radius: var(--radius-md); box-shadow: var(--shadow-md)">md<br />кнопки на карте</div>
+              <div class="ds-box" style="border: 0; border-radius: var(--radius-md); box-shadow: var(--shadow-lg)">lg<br />панель, окно</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Иконки ── -->
+        <section class="ds-section" id="icons">
+          <h2>Иконки</h2>
+          <p>
+            Набор Lucide (ISC) — линейные иконки 24 × 24 со скруглёнными концами, толщина линии 1.75 (2 — в мелких размерах).
+            Подключаются из спрайта <code>assets/icons.svg</code>:
+            <code>&lt;svg class="icon"&gt;&lt;use href="assets/icons.svg#i-map"/&gt;&lt;/svg&gt;</code>. Иконка без подписи
+            допустима только в кнопке с <code>aria-label</code>. Размеры: 14, 16, 20 (основной), 24, 32.
+          </p>
+          <div class="ds-icons" data-ds="icons"></div>
+        </section>
+
+        <!-- ── Движение ── -->
+        <section class="ds-section" id="motion">
+          <h2>Движение</h2>
+          <p>Анимация объясняет изменение, а не украшает. Нет параллакса, видеофонов и анимаций при прокрутке.</p>
+          <div class="ds-table-wrap">
+            <table class="ds-table">
+              <thead><tr><th>Токен</th><th>Значение</th><th>Где</th></tr></thead>
+              <tbody>
+                <tr><td><code>--dur-fast</code></td><td>120 ms</td><td>Наведение, нажатие, смена цвета</td></tr>
+                <tr><td><code>--dur-base</code></td><td>200 ms</td><td>Меню, тосты, смена экрана (View Transitions)</td></tr>
+                <tr><td><code>--dur-slow</code></td><td>320 ms</td><td>Шторка, окна, сворачивание панели</td></tr>
+                <tr><td><code>--ease-out</code></td><td>cubic-bezier(.2, .8, .2, 1)</td><td>Всё, что появляется</td></tr>
+                <tr><td>Перелёт карты</td><td>500–600 ms</td><td>Выбор точки, смена сценария, раскрытие кластера</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>При <code>prefers-reduced-motion: reduce</code> все переходы сокращаются до 1 ms, перелёты карты становятся мгновенными, пульсация «идёт сейчас» отключается.</p>
+        </section>
+
+        <!-- ── Кнопки ── -->
+        <section class="ds-section" id="buttons">
+          <h2>Кнопки</h2>
+          <p>Одна главная кнопка на экран или панель. Оранжевая — главное действие, фиолетовая — действие со временем (метка, «Я приду»).</p>
+          <div class="ds-sub">
+            <h3>Варианты</h3>
+            <div class="ds-stage">
+              <button class="btn btn--primary" type="button">Главное</button>
+              <button class="btn btn--secondary" type="button">Вторичное</button>
+              <button class="btn btn--outline" type="button">Контурная</button>
+              <button class="btn" type="button">Нейтральная</button>
+              <button class="btn btn--ghost" type="button">Прозрачная</button>
+              <button class="btn btn--accent" type="button"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-plus"></use></svg>Метка</button>
+              <button class="btn btn--accent-soft" type="button">Я приду</button>
+              <button class="btn btn--inverse" type="button">Тёмная</button>
+              <button class="btn btn--danger" type="button">Пожаловаться</button>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Размеры и состояния</h3>
+            <div class="ds-stage">
+              <button class="btn btn--primary btn--sm" type="button">32 · sm</button>
+              <button class="btn btn--primary" type="button">40 · md</button>
+              <button class="btn btn--primary btn--lg" type="button">48 · lg</button>
+              <button class="btn btn--primary is-loading" type="button" aria-busy="true"><span>Загрузка</span></button>
+              <button class="btn btn--primary" type="button" disabled>Недоступна</button>
+              <button class="btn btn--outline" type="button" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>В маршруте</button>
+              <button class="btn btn--accent-soft" type="button" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Вы идёте</button>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Иконочные</h3>
+            <div class="ds-stage ds-stage--subtle">
+              <button class="icon-btn" type="button" aria-label="Поделиться"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-share-2"></use></svg></button>
+              <button class="icon-btn icon-btn--muted" type="button" aria-label="Фильтры"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-sliders-horizontal"></use></svg></button>
+              <button class="icon-btn icon-btn--floating" type="button" aria-label="Где я"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-locate-fixed"></use></svg></button>
+              <button class="icon-btn icon-btn--floating icon-btn--sm icon-btn--round" type="button" aria-label="В маршрут"><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-route"></use></svg></button>
+              <button class="icon-btn" type="button" aria-pressed="true" aria-label="Выбрано"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg></button>
+              <div class="map-controls__group" style="display: inline-grid">
+                <button type="button" class="icon-btn" aria-label="Приблизить"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-plus"></use></svg></button>
+                <button type="button" class="icon-btn" aria-label="Отдалить"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-minus"></use></svg></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Поля ── -->
+        <section class="ds-section" id="fields">
+          <h2>Поля и выбор</h2>
+          <p>Поля — на мягком сером фоне без рамки, при фокусе — белые с фиолетовым кольцом. Ошибка — красная рамка, текст под полем и <code>aria-invalid</code>.</p>
+          <div class="ds-stage ds-stage--grid">
+            <div class="field">
+              <label class="field__label" for="ds-1">Название</label>
+              <input class="input" id="ds-1" placeholder="Например, бухта Шамора" />
+              <p class="field__hint">Как место называют местные</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="ds-2">С ошибкой</label>
+              <input class="input" id="ds-2" value="Ш" aria-invalid="true" aria-describedby="ds-2-e" />
+              <p class="field__error" id="ds-2-e">Напишите название — хотя бы три буквы</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="ds-3">Недоступно</label>
+              <input class="input" id="ds-3" value="Нельзя изменить" disabled />
+            </div>
+            <div class="field">
+              <span class="field__label">Поиск</span>
+              <div class="input-group">
+                <svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-search"></use></svg>
+                <input class="input" type="search" placeholder="Название, район или тег" aria-label="Поиск" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="ds-4">Выпадающий список</label>
+              <select class="select" id="ds-4"><option>Сначала интересные</option><option>Ближе к центру</option></select>
+            </div>
+            <div class="field">
+              <label class="field__label" for="ds-5">Описание</label>
+              <textarea class="textarea" id="ds-5" rows="3">Акустический концерт, приносите пледы.</textarea>
+              <span class="field__counter">38 / 1000</span>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <label class="check"><input type="checkbox" checked /><span>Чекбокс</span></label>
+            <label class="check"><input type="checkbox" /><span>Не выбран</span></label>
+            <label class="check"><input type="radio" name="ds-r" checked /><span>Радио</span></label>
+            <label class="check"><input type="radio" name="ds-r" /><span>Другой вариант</span></label>
+            <label class="switch" style="gap: var(--space-3)"><span>Бесплатно</span><input type="checkbox" checked /></label>
+            <div class="counter" role="group" aria-label="Счётчик">
+              <button type="button" class="icon-btn icon-btn--sm" aria-label="Меньше"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-minus"></use></svg></button>
+              <output class="counter__value">4</output>
+              <button type="button" class="icon-btn icon-btn--sm" aria-label="Больше"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-plus"></use></svg></button>
+            </div>
+          </div>
+          <div class="ds-stage ds-stage--column">
+            <div class="choice-group">
+              <label class="choice"><input type="radio" name="ds-c" checked /><span class="choice__icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-map-pin"></use></svg></span><span><span class="choice__title">Место</span><span class="choice__text">Постоянная точка</span></span></label>
+              <label class="choice"><input type="radio" name="ds-c" /><span class="choice__icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-calendar"></use></svg></span><span><span class="choice__title">Событие</span><span class="choice__text">С датой и временем</span></span></label>
+            </div>
+            <div class="upload" style="max-width: 24rem">
+              <div class="upload__item"><img src="assets/brand/vlru-seagull.svg" alt="" style="object-fit: contain; padding: 1rem" /></div>
+              <label class="upload__drop"><svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-image-plus"></use></svg>Добавить<input type="file" /></label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Фильтры ── -->
+        <section class="ds-section" id="filters">
+          <h2>Фильтры и режимы</h2>
+          <div class="ds-sub">
+            <h3>Сценарии — сегментированный переключатель</h3>
+            <p>Главный выбор на карте. На телефоне активный пункт тёмный, потому что лежит прямо на карте.</p>
+            <div class="ds-stage ds-stage--column">
+              <div class="segmented segmented--lg" role="group" aria-label="Сценарий" style="max-width: 26rem">
+                <button class="segmented__item" data-scenario="city" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-building-2"></use></svg>Город</button>
+                <button class="segmented__item" data-scenario="nature" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-trees"></use></svg>Природа</button>
+                <button class="segmented__item" data-scenario="sea" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-waves"></use></svg>Море</button>
+              </div>
+              <div class="segmented" role="tablist" style="max-width: 18rem">
+                <button class="segmented__item" role="tab" aria-selected="true">Всё</button>
+                <button class="segmented__item" role="tab" aria-selected="false">Места <span class="segmented__count">20</span></button>
+                <button class="segmented__item" role="tab" aria-selected="false">События <span class="segmented__count">5</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Чипы</h3>
+            <p>Категории и быстрые фильтры. Выбранный чип — тёмный. Убираемый — серый с крестиком.</p>
+            <div class="ds-stage">
+              <button class="chip" aria-pressed="true">Все</button>
+              <button class="chip" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-footprints"></use></svg>Прогулки<span class="chip__count">5</span></button>
+              <button class="chip" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-binoculars"></use></svg>Смотровые<span class="chip__count">3</span></button>
+              <button class="chip chip--lg" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-volleyball"></use></svg>Спорт</button>
+              <button class="chip chip--removable">Бесплатно<svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-x"></use></svg></button>
+              <a class="chip chip--lg chip--floating" href="#map"><span class="live-dot" style="color: var(--color-accent)" aria-hidden="true"></span>Сейчас: 12 меток</a>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Вкладки</h3>
+            <div class="ds-stage ds-stage--column">
+              <div class="tabs" role="tablist">
+                <button class="tab" role="tab" aria-selected="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-layers"></use></svg>Все<span class="tab__count">58</span></button>
+                <button class="tab" role="tab" aria-selected="false">Город<span class="tab__count">25</span></button>
+                <button class="tab" role="tab" aria-selected="false">Природа<span class="tab__count">16</span></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Статусы ── -->
+        <section class="ds-section" id="status">
+          <h2>Статусы и индикаторы</h2>
+          <div class="ds-stage">
+            <span class="badge">Нейтральный</span>
+            <span class="badge badge--success"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg>Опубликовано</span>
+            <span class="badge badge--warning"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-hourglass"></use></svg>На проверке</span>
+            <span class="badge badge--danger"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-x"></use></svg>Отклонено</span>
+            <span class="badge badge--timed"><span class="live-dot" aria-hidden="true"></span>идёт, ещё 40 мин</span>
+            <span class="badge badge--inverse">Ваша метка</span>
+            <span class="date-tile"><span class="date-tile__day">21</span><span class="date-tile__month">ноя</span></span>
+          </div>
+          <div class="ds-stage">
+            <span class="avatar avatar--xs" style="--avatar-bg: var(--orange-100); --avatar-fg: var(--orange-800)">А</span>
+            <span class="avatar avatar--sm">Д</span>
+            <span class="avatar" style="--avatar-bg: var(--blue-100); --avatar-fg: var(--blue-600)">КС</span>
+            <span class="avatar avatar--lg" style="--avatar-bg: var(--green-100); --avatar-fg: var(--green-600)">Л</span>
+            <span class="avatar-stack"><span class="avatar avatar--sm">А</span><span class="avatar avatar--sm" style="--avatar-bg: var(--blue-100); --avatar-fg: var(--blue-600)">Д</span><span class="avatar avatar--sm" style="--avatar-bg: var(--orange-100); --avatar-fg: var(--orange-800)">С</span></span>
+            <div class="meter" style="width: 16rem">
+              <div class="meter__label"><span>Идут <strong>4</strong></span><span>нужно ещё 2 человека</span></div>
+              <div class="meter__track"><div class="meter__fill" style="width: 66%"></div></div>
+            </div>
+          </div>
+          <div class="ds-stage ds-stage--column">
+            <ol class="steps" style="max-width: 32rem">
+              <li class="steps__item is-done"><span class="steps__bar"></span><span>1. Что</span></li>
+              <li class="steps__item" aria-current="step"><span class="steps__bar"></span><span>2. Подробности</span></li>
+              <li class="steps__item"><span class="steps__bar"></span><span>3. Отправка</span></li>
+            </ol>
+            <div class="alert"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-info"></use></svg><span>Информационное сообщение внутри экрана.</span></div>
+            <div class="alert alert--warning"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-triangle-alert"></use></svg><div><strong class="alert__title">Перед поездкой</strong>Погода на море меняется быстро.</div></div>
+            <div class="alert alert--success"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg><span>Вы вошли — статус проверки появится в профиле.</span></div>
+            <div class="alert alert--danger"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-triangle-alert"></use></svg><span>Не получилось отправить. Попробуйте ещё раз.</span></div>
+            <div class="alert alert--neutral"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-shield-check"></use></svg><span>Встречайтесь в людных местах.</span></div>
+          </div>
+        </section>
+
+        <!-- ── Карточки ── -->
+        <section class="ds-section" id="cards">
+          <h2>Карточки</h2>
+          <p>Отрисованы теми же функциями, что и в прототипе (<code>src/js/ui/cards.js</code>), на реальных демо-данных.</p>
+          <div class="ds-sub">
+            <h3>Карточка справочника — место и событие</h3>
+            <div class="ds-stage ds-stage--grid" data-ds="place-cards"></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Строка списка на карте</h3>
+            <p>Компактная: фото 72 px, название, категория цветом сценария, факты. Справа — добавить в маршрут.</p>
+            <div class="ds-stage ds-stage--column"><ul class="map-panel__list" role="list" style="max-width: 26rem; padding: 0" data-ds="rows"></ul></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Метка «Сейчас»</h3>
+            <div class="ds-stage ds-stage--grid" data-ds="pins" style="list-style: none"></div>
+          </div>
+          <div class="ds-sub">
+            <h3>Подборка</h3>
+            <div class="ds-stage ds-stage--grid" data-ds="collections"></div>
+          </div>
+        </section>
+
+        <!-- ── Окна ── -->
+        <section class="ds-section" id="overlays">
+          <h2>Окна и уведомления</h2>
+          <p>
+            Окно — нативный <code>&lt;dialog&gt;</code>: ловушка фокуса, Escape и возврат фокуса работают сами. На телефоне окно
+            становится нижней шторкой с ручкой. Уведомления появляются сверху под шапкой — внизу живут шторка, маршрут и кнопки форм.
+          </p>
+          <div class="ds-stage ds-stage--subtle" style="align-items: flex-start">
+            <div class="dialog-static">
+              <div class="dialog__header"><h4 class="dialog__title">Снять метку?</h4><button type="button" class="icon-btn" aria-label="Закрыть"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-x"></use></svg></button></div>
+              <div class="dialog__body"><p>Она сразу исчезнет с карты у всех.</p></div>
+              <div class="dialog__footer"><button class="btn btn--ghost" type="button">Отмена</button><button class="btn btn--inverse" type="button">Снять</button></div>
+            </div>
+            <div class="menu" role="menu" style="position: static">
+              <button type="button" class="menu__item" role="menuitem"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-user"></use></svg>Профиль</button>
+              <button type="button" class="menu__item" role="menuitem"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-radio"></use></svg>Мои метки</button>
+              <div class="menu__separator"></div>
+              <button type="button" class="menu__item" role="menuitem"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-log-out"></use></svg>Выйти</button>
+            </div>
+            <div style="display: grid; gap: var(--space-2); width: 24rem; max-width: 100%">
+              <div class="toast toast--success"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg><span class="toast__text">В маршруте 3 точки</span><button type="button" class="toast__action">Показать</button></div>
+              <div class="toast"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-info"></use></svg><span class="toast__text">Ссылка скопирована</span></div>
+              <div class="toast toast--danger"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-triangle-alert"></use></svg><span class="toast__text">Нет соединения</span></div>
+            </div>
+          </div>
+          <div class="ds-stage">
+            <button class="btn btn--outline" type="button" data-ds-open="dialog">Открыть окно</button>
+            <button class="btn btn--outline" type="button" data-ds-open="toast">Показать уведомление</button>
+            <button class="btn btn--outline" type="button" data-ds-open="auth">Окно входа</button>
+          </div>
+        </section>
+
+        <!-- ── Пустые ── -->
+        <section class="ds-section" id="states">
+          <h2>Пустые и служебные состояния</h2>
+          <p>У каждого пустого состояния — причина простыми словами и выход: сбросить условия, предложить место, открыть карту.</p>
+          <div class="ds-stage ds-stage--grid">
+            <div class="empty">
+              <span class="empty__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-search"></use></svg></span>
+              <h4 class="empty__title">Ничего не нашлось</h4>
+              <p class="empty__text">Попробуйте изменить условия или загляните в другой раздел.</p>
+              <div class="empty__actions"><button class="btn btn--primary" type="button">Сбросить всё</button></div>
+            </div>
+            <div class="empty">
+              <span class="empty__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="assets/icons.svg#i-wifi-off"></use></svg></span>
+              <h4 class="empty__title">Карта не загрузилась</h4>
+              <p class="empty__text">Похоже, пропало соединение. Список мест работает.</p>
+              <div class="empty__actions"><button class="btn btn--primary" type="button">Повторить</button></div>
+            </div>
+            <div class="empty" aria-hidden="true">
+              <div class="result-row" style="width: 100%">
+                <div class="media skeleton" style="--media-ratio: 1"></div>
+                <div class="result-row__body"><div class="skeleton skeleton--text" style="width: 70%"></div><div class="skeleton skeleton--text" style="width: 45%"></div></div>
+              </div>
+              <p class="empty__text">Скелетон при загрузке</p>
+            </div>
+          </div>
+          <p>Отдельные экраны: <a href="index.html#/nope">404</a>, <a href="index.html#/add/success">успешная отправка</a>, <a href="index.html#/profile">профиль без входа</a>.</p>
+        </section>
+
+        <!-- ── Карта ── -->
+        <section class="ds-section" id="map">
+          <h2>Карта</h2>
+          <p>
+            Настоящая география на данных OpenStreetMap (векторные тайлы OpenFreeMap), отрисованная собственным схематичным стилем:
+            только суша, вода, зелень, дороги, паромы и подписи на русском. Магазины, номера домов и чужие иконки выключены —
+            точки на карту ставит только продукт. Стиль — <code>src/js/map/style.js</code>, цвета — токены <code>--map-*</code>.
+          </p>
+          <div class="ds-sub">
+            <h3>Маркеры</h3>
+            <p>Форма различает тип, цвет — сценарий, иконка — категорию. Подпись видна при наведении, выборе и на крупном масштабе.</p>
+            <div class="ds-stage ds-stage--map">
+              <div class="ds-specimen"><span class="ds-label">место</span><span class="marker" data-scenario="city"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-binoculars"></use></svg></span></div>
+              <div class="ds-specimen"><span class="ds-label">природа · выбрано</span><span class="marker" data-scenario="nature" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-mountain"></use></svg><span class="marker__label">Гора Пидан</span></span></div>
+              <div class="ds-specimen"><span class="ds-label">море</span><span class="marker" data-scenario="sea"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-lighthouse"></use></svg></span></div>
+              <div class="ds-specimen"><span class="ds-label">событие</span><span class="marker marker--event" data-scenario="timed"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-calendar"></use></svg><span>21 ноя</span></span></div>
+              <div class="ds-specimen"><span class="ds-label">кластер</span><span class="marker marker--cluster" data-scenario="city" data-size="md">12</span></div>
+              <div class="ds-specimen"><span class="ds-label">метка «Сейчас»</span><span class="marker marker--pin is-live" style="margin-right: 3rem"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-volleyball"></use></svg><span class="marker__time">идёт</span></span></div>
+              <div class="ds-specimen"><span class="ds-label">своя метка</span><span class="marker marker--pin is-mine" style="margin-right: 3rem"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-guitar"></use></svg><span class="marker__time">30 мин</span></span></div>
+              <div class="ds-specimen"><span class="ds-label">точка маршрута</span><span class="marker marker--stop">2</span></div>
+              <div class="ds-specimen"><span class="ds-label">я</span><span class="marker marker--me"></span></div>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Панель маршрута</h3>
+            <div class="ds-stage ds-stage--map">
+              <div class="route-bar">
+                <div class="route-bar__card">
+                  <span class="route-bar__icon"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-route"></use></svg></span>
+                  <div class="route-bar__info"><strong>Маршрут · 3 точки</strong><span>4,2 км · 55 мин пешком</span></div>
+                  <div class="segmented" role="radiogroup"><button class="segmented__item" role="radio" aria-checked="true"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-footprints"></use></svg>Пешком</button><button class="segmented__item" role="radio" aria-checked="false"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-car"></use></svg>Авто</button></div>
+                  <div class="route-bar__actions"><button class="btn btn--sm btn--outline" type="button">Изменить</button><button class="icon-btn icon-btn--sm" type="button" aria-label="Очистить"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-x"></use></svg></button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ds-sub">
+            <h3>Цвета подложки</h3>
+            <div class="ds-scale" data-ds="map-colors"></div>
+          </div>
+        </section>
+
+        <!-- ── Сетка ── -->
+        <section class="ds-section" id="layout">
+          <h2>Сетка и адаптив</h2>
+          <p>Адаптив — перестройка, а не уменьшение. Главное отличие — карта: на десктопе панель слева, на телефоне — шторка снизу.</p>
+          <div class="ds-table-wrap">
+            <table class="ds-table">
+              <thead><tr><th>Точка</th><th>Ширина</th><th>Что меняется</th></tr></thead>
+              <tbody>
+                <tr><td>base</td><td>320+ px</td><td>Одна колонка, шторка с тремя положениями, меню — выпадающая панель, панель действий снизу на странице места</td></tr>
+                <tr><td><code>sm</code></td><td>480+</td><td>Справочник в две колонки</td></tr>
+                <tr><td><code>md</code></td><td>768+</td><td>Карта с боковой панелью 352 px, полная навигация в шапке, окна по центру</td></tr>
+                <tr><td><code>lg</code></td><td>1024+</td><td>Панель 416 px, справочник в три колонки, страница места в две колонки</td></tr>
+                <tr><td><code>xl</code></td><td>1280+</td><td>Справочник в четыре колонки, контейнер 1280 px</td></tr>
+                <tr><td><code>2xl</code></td><td>1600+</td><td>Справочник в пять колонок</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Отступы контейнера: 24 px на десктопе и 16 px на телефоне. Минимальная мишень касания — 44 px. Проверенный минимум ширины — 320 px.</p>
+        </section>
+
+        <!-- ── Тексты ── -->
+        <section class="ds-section" id="voice">
+          <h2>Тексты</h2>
+          <p>Дружелюбно, коротко, по делу. Обращение на «вы» со строчной. Практическая информация важнее эпитетов.</p>
+          <div class="ds-dodont">
+            <div class="ds-rule"><span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-check"></use></svg>Так</span><p>«Лучший свет — за час до заката»<br />«Не нашли место? Предложите»<br />«Метка исчезнет, когда встреча закончится»</p></div>
+            <div class="ds-rule ds-rule--dont"><span class="ds-rule__title"><svg class="icon" aria-hidden="true"><use href="assets/icons.svg#i-circle-x"></use></svg>Не так</span><p>«Уникальная жемчужина Приморья!!!»<br />«Произошла ошибка 500»<br />«Уважаемый пользователь, Вам необходимо авторизоваться»</p></div>
+          </div>
+          <div class="ds-table-wrap">
+            <table class="ds-table">
+              <thead><tr><th>Что</th><th>Как пишем</th></tr></thead>
+              <tbody>
+                <tr><td>Числа</td><td>1 200 ₽ · 3,1 км · 2 ч 30 мин — неразрывный пробел перед единицей</td></tr>
+                <tr><td>Даты</td><td>Сб, 21 ноября · 19:30; в маркере — «21 ноя»</td></tr>
+                <tr><td>Кавычки</td><td>«ёлочки», внутри — „лапки“</td></tr>
+                <tr><td>Ошибки</td><td>Что случилось и что сделать: «Не получилось отправить. Проверьте соединение и попробуйте ещё раз»</td></tr>
+                <tr><td>Кнопки</td><td>Глагол действия: «Добавить», «Я приду», «Показать 12 результатов»</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ── Доступность ── -->
+        <section class="ds-section" id="a11y">
+          <h2>Доступность</h2>
+          <div class="ds-stage ds-stage--column">
+            <ul class="checklist" role="list">
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Фокус всегда виден: фиолетовое кольцо 2 px с белым зазором</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Карта управляется стрелками и +/−; все объекты карты доступны списком в панели</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Иконочные кнопки — с aria-label; декоративные иконки скрыты от скринридера</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Цвет дублируется формой, иконкой и текстом</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Ошибки форм — текстом под полем, aria-invalid и фокус на первом ошибочном поле</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Счётчики результатов и уведомления озвучиваются через aria-live</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>Мишени касания на телефоне — от 44 px</li>
+              <li><svg class="icon icon--sm" aria-hidden="true"><use href="assets/icons.svg#i-check"></use></svg>prefers-reduced-motion отключает анимации и перелёты карты</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ── Разработка ── -->
+        <section class="ds-section" id="dev">
+          <h2>Для разработки</h2>
+          <p>Подробно — в <code>README.md</code> и <code>docs/</code>. Коротко:</p>
+          <pre class="ds-code">src/styles/tokens.css        — все значения: цвет, шрифт, отступы, радиусы, тени, движение
+src/styles/components/*.css  — компоненты (BEM-подобные классы: .block__element--modifier)
+src/styles/views/*.css       — экраны
+src/js/ui/*.js               — рендереры компонентов: данные → разметка
+src/js/views/*.js            — экраны: mount / update / unmount
+src/js/api/*.js              — демо-API; заменяется на настоящие запросы без изменения экранов
+data/*.json                  — демо-данные в форме ответа API</pre>
+          <pre class="ds-code">/* Новый компонент берёт значения только из семантических токенов */
+.my-thing {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+}</pre>
+        </section>
+      </main>
+    </div>
+    <div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+  </body>
+</html>
