@@ -15,3 +15,25 @@ else
 fi
 go mod download
 """
+
+[tasks.design]
+description = "Открыть дизайн-прототип (статический сервер на :8080)"
+dir = "design"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+port="${PORT:-8080}"
+url="http://127.0.0.1:${port}"
+python3 -m http.server "$port" --bind 127.0.0.1 &
+server=$!
+cleanup() { kill "$server" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -sf -o /dev/null "$url"; then
+    break
+  fi
+  sleep 0.2
+done
+open "$url"
+wait "$server"
+''''
