@@ -1,0 +1,7 @@
+# Инструменты сборки карты: tilemaker (рендер MVT-тайлов) + osmium (кроп PBF).
+# Собирается автоматически из build-map.sh / build-relief.sh.
+FROM ghcr.io/systemed/tilemaker:latest
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends osmium-tool \
+ && rm -rf /var/lib/apt/lists/*

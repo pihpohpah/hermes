@@ -198,7 +198,7 @@ description = "Прогнать линтер"
 run = "golangci-lint run ./..."
 
 [tasks.map-download]
-description = "Собрать офлайн-карту Приморского края (PMTiles, z0-14) из OSM"
+description = "Собрать офлайн-карту Приморского края (PMTiles, z0-15) из OSM"
 run = "./scripts/map/build-map.sh"
 
 [tasks.map-size]
