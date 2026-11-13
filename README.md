@@ -154,6 +154,16 @@ WEATHER_MODE=mock go run ./cmd/server weather_load   # явный demo-режи�
 - `GET /events/{id}` (UUID или slug)
 - `GET /collections?scenario=` · `GET /collections/{id}` — редакционные подборки с элементами
 
+## Предложения и фото
+
+Пользовательские предложения (новые места, события, правки) проходят редакционный
+цикл `review → published/rejected`. Автор видит только свои. Повторная отправка с
+тем же заголовком `Idempotency-Key` и телом возвращает сохранённую запись (201 → 200),
+с другим телом — 409. Тип `fix` требует `fix_id` и `fix_reasons`, `event` — `date`.
+
+- `POST /submissions` · `GET /submissions?status=review` · `GET /submissions/{id}`
+- `POST /photos` — заглушка загрузки фото (multipart, поле `file`, лимит `PHOTOS_MAX_UPLOAD_MB`, по умолчанию 10 МБ). Хранилище, модерация и URL появятся позже: ответ — `202 {id, status: "pending"}`.
+
 API: `GET /forecast/place/{id}?activity=sup&date=YYYY-MM-DD` возвращает
 почасовые оценки, `sources` (источник, доступность, demo), `contributions`,
 `warnings` и `limitations`.

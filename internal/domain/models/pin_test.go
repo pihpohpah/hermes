@@ -1,13 +1,13 @@
-package models
+package models_test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
 func TestSlugify(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name    string
 		raw     string
@@ -24,9 +24,7 @@ func TestSlugify(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := Slugify(tc.raw)
+			got := models.Slugify(tc.raw)
 			if tc.wantLen > 0 {
 				if len(got) != tc.wantLen {
 					t.Fatalf("Slugify(%q) length = %d, want %d (%q)", tc.raw, len(got), tc.wantLen, got)
@@ -42,26 +40,22 @@ func TestSlugify(t *testing.T) {
 }
 
 func TestNewPinBoundsRejectsInverted(t *testing.T) {
-	t.Parallel()
-
-	if _, err := NewPinBounds(10, 20, 10, 30); err == nil {
+	if _, err := models.NewPinBounds(10, 20, 10, 30); err == nil {
 		t.Fatal("expected error for minLon == maxLon")
 	}
-	if _, err := NewPinBounds(10, 30, 20, 20); err == nil {
+	if _, err := models.NewPinBounds(10, 30, 20, 20); err == nil {
 		t.Fatal("expected error for minLat == maxLat")
 	}
-	if _, err := NewPinBounds(131.8, 43.0, 132.0, 43.2); err != nil {
+	if _, err := models.NewPinBounds(131.8, 43.0, 132.0, 43.2); err != nil {
 		t.Fatalf("valid bounds rejected: %v", err)
 	}
 }
 
 func TestCreatePinInputValidate(t *testing.T) {
-	t.Parallel()
-
-	base := CreatePinInput{
-		Kind:     PinKindSport,
+	base := models.CreatePinInput{
+		Kind:     models.PinKindSport,
 		Title:    "Футбол на Спортивной",
-		Location: Point{Lat: 43.119, Lon: 131.874},
+		Location: models.Point{Lat: 43.119, Lon: 131.874},
 		StartsAt: time.Now().Add(30 * time.Minute),
 		EndsAt:   time.Now().Add(2 * time.Hour),
 		AuthorID: "00000000-0000-0000-0000-000000000001",

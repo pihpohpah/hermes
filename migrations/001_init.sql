@@ -352,6 +352,42 @@ CREATE TABLE IF NOT EXISTS collection_items (
     PRIMARY KEY (collection_id, item_type, item_id)
 );
 
+-- Предложения пользователей: новые места, события и правки. Редакция ведёт
+-- статус review -> published/rejected; контакт нужен для обратной связи.
+-- idempotency_key связывает повторную отправку с той же записью.
+CREATE TABLE IF NOT EXISTS submissions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    idempotency_key text,
+    type text NOT NULL CHECK (type IN ('place', 'event', 'fix')),
+    status text NOT NULL DEFAULT 'review' CHECK (status IN ('review', 'published', 'rejected')),
+    scenario text CHECK (scenario IS NULL OR scenario IN ('city', 'nature', 'sea')),
+    category text,
+    title text NOT NULL,
+    address text NOT NULL DEFAULT '',
+    location geography(Point, 4326),
+    event_date date,
+    event_time text NOT NULL DEFAULT '',
+    description text NOT NULL DEFAULT '',
+    hours text NOT NULL DEFAULT '',
+    price text NOT NULL DEFAULT '',
+    link text NOT NULL DEFAULT '',
+    fix_id text NOT NULL DEFAULT '',
+    fix_reasons text[] NOT NULL DEFAULT '{}',
+    contact text NOT NULL DEFAULT '',
+    photos jsonb NOT NULL DEFAULT '[]'::jsonb,
+    moderator_note text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT submissions_title_length CHECK (char_length(title) BETWEEN 1 AND 200),
+    CONSTRAINT submissions_contact_length CHECK (char_length(contact) <= 140)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_author_idem
+    ON submissions (author_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_submissions_author_created_at ON submissions USING btree (author_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions USING btree (status);
+
 CREATE INDEX IF NOT EXISTS idx_places_location ON places USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_places_type ON places USING btree (type);
 CREATE INDEX IF NOT EXISTS idx_places_layer_code ON places USING btree (layer_code);

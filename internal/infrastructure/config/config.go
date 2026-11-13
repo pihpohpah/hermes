@@ -38,6 +38,7 @@ const (
 	defaultPinsHideThreshold = 3
 	defaultPinsMaxDurationH  = 12.0
 	defaultPinsPurgeGraceH   = 24.0
+	defaultPhotosMaxUploadMB = 10
 )
 
 // WeatherMode selects where weather data comes from. A failing real API never
@@ -61,6 +62,14 @@ type Config struct {
 	SentryConfig
 	SessionConfig
 	PinsConfig
+	PhotosConfig
+}
+
+// PhotosConfig covers the photo upload endpoint. Storage and moderation are
+// stubs for now; only the upload size limit is enforced.
+type PhotosConfig struct {
+	// MaxUploadMB caps one multipart upload in megabytes.
+	MaxUploadMB int64 `koanf:"PHOTOS_MAX_UPLOAD_MB" validate:"gte=1,lte=50"`
 }
 
 // PinsConfig is the moderation policy of the radar «Сейчас»: per-user
@@ -247,6 +256,9 @@ func defaultCfg() Config {
 			ReportHideThreshold: defaultPinsHideThreshold,
 			MaxDurationH:        defaultPinsMaxDurationH,
 			PurgeGraceH:         defaultPinsPurgeGraceH,
+		},
+		PhotosConfig: PhotosConfig{
+			MaxUploadMB: defaultPhotosMaxUploadMB,
 		},
 	}
 }

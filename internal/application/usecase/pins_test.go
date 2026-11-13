@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pihpohpah/hermes/internal/application/usecase"
 	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
@@ -29,7 +30,7 @@ func (f *fakePinStore) CountRecentByAuthor(_ context.Context, _ string, _ time.T
 	return f.recent, nil
 }
 
-func validCreateInput() models.CreatePinInput {
+func validCreatePinInput() models.CreatePinInput {
 	starts := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 
 	return models.CreatePinInput{
@@ -43,12 +44,10 @@ func validCreateInput() models.CreatePinInput {
 }
 
 func TestCreatePinAppliesStopWords(t *testing.T) {
-	t.Parallel()
-
 	store := &fakePinStore{}
-	uc := NewCreatePinUseCase(store, PinRules{StopWords: []string{"ставки", "КРИПТА"}}, time.Now)
+	uc := usecase.NewCreatePinUseCase(store, usecase.PinRules{StopWords: []string{"ставки", "КРИПТА"}}, time.Now)
 
-	in := validCreateInput()
+	in := validCreatePinInput()
 	in.Title = "Крипта ставки бесплатно"
 	if _, err := uc.Do(context.Background(), in); err == nil {
 		t.Fatal("expected stop word rejection")
@@ -57,66 +56,48 @@ func TestCreatePinAppliesStopWords(t *testing.T) {
 	}
 }
 
-func TestCreatePinEnforcesActiveLimit(t *testing.T) {
-	t.Parallel()
-
-	store := &fakePinStore{active: 5}
-	uc := NewCreatePinUseCase(store, PinRules{MaxActivePerUser: 5}, time.Now)
-
-	if _, err := uc.Do(context.Background(), validCreateInput()); err == nil {
-		t.Fatal("expected active pin limit rejection")
+func TestCreatePinEnforcesLimits(t *testing.T) {
+	tests := []struct {
+		name  string
+		store *fakePinStore
+		rules usecase.PinRules
+	}{
+		{name: "active pin cap", store: &fakePinStore{active: 5}, rules: usecase.PinRules{MaxActivePerUser: 5}},
+		{name: "hourly rate limit", store: &fakePinStore{recent: 10}, rules: usecase.PinRules{MaxPerHour: 10}},
 	}
-}
 
-func TestCreatePinEnforcesHourlyRateLimit(t *testing.T) {
-	t.Parallel()
-
-	store := &fakePinStore{recent: 10}
-	uc := NewCreatePinUseCase(store, PinRules{MaxPerHour: 10}, time.Now)
-
-	if _, err := uc.Do(context.Background(), validCreateInput()); err == nil {
-		t.Fatal("expected hourly rate limit rejection")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uc := usecase.NewCreatePinUseCase(tt.store, tt.rules, time.Now)
+			if _, err := uc.Do(context.Background(), validCreatePinInput()); err == nil {
+				t.Fatal("expected moderation rejection")
+			}
+		})
 	}
 }
 
 func TestCreatePinNightBan(t *testing.T) {
-	t.Parallel()
-
 	vladivostok, err := time.LoadLocation("Asia/Vladivostok")
 	if err != nil {
 		t.Skipf("tzdata unavailable: %v", err)
 	}
 
-	// 02:30 local — inside the 01:00–07:00 night window.
-	night := time.Date(2026, 11, 14, 2, 30, 0, 0, vladivostok)
-	store := &fakePinStore{}
-	uc := NewCreatePinUseCase(
-		store,
-		PinRules{
-			NightBanFrom: "01:00",
-			NightBanTo:   "07:00",
-			Location:     vladivostok,
-		},
-		func() time.Time { return night },
-	)
+	rules := usecase.PinRules{
+		NightBanFrom: "01:00",
+		NightBanTo:   "07:00",
+		Location:     vladivostok,
+	}
 
-	if _, err := uc.Do(context.Background(), validCreateInput()); err == nil {
+	night := time.Date(2026, 11, 14, 2, 30, 0, 0, vladivostok)
+	nightUC := usecase.NewCreatePinUseCase(&fakePinStore{}, rules, func() time.Time { return night })
+	if _, err := nightUC.Do(context.Background(), validCreatePinInput()); err == nil {
 		t.Fatal("expected night ban rejection at 02:30 local")
 	}
 
-	// 12:00 local — outside the window: the same input passes.
 	day := time.Date(2026, 11, 14, 12, 0, 0, 0, vladivostok)
-	uc = NewCreatePinUseCase(
-		store,
-		PinRules{
-			NightBanFrom: "01:00",
-			NightBanTo:   "07:00",
-			Location:     vladivostok,
-		},
-		func() time.Time { return day },
-	)
-
-	if _, err := uc.Do(context.Background(), validCreateInput()); err != nil {
+	store := &fakePinStore{}
+	dayUC := usecase.NewCreatePinUseCase(store, rules, func() time.Time { return day })
+	if _, err := dayUC.Do(context.Background(), validCreatePinInput()); err != nil {
 		t.Fatalf("daytime creation rejected: %v", err)
 	}
 	if store.created.AuthorID != "00000000-0000-0000-0000-000000000001" {
@@ -125,12 +106,10 @@ func TestCreatePinNightBan(t *testing.T) {
 }
 
 func TestCreatePinTrimsAndNormalizes(t *testing.T) {
-	t.Parallel()
-
 	store := &fakePinStore{}
-	uc := NewCreatePinUseCase(store, PinRules{}, time.Now)
+	uc := usecase.NewCreatePinUseCase(store, usecase.PinRules{}, time.Now)
 
-	in := validCreateInput()
+	in := validCreatePinInput()
 	in.Title = "  Идём на закат к маяку  "
 	in.Note = " берите термосы "
 	in.PlaceLabel = "  Поле у стадиона "
