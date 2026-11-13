@@ -50,6 +50,8 @@ function readForm(form, scenario) {
   return result;
 }
 
+export { field as filterField, readForm as readFiltersForm };
+
 /**
  * @param {object} options
  * @param {'city'|'nature'|'sea'} options.scenario

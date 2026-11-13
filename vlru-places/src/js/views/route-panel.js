@@ -99,7 +99,7 @@ export function createRouteController(stage) {
         html`
           <div class="preview">
             <div class="preview__bar">
-              <button type="button" class="btn btn--sm btn--ghost" data-action="route-close">${icon('arrow-left', 'icon--sm')}К списку</button>
+              <button type="button" class="btn btn--sm btn--ghost" data-action="route-close">${icon('arrow-left', 'icon--sm')}Назад</button>
             </div>
             <div class="empty">
               <span class="empty__icon">${icon('route', 'icon--lg')}</span>
@@ -117,7 +117,7 @@ export function createRouteController(stage) {
       html`
         <div class="preview">
           <div class="preview__bar">
-            <button type="button" class="btn btn--sm btn--ghost" data-action="route-close">${icon('arrow-left', 'icon--sm')}К списку</button>
+            <button type="button" class="btn btn--sm btn--ghost" data-action="route-close">${icon('arrow-left', 'icon--sm')}Назад</button>
             <button type="button" class="btn btn--sm btn--danger" data-action="route-clear">${icon('trash-2', 'icon--sm')}Очистить</button>
           </div>
           <div>

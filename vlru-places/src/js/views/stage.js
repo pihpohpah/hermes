@@ -3,7 +3,7 @@
  *
  * Создаётся один раз и живёт всё время работы приложения: при уходе на другие страницы
  * скрывается, а при возврате карта остаётся в том же положении. Содержимое панели
- * (список, превью, маршрут, метки) отдают панели explore.js и now.js.
+ * (фильтры, список, превью, маршрут, метки) отдают панели explore.js и now.js.
  *
  * Мобильная раскладка: элементы с data-top-slot переносятся из шапки панели в верхнюю
  * плавающую зону .map-top, а панель становится нижней шторкой (ui/sheet.js).
@@ -32,10 +32,10 @@ function createStage(root) {
         ${icon('panel-left-close')}
       </button>
       <div data-overlay></div>
-      <aside class="map-panel" id="map-panel" data-sheet="peek" aria-label="Список на карте">
+      <aside class="map-panel" id="map-panel" data-sheet="peek" aria-label="Фильтры и список мест на карте">
         <button type="button" class="map-panel__handle" aria-controls="map-panel" aria-expanded="false"></button>
         <div class="map-panel__head" data-head></div>
-        <div class="map-panel__body" data-body></div>
+        <div class="map-panel__body" id="map-panel-content" data-body></div>
         <div class="map-panel__foot" data-foot></div>
       </aside>
       <div class="map-controls">

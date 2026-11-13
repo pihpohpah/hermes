@@ -5,7 +5,7 @@
  */
 
 const STATES = ['peek', 'half', 'full'];
-const LABELS = { peek: 'Развернуть список', half: 'Развернуть список на весь экран', full: 'Свернуть список' };
+const LABELS = { peek: 'Развернуть панель', half: 'Развернуть панель на весь экран', full: 'Свернуть панель' };
 
 export function bindSheet(panel, { handle, dragZones = [], onChange } = {}) {
   let current = panel.dataset.sheet || 'peek';
