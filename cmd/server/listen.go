@@ -92,6 +92,9 @@ func runListen(
 	idempotencyRepo := repository.NewIdempotencyRepository(pool)
 	txManager := repository.NewTxManager(pool)
 
+	photoRepo := repository.NewPhotoRepository(pool)
+	createPhotoUC := usecase.NewCreatePhotoUseCase(photoRepo)
+
 	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
 	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
 
@@ -135,7 +138,7 @@ func runListen(
 		CreateSubmission:   httproutes.NewCreateSubmissionHandler(logger, createSubmissionUC),
 		GetSubmission:      httproutes.NewGetSubmissionHandler(logger, getSubmissionUC),
 		ListSubmissions:    httproutes.NewListSubmissionsHandler(logger, listSubmissionsUC),
-		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, cfg.MaxUploadMB<<20),
+		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, createPhotoUC, cfg.MaxUploadMB<<20),
 		RequireAuth:        authMiddleware.Require,
 		LoadAuth:           authMiddleware.Load,
 		AllowedOrigins:     cfg.AllowedOriginList(),

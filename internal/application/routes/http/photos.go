@@ -1,29 +1,34 @@
 package http
 
 import (
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/pihpohpah/hermes/internal/application/presenter"
+	"github.com/pihpohpah/hermes/internal/application/usecase"
 	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
-// PhotoUploadHandler accepts a photo multipart upload and acknowledges it.
-// Storage, moderation and URL issuance are not wired yet: the response stays
-// a stub so the client flow can be built and tested end to end beforehand.
+// PhotoUploadHandler accepts a photo multipart upload and registers it in the
+// moderation queue. The bytes are hashed and metered now; storage, URL
+// issuance and the moderation endpoint arrive with the storage layer.
 type PhotoUploadHandler struct {
 	logger         *slog.Logger
 	responseWriter *APIResponseWriter[presenter.PhotoUpload]
+	createPhoto    *usecase.CreatePhotoUseCase
 	maxBytes       int64
 }
 
-func NewPhotoUploadHandler(logger *slog.Logger, maxBytes int64) *PhotoUploadHandler {
+func NewPhotoUploadHandler(
+	logger *slog.Logger,
+	createPhoto *usecase.CreatePhotoUseCase,
+	maxBytes int64,
+) *PhotoUploadHandler {
 	if maxBytes <= 0 {
 		maxBytes = defaultPhotoUploadLimit
 	}
@@ -31,6 +36,7 @@ func NewPhotoUploadHandler(logger *slog.Logger, maxBytes int64) *PhotoUploadHand
 	return &PhotoUploadHandler{
 		logger:         logger,
 		responseWriter: NewAPIResponseWriter[presenter.PhotoUpload](logger),
+		createPhoto:    createPhoto,
 		maxBytes:       maxBytes,
 	}
 }
@@ -45,7 +51,8 @@ func (h *PhotoUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := requireUserID(r.Context()); err != nil {
+	userID, err := requireUserID(r.Context())
+	if err != nil {
 		h.responseWriter.Error(w, statusCode(err), err)
 
 		return
@@ -65,9 +72,8 @@ func (h *PhotoUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Consume the body now so the size limit is enforced even though the
-	// bytes are not stored yet.
-	discarded, err := io.Copy(io.Discard, file)
+	hash := sha256.New()
+	size, err := io.Copy(hash, file)
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
@@ -83,20 +89,26 @@ func (h *PhotoUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.responseWriter.SuccessWithStatus(w, http.StatusAccepted, presenter.PhotoUpload{
-		ID:     fmt.Sprintf("ph-%s", uploadID()),
-		Status: "pending",
-		Note:   fmt.Sprintf("файл `%s` (%d байт) принят, хранилище и модерация подключатся позже", header.Filename, discarded),
+	ownerID := userID
+	photo, err := h.createPhoto.Do(r.Context(), models.CreatePhotoInput{
+		OwnerID:      &ownerID,
+		OriginalName: header.Filename,
+		ContentType:  header.Header.Get("Content-Type"),
+		SizeBytes:    size,
+		SHA256:       hex.EncodeToString(hash.Sum(nil)),
 	})
-}
+	if err != nil {
+		h.responseWriter.Error(w, statusCode(err), err)
 
-// uploadID is a local random id for the stub acknowledgement; the real
-// storage will issue persistent ids when it arrives.
-func uploadID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
+		return
 	}
 
-	return hex.EncodeToString(b[:])
+	h.responseWriter.SuccessWithStatus(w, http.StatusAccepted, presenter.PhotoUpload{
+		ID:     photo.ID,
+		Status: string(photo.Status),
+		Note: fmt.Sprintf(
+			"файл `%s` (%d байт) принят на модерацию, хранилище подключится позже",
+			photo.OriginalName, photo.SizeBytes,
+		),
+	})
 }

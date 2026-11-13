@@ -162,7 +162,7 @@ WEATHER_MODE=mock go run ./cmd/server weather_load   # явный demo-режи�
 с другим телом — 409. Тип `fix` требует `fix_id` и `fix_reasons`, `event` — `date`.
 
 - `POST /submissions` · `GET /submissions?status=review` · `GET /submissions/{id}`
-- `POST /photos` — заглушка загрузки фото (multipart, поле `file`, лимит `PHOTOS_MAX_UPLOAD_MB`, по умолчанию 10 МБ). Хранилище, модерация и URL появятся позже: ответ — `202 {id, status: "pending"}`.
+- `POST /photos` — загрузка фото (multipart, поле `file`, лимит `PHOTOS_MAX_UPLOAD_MB`, по умолчанию 10 МБ). Запись сразу падает в таблицу `photos` со статусом `moderation`: id — UUIDv7 (генерируется в приложении, сортируется по времени), фиксируются `size_bytes` и `sha256`, автор — из сессии. Жизненный цикл: `moderation → active/rejected`, удаление — мягкое (`deleted`). Колонки атрибуции (`author`, `license`, `license_url`, `source_url`) заполнятся при модерации; байты файла и URL появятся с подключением хранилища. Ответ — `202 {id, status: "moderation"}`.
 
 API: `GET /forecast/place/{id}?activity=sup&date=YYYY-MM-DD` возвращает
 почасовые оценки, `sources` (источник, доступность, demo), `contributions`,
