@@ -1,0 +1,30 @@
+{
+  "latitude": 43.1,
+  "longitude": 131.8,
+  "utc_offset_seconds": 0,
+  "timezone": "GMT",
+  "hourly_units": {
+    "pm2_5": "μg/m³",
+    "european_aqi": "EAQI"
+  },
+  "hourly": {
+    "time": [
+      "2026-11-12T14:00",
+      "2026-11-12T15:00",
+      "2026-11-12T16:00",
+      "2026-11-12T17:00"
+    ],
+    "pm2_5": [
+      5.1,
+      7.4,
+      31.2,
+      null
+    ],
+    "european_aqi": [
+      11,
+      16,
+      68,
+      null
+    ]
+  }
+}

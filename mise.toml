@@ -16,6 +16,137 @@ fi
 go mod download
 """
 
+<<<<<<< HEAD
+=======
+[tasks.dev]
+description = "Запуск сервера с hot-reload (air / go run)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v air >/dev/null 2>&1; then
+  exec air -c .air.toml
+else
+  exec go run ./cmd/server listen
+fi
+"""
+
+[tasks.migrate-up]
+description = "Применить идемпотентные SQL-миграции в PostgreSQL"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+DB_NAME="${POSTGRES_DB:-hermes}"
+DB_USER="${POSTGRES_USER:-postgres}"
+CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
+for f in migrations/*.sql; do
+  echo "== $f"
+  docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$f"
+done
+"""
+
+[tasks.migrate-down]
+description = "Откатить SQL-миграции в PostgreSQL"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+DB_NAME="${POSTGRES_DB:-hermes}"
+DB_USER="${POSTGRES_USER:-postgres}"
+CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
+docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
+DROP TABLE IF EXISTS reports;
+DROP TABLE IF EXISTS conditions_cache;
+DROP TABLE IF EXISTS weather_source_status;
+DROP TABLE IF EXISTS weather_observations;
+DROP TABLE IF EXISTS trips;
+DROP TABLE IF EXISTS place_sources;
+DROP TABLE IF EXISTS places;
+DROP TABLE IF EXISTS place_layers;
+SQL
+"""
+
+[tasks.templ]
+description = "Сгенерировать Go-код из templ-шаблонов"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v templ >/dev/null 2>&1; then
+  templ generate
+else
+  go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate
+fi
+"""
+
+[tasks.seed]
+description = "Наполнить БД тестовыми местами вокруг Владивостока (43.1155, 131.8855)"
+run = "go run ./cmd/server seed"
+
+[tasks.weather-load]
+description = "Загрузить почасовую погоду Open-Meteo для seed-мест (WEATHER_MODE=real|mock)"
+run = "go run ./cmd/server weather_load"
+
+[tasks.weather-load-day]
+description = "Загрузить погоду на конкретный день Asia/Vladivostok: DATE=YYYY-MM-DD"
+run = "go run ./cmd/server weather_load -day ${DATE:?set DATE=YYYY-MM-DD}"
+
+[tasks.conditions-assess]
+description = "Оценить условия для мест (эвристики) за сегодня: ACTIVITY=walk,sup,hike,run, PLACE=<uuid>"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+if [ -n "${DATE:-}" ]; then args+=(-day "$DATE"); fi
+if [ -n "${ACTIVITY:-}" ]; then args+=(-activity "$ACTIVITY"); fi
+if [ -n "${PLACE:-}" ]; then args+=(-place "$PLACE"); fi
+go run ./cmd/server conditions_assess "${args[@]}"
+"""
+
+[tasks.elevations-enrich]
+description = "Заполнить высоты точек через Open-Meteo elevation (нужно для горной погоды)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+if [ -n "${PLACE:-}" ]; then args+=(-place "$PLACE"); fi
+if [ -n "${OVERWRITE:-}" ]; then args+=(-overwrite); fi
+go run ./cmd/server elevations_enrich "${args[@]}"
+"""
+
+[tasks.coverage-probe]
+description = "Показать, какие данные реально приходят и какие точки делят одну ячейку модели"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+args=()
+if [ -n "${DATE:-}" ]; then args+=(-day "$DATE"); fi
+if [ -n "${PLACE:-}" ]; then args+=(-place "$PLACE"); fi
+go run ./cmd/server coverage_probe "${args[@]}"
+"""
+
+[tasks.map-relief]
+description = "Собрать офлайн-рельеф (hillshade) Приморского края в PMTiles"
+run = "./scripts/map/build-relief.sh"
+
+[tasks.map-relief-local]
+description = "Собрать рельеф только для агломерации Владивостока (быстро)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+RELIEF_BBOX="${RELIEF_BBOX:-131.7,42.95,132.2,43.35}" \
+RELIEF_MINZOOM="${RELIEF_MINZOOM:-10}" RELIEF_MAXZOOM="${RELIEF_MAXZOOM:-13}" \
+  ./scripts/map/build-relief.sh
+"""
+
+[tasks.weather-demo]
+description = "Прогнать загрузку и оценку в явном demo-режиме (без сети)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+export WEATHER_MODE=mock
+go run ./cmd/server weather_load "$@"
+go run ./cmd/server conditions_assess "$@"
+"""
+
+>>>>>>> d2f4bda ([back])
 [tasks.design]
 description = "Открыть дизайн-прототип (статический сервер на :8080)"
 dir = "design"
@@ -36,4 +167,55 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 open "$url"
 wait "$server"
+<<<<<<< HEAD
 ''''
+=======
+'''
+
+[tasks.lint]
+description = "Прогнать линтер"
+run = "golangci-lint run ./..."
+
+[tasks.map-download]
+description = "Собрать офлайн-карту Приморского края (PMTiles, z0-14) из OSM"
+run = "./scripts/map/build-map.sh"
+
+[tasks.map-size]
+description = "Показать размер собранного архива карты"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+f="${MAP_OUTPUT:-web/static/pmtiles/primorsky-krai-z15.pmtiles}"
+if [ ! -f "$f" ]; then
+  echo "Архив не собран: $f"
+  echo "Запустите: mise run map-download"
+  exit 1
+fi
+du -h "$f"
+"""
+
+[tasks.map-serve]
+description = "Карта с двумя режимами (город/природа) на :8080, без Postgres"
+run = "go run ./cmd/mapserver -addr :8080"
+
+[tasks.map-serve-relief]
+description = "Устарело: оба режима теперь доступны в map-serve по умолчанию"
+run = "go run ./cmd/mapserver -addr :8080"
+
+[tasks.map-check]
+description = "Проверить, что эндпоинт архива отвечает байтовыми диапазонами"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+url="${MAP_URL:-http://127.0.0.1:8080}/api/map/region.pmtiles"
+code=$(curl -s -o /tmp/hermes-map-range.bin -w '%{http_code}' -r 0-1023 "$url")
+bytes=$(wc -c < /tmp/hermes-map-range.bin | tr -d ' ')
+magic=$(head -c 7 /tmp/hermes-map-range.bin)
+echo "HTTP $code, получено байт: $bytes, магия: $magic"
+[ "$code" = "206" ] || { echo "Ожидался 206 Partial Content"; exit 1; }
+[ "$bytes" = "1024" ] || { echo "Ожидалось ровно 1024 байта"; exit 1; }
+[ "$magic" = "PMTiles" ] || { echo "Неверная сигнатура архива"; exit 1; }
+echo "OK: Range-запросы и архив в порядке"
+"""
+
+>>>>>>> d2f4bda ([back])

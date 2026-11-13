@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Приморский край · офлайн-карта</title>
+  <link rel="icon" href="/map/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/map/vendor/maplibre-gl.css">
+  <style>
+    :root {
+      --bg: #f6f5f2;
+      --surface: #ffffff;
+      --border: #e2e0d8;
+      --text: #181816;
+      --muted: #65645e;
+      --accent: #0f62fe;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.7rem 1.1rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      z-index: 2;
+    }
+    .brand { font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
+    .topbar__hint { font-size: 0.78rem; color: var(--muted); }
+    .topbar__status {
+      margin-left: auto;
+      font-size: 0.78rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .topbar__status[data-state="error"] { color: #b3261e; border-color: #e6bdb9; }
+    .topbar__status[data-state="ready"] { color: #1f6f3f; border-color: #bcd9c6; }
+    .topbar__status[data-state="offline"] { color: #8a5a00; border-color: #e6d3ac; }
+
+    /* Переключение режимов: город — обычная карта, природа — рельеф
+       с высотными зонами. Слои режимов взаимоисключающие, наложения нет. */
+    .mode-switch {
+      display: inline-flex;
+      padding: 2px;
+      gap: 2px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .mode-switch button {
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.28rem 0.7rem;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mode-switch button.is-active {
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(24, 24, 22, 0.14);
+    }
+    .mode-switch button:disabled { opacity: 0.45; cursor: default; }
+    .mode-switch button:disabled.is-active { opacity: 1; }
+    .shell {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #map { flex: 1 1 auto; min-height: 0; width: 100%; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+      text-align: center;
+      background: rgba(246, 245, 242, 0.94);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      z-index: 3;
+    }
+    .overlay[hidden] { display: none; }
+    .overlay code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.15rem 0.35rem;
+      font-size: 0.85em;
+    }
+    .overlay__box { max-width: 40rem; }
+
+    /* Демонстрационная панель скачивания архива (см. MAP.md). */
+    .offline-panel {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 4;
+      width: min(320px, calc(100% - 24px));
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(24, 24, 22, 0.12);
+      padding: 0.85rem 0.9rem;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+    .offline-panel__title {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+      margin: 0 0 0.35rem;
+    }
+    .offline-panel__badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #8a5a00;
+      background: #fdf3dd;
+      border: 1px solid #e6d3ac;
+      border-radius: 4px;
+      padding: 0.05rem 0.3rem;
+    }
+    .offline-panel__note { margin: 0 0 0.6rem; color: var(--muted); }
+    .offline-panel__row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .offline-panel button {
+      font: inherit;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+    }
+    .offline-panel button[data-primary] {
+      background: var(--text);
+      border-color: var(--text);
+      color: var(--surface);
+    }
+    .offline-panel button:disabled { opacity: 0.5; cursor: default; }
+    .offline-panel__bar {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+      margin: 0.55rem 0 0.35rem;
+    }
+    .offline-panel__bar span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+      transition: width 0.15s linear;
+    }
+    .offline-panel__state { color: var(--muted); }
+    .offline-panel__state[data-tone="ok"] { color: #1f6f3f; }
+    .offline-panel__state[data-tone="error"] { color: #b3261e; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">ВЫХОДИ · Приморский край</span>
+    <div class="mode-switch" role="group" aria-label="Режим карты">
+      <button type="button" data-mode="city" class="is-active">Город</button>
+      <button type="button" data-mode="nature" id="mode-nature" disabled>Природа</button>
+    </div>
+    <span class="topbar__hint">Тайлы PMTiles z0–15 · офлайн, без CDN</span>
+    <span class="topbar__status" id="status" data-state="loading">Загрузка тайлов…</span>
+  </header>
+
+  <div class="shell">
+    <div id="map"></div>
+    <div class="overlay" id="overlay" hidden>
+      <div class="overlay__box" id="overlay-body"></div>
+    </div>
+
+    <section class="offline-panel" id="offline-panel" aria-label="Офлайн-архив карты">
+      <h2 class="offline-panel__title">
+        Офлайн-карта
+        <span class="offline-panel__badge">демо</span>
+      </h2>
+      <p class="offline-panel__note" id="offline-note">
+        Тайлы читаются по запросу. Скачайте архив целиком, чтобы карта работала без сети.
+      </p>
+      <div class="offline-panel__bar" id="offline-bar" hidden><span id="offline-bar-fill"></span></div>
+      <div class="offline-panel__row">
+        <button type="button" id="offline-download" data-primary>Скачать карту</button>
+        <button type="button" id="offline-remove" hidden>Удалить копию</button>
+      </div>
+      <p class="offline-panel__state" id="offline-state"></p>
+    </section>
+  </div>
+
+  <script src="/map/vendor/maplibre-gl.js"></script>
+  <script src="/map/vendor/pmtiles.js"></script>
+  <script type="module">
+    import {
+      loadArchive, saveArchive, deleteArchive, downloadArchive,
+      storageInfo, requestPersistence, blobSource, formatBytes,
+      cachingSource, clearChunkCache, chunkCacheStats,
+    } from '/map/offline.js';
+
+    (async () => {
+      const ARCHIVE_URL = '/api/map/region.pmtiles';
+      const RELIEF_URL = '/api/map/relief.pmtiles';
+      const SOURCE_ID = 'region';
+      const PROTOCOL_ID = 'pmtiles';
+      const statusEl = document.getElementById('status');
+      const overlay = document.getElementById('overlay');
+      const overlayBody = document.getElementById('overlay-body');
+      const modeButtons = Array.from(document.querySelectorAll('.mode-switch button'));
+      const natureButton = document.getElementById('mode-nature');
+
+      // Природа доступна только когда собран архив рельефа. Стиль при этом
+      // вырезает растровый источник (иначе MapLibre 404-ит каждый кадр),
+      // поэтому кнопку без архива просто выключаем.
+      fetch(RELIEF_URL, { method: 'HEAD' })
+        .then((response) => {
+          natureButton.disabled = !response.ok;
+          if (!response.ok) {
+            natureButton.title = 'Архив рельефа не собран: mise run map-relief-local';
+          }
+        })
+        .catch(() => { /* офлайн не отключает уже загруженный архив */ });
+
+      // MapLibre выкидывает нестандартные ключи слоя из getStyle(), поэтому
+      // маппинг «слой -> режим» читаем из того же style.json отдельно.
+      const layerModes = new Map();
+      try {
+        const styleDoc = await (await fetch('/map/style.json')).json();
+        for (const layer of styleDoc.layers) {
+          layerModes.set(layer.id, layer['hermes:mode'] || 'city');
+        }
+      } catch (error) {
+        console.warn('не удалось прочитать режимы слоёв:', error.message);
+      }
+
+      const applyMode = (mode) => {
+        for (const layer of map.getStyle().layers) {
+          const layerMode = layerModes.get(layer.id) || 'city';
+          const visible = layerMode === mode || layerMode === 'both';
+          try {
+            map.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none');
+          } catch (error) {
+            // Слой может отсутствовать: сервер вырезал рельеф из стиля.
+          }
+        }
+      };
+
+      // Режим можно задать ссылкой: /map/?mode=nature.
+      const initialMode = new URLSearchParams(window.location.search).get('mode');
+      if (initialMode === 'nature' || initialMode === 'city') {
+        for (const button of modeButtons) {
+          button.classList.toggle('is-active', button.dataset.mode === initialMode);
+        }
+      }
+
+      let pendingMode = null;
+      // Готовность отслеживаем сами: map.loaded() во время догрузки тайлов
+      // возвращает false, и клик по режиму зависал бы в очереди навсегда
+      // ('load' карты при этом уже сработал и не повторится).
+      let styleReady = false;
+      const setMode = (mode) => {
+        for (const button of modeButtons) {
+          button.classList.toggle('is-active', button.dataset.mode === mode);
+        }
+        // Стиль мог ещё не загрузиться (холодный старт по Range) — применим
+        // режим после 'load', иначе getStyle() вернёт undefined.
+        if (!styleReady) {
+          pendingMode = mode;
+          return;
+        }
+        applyMode(mode);
+      };
+
+      for (const button of modeButtons) {
+        button.addEventListener('click', () => {
+          if (button.disabled) return;
+          setMode(button.dataset.mode);
+        });
+      }
+
+      const setStatus = (text, state) => {
+        statusEl.textContent = text;
+        statusEl.dataset.state = state;
+      };
+
+      const showOverlay = (html) => {
+        overlayBody.innerHTML = html;
+        overlay.hidden = false;
+      };
+
+      const offlineEls = {
+        panel: document.getElementById('offline-panel'),
+        note: document.getElementById('offline-note'),
+        bar: document.getElementById('offline-bar'),
+        barFill: document.getElementById('offline-bar-fill'),
+        download: document.getElementById('offline-download'),
+        remove: document.getElementById('offline-remove'),
+        state: document.getElementById('offline-state'),
+      };
+
+      const setOfflineState = (text, tone) => {
+        offlineEls.state.textContent = text;
+        if (tone) offlineEls.state.dataset.tone = tone;
+        else delete offlineEls.state.dataset.tone;
+      };
+
+      // PMTiles читается по HTTP Range: весь архив в память не грузится.
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol(PROTOCOL_ID, protocol.tile);
+
+      const networkSource = new pmtiles.FetchSource(ARCHIVE_URL);
+      const ARCHIVE_KEY = networkSource.getKey();
+
+      // Источник выбирается ДО создания карты. Если в IndexedDB уже лежит
+      // скачанная копия, карта сразу поднимается на ней: так не бывает окна,
+      // когда MapLibre успел запросить тайлы из сети, а сеть уже недоступна.
+      // Раньше источник подменялся после setStyle(getStyle()), и при холодном
+      // старте getStyle() возвращал undefined — карта оставалась без слоёв.
+      let startupArchive = null;
+      try {
+        startupArchive = await loadArchive();
+      } catch (error) {
+        console.warn('не удалось прочитать офлайн-копию:', error.message);
+      }
+
+      // Полный архив (кнопка) важнее кусков: он даёт гарантированный офлайн.
+      // Если архива нет, работаем по Range, но каждый полученный кусок кладём
+      // в IndexedDB — тогда уже просмотренные тайлы переживут перезагрузку.
+      const usingLocalAtStart = Boolean(startupArchive);
+      const activePMTiles = usingLocalAtStart
+        ? new pmtiles.PMTiles(blobSource(startupArchive.blob, ARCHIVE_KEY))
+        : new pmtiles.PMTiles(cachingSource(networkSource));
+      protocol.add(activePMTiles);
+
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: '/map/style.json',
+        center: [131.8855, 43.1155],
+        zoom: 11,
+        maxZoom: 15,
+        minZoom: 3,
+        attributionControl: { compact: true },
+        // Векторные тайлы уже готовы: сглаживание по умолчанию даёт артефакты на границах.
+        renderWorldCopies: false,
+      });
+
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
+      map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
+
+      // Ошибку тайлов показываем только строкой статуса: карта уже может быть
+      // отрисована, и закрывать её оверлеем из-за одного тайла на краю экрана
+      // (частый случай при панорамировании за пределы архива) нельзя.
+      let archiveBroken = false;
+      map.on('error', (event) => {
+        const message = event && event.error ? event.error.message : String(event);
+        // Отсутствие отдельных глифов не должно менять статус.
+        if (/glyph|font/i.test(message)) return;
+
+        if (!navigator.onLine) {
+          setStatus('Нет сети · доступны только загруженные тайлы', 'offline');
+          return;
+        }
+
+        // Отсутствующий архив — отдельный, фатальный случай: его ловит HEAD ниже.
+        if (/pmtiles|region\.pmtiles|404|503/i.test(message)) {
+          archiveBroken = true;
+        }
+        setStatus('Часть тайлов недоступна', 'error');
+      });
+
+      // Проверяем, пришли ли вообще тайлы. Без скачанной копии архив читается
+      // по Range, и если сеть недоступна, стиль загрузится, а данные — нет:
+      // canvas останется пустым. Раньше в этом случае статус врал «Карта готова».
+      const verifyTilesArrived = () => {
+        window.setTimeout(() => {
+          if (usingLocalAtStart) return; // локальная копия не зависит от сети
+          let drawn = 0;
+          try {
+            drawn = map.queryRenderedFeatures().length;
+          } catch (error) {
+            drawn = 0;
+          }
+          if (drawn > 0) return;
+
+          setStatus('Тайлы не загрузились', 'error');
+          showOverlay(
+            '<h1>Тайлы недоступны</h1>' +
+            '<p>Стиль загрузился, но данные карты не пришли — сервер недоступен, ' +
+            'а скачанной копии на устройстве нет.</p>' +
+            '<p>Нажмите <strong>«Скачать карту»</strong> в правом нижнем углу, ' +
+            'пока сервер доступен: тогда архив сохранится на устройстве и карта ' +
+            'будет работать без сети.</p>' +
+            '<p style="color:#65645e;font-size:.85em">Уже загруженные ранее тайлы ' +
+            'могут показываться из кеша браузера, но он очищается и не гарантирует офлайн.</p>'
+          );
+        }, 6000);
+      };
+
+      map.on('load', () => {
+        if (archiveBroken) return;
+        setStatus(
+          usingLocalAtStart ? 'Карта готова · офлайн-копия'
+            : navigator.onLine ? 'Карта готова' : 'Офлайн · загруженные тайлы',
+          navigator.onLine || usingLocalAtStart ? 'ready' : 'offline'
+        );
+        overlay.hidden = true;
+        verifyTilesArrived();
+        // На старте применяем активный режим, иначе все слои стиля видимы
+        // одновременно и рельеф накладывается на городскую карту.
+        const activeButton = modeButtons.find((b) => b.classList.contains('is-active'));
+        styleReady = true;
+        applyMode(pendingMode || (activeButton ? activeButton.dataset.mode : 'city'));
+        pendingMode = null;
+      });
+
+      window.addEventListener('offline', () => {
+        if (usingLocalAtStart) return; // копия на диске — сеть не важна
+        setStatus('Офлайн · загруженные тайлы', 'offline');
+      });
+      window.addEventListener('online', () => {
+        if (usingLocalAtStart) return;
+        setStatus('Карта готова', 'ready');
+      });
+
+      // Проверяем архив отдельно от стиля, чтобы показать внятную подсказку.
+      fetch(ARCHIVE_URL, { method: 'HEAD' })
+        .then((response) => {
+          if (response.ok) return;
+          setStatus('Архив не найден', 'error');
+          showOverlay(
+            '<h1>Архив карты ещё не собран</h1>' +
+            '<p>Эндпоинт <code>' + ARCHIVE_URL + '</code> вернул ' + response.status + '.</p>' +
+            '<p>Запустите <code>mise map-download</code>, затем перезагрузите страницу.</p>'
+          );
+        })
+        .catch(() => {
+          // Офлайн — не повод закрывать карту: уже открытый архив продолжает работать.
+          if (navigator.onLine) setStatus('Сервер недоступен', 'error');
+        });
+
+      // ---- Демонстрационный офлайн-режим -----------------------------------
+      // Архив целиком кладётся в IndexedDB. Пока копии нет, тайлы тянутся по
+      // HTTP Range; после скачивания карта перезапускается уже с локальным
+      // источником и работает без сети.
+
+      const refreshOfflineUI = async (saved) => {
+        const hasLocal = Boolean(saved);
+        offlineEls.remove.hidden = !hasLocal;
+
+        if (hasLocal) {
+          const savedAt = new Date(saved.savedAt).toLocaleString('ru-RU');
+          offlineEls.download.textContent = 'Обновить копию';
+          offlineEls.note.textContent = `Копия на устройстве: ${formatBytes(saved.blob.size)}, сохранена ${savedAt}.`;
+          setOfflineState('Карта работает без сети', 'ok');
+        } else {
+          offlineEls.download.textContent = 'Скачать карту';
+          offlineEls.note.textContent =
+            'Тайлы читаются по запросу. Скачайте архив целиком, чтобы карта работала без сети.';
+
+          // Просмотренные онлайн тайлы тоже сохраняются — показываем объём,
+          // чтобы было видно: карта не «пустая», часть уже лежит на устройстве.
+          const chunks = await chunkCacheStats().catch(() => null);
+          const savedChunks = chunks && chunks.bytes ? formatBytes(chunks.bytes) : null;
+          if (savedChunks) {
+            offlineEls.note.textContent +=
+              ` Просмотренные области сохранены (${savedChunks}) и переживут перезагрузку.`;
+            setOfflineState('Просмотренные тайлы кешированы', 'ok');
+          } else {
+            setOfflineState('');
+          }
+        }
+
+        // navigator.storage.estimate() в Chrome не учитывает Blob внутри
+        // IndexedDB (показывает единицы МБ при архиве в 90 МБ), поэтому
+        // реальный размер копии берём из метаданных, а не из квоты.
+        const info = await storageInfo().catch(() => null);
+        if (info && info.quota) {
+          offlineEls.note.textContent += ` Доступно на устройстве ${formatBytes(info.quota)}.`;
+        }
+      };
+
+      // Переключение источника = перезагрузка страницы.
+      //
+      // Так надёжнее, чем подменять источник на живой карте: MapLibre кеширует
+      // уже загруженные тайлы и директории, и setStyle(getStyle()) на холодном
+      // старте (когда стиль ещё не пришёл) возвращает undefined — карта
+      // остаётся без слоёв. Перезапуск с выбранным источником исключает это окно.
+      const reloadWithNewSource = () => window.location.reload();
+
+      const tick = (received, total) => {
+        offlineEls.bar.hidden = false;
+        const percent = total ? Math.min(100, (received / total) * 100) : 0;
+        offlineEls.barFill.style.width = `${percent}%`;
+        setOfflineState(
+          total
+            ? `Скачиваем ${formatBytes(received)} из ${formatBytes(total)} (${Math.floor(percent)}%)`
+            : `Скачиваем ${formatBytes(received)}`
+        );
+      };
+
+      offlineEls.download.addEventListener('click', async () => {
+        offlineEls.download.disabled = true;
+        offlineEls.remove.disabled = true;
+        offlineEls.bar.hidden = false;
+        offlineEls.barFill.style.width = '0%';
+        setOfflineState('Начинаем скачивание…');
+
+        try {
+          // Просим браузер не вытеснять архив: иначе копия может пропасть.
+          await requestPersistence().catch(() => false);
+          const { blob, bytes } = await downloadArchive(ARCHIVE_URL, tick);
+
+          if (bytes < 1024) throw new Error('получен пустой архив');
+
+          await saveArchive(blob, { url: ARCHIVE_URL, bytes });
+
+          offlineEls.barFill.style.width = '100%';
+          setOfflineState('Копия сохранена, перезапускаем карту…', 'ok');
+          setStatus('Офлайн-копия загружена', 'ready');
+          // Перезапуск поднимет карту уже с локального источника.
+          reloadWithNewSource();
+        } catch (error) {
+          const message = error && error.message ? error.message : String(error);
+          setOfflineState(`Не удалось скачать: ${message}`, 'error');
+          offlineEls.bar.hidden = true;
+        } finally {
+          offlineEls.download.disabled = false;
+          offlineEls.remove.disabled = false;
+        }
+      });
+
+      offlineEls.remove.addEventListener('click', async () => {
+        offlineEls.remove.disabled = true;
+        try {
+          // Чистим и полную копию, и куски: после пересборки архива они
+          // устаревают и могут отдавать данные из старой версии карты.
+          await deleteArchive();
+          await clearChunkCache();
+          await refreshOfflineUI(null);
+          // Перезапуск сбрасывает кеш тайлов внутри MapLibre.
+          window.location.reload();
+        } catch (error) {
+          setOfflineState(`Не удалось удалить: ${error.message}`, 'error');
+          offlineEls.remove.disabled = false;
+        }
+      });
+
+      // Service Worker кеширует оболочку, чтобы страница открывалась по F5
+      // без сети. Сам архив он не дублирует — тот лежит в IndexedDB.
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .register('/map/sw.js', { scope: '/map/' })
+          .catch((error) => {
+            // SW нужен только для перезагрузки офлайн; карта работает и без него.
+            console.warn('service worker не зарегистрирован:', error.message);
+          });
+      }
+
+      // Источник уже выбран выше (startupArchive); здесь только обновляем UI.
+      refreshOfflineUI(startupArchive).catch(() => undefined);
+
+      // Кеш кусков наполняется по мере отрисовки, поэтому пересчитываем панель
+      // после загрузки карты и с задержкой — иначе объём всегда показывался бы 0.
+      map.once('load', () => {
+        window.setTimeout(() => {
+          refreshOfflineUI(startupArchive).catch(() => undefined);
+        }, 2500);
+      });
+
+      // Удобно для отладки из консоли браузера.
+      window.hermesMap = map;
+    })();
+  </script>
+</body>
+</html>
