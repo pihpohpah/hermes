@@ -30,36 +30,36 @@ func plural(count int, forms [3]string) string {
 }
 
 func countLabel(count int, forms [3]string) string {
-	return fmt.Sprintf("%d %s", count, plural(count, forms))
+	return fmt.Sprintf("%d %s", count, plural(count, forms))
 }
 
 func formatDistance(km float64) string {
 	switch {
 	case km < 1:
 		meters := math.Max(50, math.Round(km*1000/50)*50)
-		return fmt.Sprintf("%.0f м", meters)
+		return fmt.Sprintf("%.0f м", meters)
 	case km < 10:
-		return fmt.Sprintf("%.1f км", math.Round(km*10)/10)
+		return fmt.Sprintf("%.1f км", math.Round(km*10)/10)
 	default:
-		return fmt.Sprintf("%.0f км", math.Round(km))
+		return fmt.Sprintf("%.0f км", math.Round(km))
 	}
 }
 
 func formatDuration(minutes float64) string {
 	total := int(math.Max(1, math.Round(minutes)))
 	if total < 60 {
-		return fmt.Sprintf("%d мин", total)
+		return fmt.Sprintf("%d мин", total)
 	}
 	hours := total / 60
 	rest := total % 60
 	if hours >= 24 {
 		days := int(math.Round(float64(hours) / 24))
-		return fmt.Sprintf("%d %s", days, plural(days, [3]string{"день", "дня", "дней"}))
+		return fmt.Sprintf("%d %s", days, plural(days, [3]string{"день", "дня", "дней"}))
 	}
 	if rest > 0 {
-		return fmt.Sprintf("%d ч %d мин", hours, rest)
+		return fmt.Sprintf("%d ч %d мин", hours, rest)
 	}
-	return fmt.Sprintf("%d ч", hours)
+	return fmt.Sprintf("%d ч", hours)
 }
 
 var monthsShort = [12]string{"янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"}
@@ -130,6 +130,16 @@ func formatTimeHM(ts time.Time) string {
 	return fmt.Sprintf("%02d:%02d", ts.Hour(), ts.Minute())
 }
 
+// formatTimeOnly: «14:05» по Владивостоку из RFC3339.
+func formatTimeOnly(iso string) string {
+	ts, ok := parseISODate(iso)
+	if !ok {
+		return ""
+	}
+
+	return formatTimeHM(ts.In(vlTime))
+}
+
 // pinTiming — статус метки относительно текущего времени.
 func pinTiming(startsAt, endsAt string) (state, label, short string) {
 	start, ok1 := parseISODate(startsAt)
@@ -165,11 +175,11 @@ func formatAgo(iso string) string {
 		return "только что"
 	}
 	if minutes < 60 {
-		return fmt.Sprintf("%d %s назад", minutes, plural(minutes, [3]string{"минуту", "минуты", "минут"}))
+		return fmt.Sprintf("%d %s назад", minutes, plural(minutes, [3]string{"минуту", "минуты", "минут"}))
 	}
 	hours := int(math.Round(float64(minutes) / 60))
 	if hours < 24 {
-		return fmt.Sprintf("%d %s назад", hours, plural(hours, [3]string{"час", "часа", "часов"}))
+		return fmt.Sprintf("%d %s назад", hours, plural(hours, [3]string{"час", "часа", "часов"}))
 	}
 
 	return formatDay(iso)

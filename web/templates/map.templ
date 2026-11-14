@@ -153,9 +153,18 @@ templ MapPanelInner(view MapView) {
 			</div>
 		</div>
 		<div class="map-panel__toolbar" data-toolbar>
-			<span class="map-panel__count" aria-live="polite" data-count>
-				<strong>{ countLabel(len(view.Items), resultForms) }</strong>
-			</span>
+			<div class="map-panel__toolbar-group">
+				<span class="map-panel__count" aria-live="polite" data-count>
+					<strong>{ countLabel(len(view.Items), resultForms) }</strong>
+				</span>
+				<button
+					type="button"
+					class="btn btn--sm btn--outline"
+					data-action="trip-picker"
+					title="Куда поехать по погоде"
+					aria-label="Куда поехать по погоде"
+				>@icon("sun", "icon--sm")<span class="trip-picker-btn-text"> По погоде</span></button>
+			</div>
 			@mapTypeSegment(view)
 		</div>
 		if q.Tab == "list" && len(chips) > 0 {
@@ -205,7 +214,7 @@ func mapResultForms(itemType string) [3]string {
 
 // mapSearchForm — поиск; URL обновляет делегированный обработчик (debounce 250 мс).
 templ mapSearchForm(q MapQueryView) {
-	<form class="map-panel__search" role="search" data-top-slot="search" data-role="map-search">
+	<form class="map-panel__search" role="search" data-top-slot="search" data-role="map-search" hx-disable>
 		<div class="input-group">
 			@icon("search", "")
 			<input class="input" type="search" name="q" value={ q.Q } placeholder="Название, район или тег" aria-label="Поиск по местам" autocomplete="off" enterkeyhint="search"/>
@@ -340,7 +349,7 @@ templ mapTypeSegment(view MapView) {
 
 // mapFiltersForm — встроенная форма фильтров сценария (вкладка «Фильтры»).
 templ mapFiltersForm(view MapView, q MapQueryView) {
-	<form class="filters-form map-panel__filters" data-role="map-filters" data-scenario={ q.Scenario }>
+	<form class="filters-form map-panel__filters" data-role="map-filters" data-scenario={ q.Scenario } hx-disable>
 		<p class="map-panel__filters-note">Места на карте обновляются сразу после выбора.</p>
 		for _, spec := range presenter.Filters[q.Scenario] {
 			@filterField(spec, q.Filters)
@@ -624,9 +633,18 @@ templ routeEditorPanel(q MapQueryView) {
 			<a class="btn btn--sm btn--ghost" href={ templ.SafeURL(closeQ.pageURL()) } hx-get={ closeQ.fragmentURL() } hx-target="#map-panel-inner" hx-push-url={ closeQ.pageURL() }>
 				@icon("arrow-left", "icon--sm") Назад
 			</a>
-			<button type="button" class="btn btn--sm btn--danger" data-action="route-clear" x-show="stops.length > 0">
-				@icon("trash-2", "icon--sm") Очистить
-			</button>
+			<span class="preview__bar-actions">
+				<button
+					type="button"
+					class="btn btn--sm btn--primary"
+					data-action="plan-route"
+					x-show="stops.length > 0"
+					x-cloak
+				>@icon("calendar-plus", "icon--sm") Запланировать</button>
+				<button type="button" class="btn btn--sm btn--danger" data-action="route-clear" x-show="stops.length > 0">
+					@icon("trash-2", "icon--sm") Очистить
+				</button>
+			</span>
 		</div>
 		<div>
 			<h2 class="preview__title">Маршрут</h2>

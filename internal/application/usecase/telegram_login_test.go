@@ -1,104 +1,190 @@
 package usecase
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	"strconv"
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
-// signTelegram подписывает поля так же, как это делает Login Widget, чтобы
-// тесты не зависели от захардкоженных векторов.
-func signTelegram(t *testing.T, botToken string, fields models.TelegramAuthFields) models.TelegramAuthFields {
-	t.Helper()
-
-	sum := sha256.Sum256([]byte(botToken))
-	mac := hmac.New(sha256.New, sum[:])
-	_, _ = mac.Write([]byte(fields.DataCheckString()))
-	fields.Hash = hex.EncodeToString(mac.Sum(nil))
-
-	return fields
+// fakeVerifier имитирует инфраструктурную проверку id_token: тесты use case
+// смотрят на то, что происходит с уже проверенными claims и с провалом
+// верификации, а не на криптографию JWKS.
+type fakeVerifier struct {
+	claims models.TelegramIDClaims
+	err    error
 }
 
-func telegramTestUseCase(botToken string, now time.Time) *TelegramLoginUseCase {
-	uc := NewTelegramLoginUseCase(botToken, nil, nil, nil, nil, time.Hour)
+func (f fakeVerifier) Verify(_ context.Context, _ string) (models.TelegramIDClaims, error) {
+	return f.claims, f.err
+}
+
+func telegramTestUseCase(clientID string, verifier idTokenVerifier, now time.Time) *TelegramLoginUseCase {
+	nonces := NewTelegramNonceIssuer("test-secret", 15*time.Minute)
+	nonces.now = func() time.Time { return now }
+
+	uc := NewTelegramLoginUseCase(clientID, verifier, nonces, nil, nil, nil, nil, time.Hour)
 	uc.now = func() time.Time { return now }
 
 	return uc
 }
 
-func TestTelegramLoginVerifyAcceptsValidSignature(t *testing.T) {
-	now := time.Unix(1_760_000_000, 0)
-	fields := signTelegram(t, "bot-token", models.TelegramAuthFields{
+func validTestClaims(nonce string) models.TelegramIDClaims {
+	return models.TelegramIDClaims{
+		Issuer:    "https://oauth.telegram.org",
+		Audience:  "12345",
+		Subject:   "sub-424242",
+		ExpiresAt: 1_760_000_600,
+		IssuedAt:  1_760_000_000,
 		ID:        424242,
-		FirstName: "Аня",
-		Username:  "anya",
-		AuthDate:  now.Unix() - 30,
-	})
-
-	uc := telegramTestUseCase("bot-token", now)
-	if err := uc.verify(fields); err != nil {
-		t.Fatalf("valid signature rejected: %v", err)
+		Name:      "Аня Ким",
+		GivenName: "Аня",
+		Nonce:     nonce,
 	}
 }
 
-func TestTelegramLoginVerifyRejectsTamperedData(t *testing.T) {
+func TestTelegramLoginVerifyAcceptsValidToken(t *testing.T) {
 	now := time.Unix(1_760_000_000, 0)
-	fields := signTelegram(t, "bot-token", models.TelegramAuthFields{
-		ID:        424242,
-		FirstName: "Аня",
-		AuthDate:  now.Unix(),
-	})
-	fields.Username = "not-anya" // подпись больше не покрывает данные
+	nonces := NewTelegramNonceIssuer("test-secret", 15*time.Minute)
+	nonce, err := nonces.Issue()
+	if err != nil {
+		t.Fatalf("issue nonce: %v", err)
+	}
 
-	uc := telegramTestUseCase("bot-token", now)
-	if err := uc.verify(fields); err == nil {
-		t.Fatal("tampered payload accepted")
+	uc := telegramTestUseCase("12345", fakeVerifier{claims: validTestClaims(nonce)}, now)
+	claims, err := uc.verify(t.Context(), "id-token")
+	if err != nil {
+		t.Fatalf("valid token rejected: %v", err)
+	}
+	if claims.ID != 424242 {
+		t.Fatalf("claims = %+v", claims)
 	}
 }
 
-func TestTelegramLoginVerifyRejectsWrongToken(t *testing.T) {
+func TestTelegramLoginVerifyRejectsBadSignature(t *testing.T) {
 	now := time.Unix(1_760_000_000, 0)
-	fields := signTelegram(t, "other-token", models.TelegramAuthFields{
-		ID:        424242,
-		FirstName: "Аня",
-		AuthDate:  now.Unix(),
-	})
+	uc := telegramTestUseCase(
+		"12345",
+		fakeVerifier{err: errors.New("invalid telegram id_token: signature")},
+		now,
+	)
 
-	uc := telegramTestUseCase("bot-token", now)
-	if err := uc.verify(fields); err == nil {
-		t.Fatal("signature from another bot accepted")
+	if _, err := uc.verify(t.Context(), "forged-token"); err == nil {
+		t.Fatal("token with bad signature accepted")
 	}
 }
 
-func TestTelegramLoginVerifyRejectsStaleAuthDate(t *testing.T) {
+func TestTelegramLoginVerifyRejectsTokenWithoutNonce(t *testing.T) {
 	now := time.Unix(1_760_000_000, 0)
-	fields := signTelegram(t, "bot-token", models.TelegramAuthFields{
-		ID:        424242,
-		FirstName: "Аня",
-		AuthDate:  now.Add(-telegramAuthMaxAge - time.Hour).Unix(),
-	})
+	uc := telegramTestUseCase("12345", fakeVerifier{claims: validTestClaims("")}, now)
 
-	uc := telegramTestUseCase("bot-token", now)
-	if err := uc.verify(fields); err == nil {
-		t.Fatal("stale auth_date accepted")
+	if _, err := uc.verify(t.Context(), "id-token"); err == nil {
+		t.Fatal("token without nonce accepted")
 	}
 }
 
-func TestTelegramDataCheckStringOmitsEmptyFields(t *testing.T) {
-	fields := models.TelegramAuthFields{
-		ID:        7,
-		FirstName: "Юра",
-		AuthDate:  123,
+func TestTelegramLoginVerifyRejectsForeignNonce(t *testing.T) {
+	now := time.Unix(1_760_000_000, 0)
+	uc := telegramTestUseCase("12345", fakeVerifier{claims: validTestClaims("not-our-nonce")}, now)
+
+	if _, err := uc.verify(t.Context(), "id-token"); err == nil {
+		t.Fatal("token with nonce from another server accepted")
+	}
+}
+
+func TestTelegramLoginVerifyRejectsExpiredNonce(t *testing.T) {
+	issuedAt := time.Unix(1_760_000_000, 0)
+	nonces := NewTelegramNonceIssuer("test-secret", 15*time.Minute)
+	nonces.now = func() time.Time { return issuedAt }
+	nonce, err := nonces.Issue()
+	if err != nil {
+		t.Fatalf("issue nonce: %v", err)
 	}
 
-	want := "auth_date=123\nfirst_name=Юра\nid=7"
-	if got := fields.DataCheckString(); got != want {
-		t.Fatalf("check string = %q, want %q", got, want)
+	// Проверяем уже после окна жизни nonce.
+	uc := telegramTestUseCase("12345", fakeVerifier{claims: validTestClaims(nonce)}, issuedAt.Add(16*time.Minute))
+	if _, err := uc.verify(t.Context(), "id-token"); err == nil {
+		t.Fatal("token with expired nonce accepted")
+	}
+}
+
+func TestTelegramLoginDoRequiresConfiguredClientID(t *testing.T) {
+	uc := telegramTestUseCase("", fakeVerifier{claims: validTestClaims("x")}, time.Now())
+	if _, err := uc.Do(t.Context(), TelegramLoginInput{IDToken: "token"}); err == nil {
+		t.Fatal("login without client id must fail")
+	}
+}
+
+func TestTelegramNonceRoundtrip(t *testing.T) {
+	now := time.Unix(1_760_000_000, 0)
+	nonces := NewTelegramNonceIssuer("test-secret", 15*time.Minute)
+	nonces.now = func() time.Time { return now }
+
+	nonce, err := nonces.Issue()
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	if !nonces.Valid(nonce) {
+		t.Fatal("fresh own nonce rejected")
+	}
+
+	other := NewTelegramNonceIssuer("other-secret", 15*time.Minute)
+	other.now = nonces.now
+	if other.Valid(nonce) {
+		t.Fatal("nonce accepted with another key")
+	}
+
+	if nonces.Valid(nonce + "tampered") {
+		t.Fatal("tampered nonce accepted")
+	}
+	if nonces.Valid("no-dot") {
+		t.Fatal("malformed nonce accepted")
+	}
+
+	nonces.now = func() time.Time { return now.Add(16 * time.Minute) }
+	if nonces.Valid(nonce) {
+		t.Fatal("expired nonce accepted")
+	}
+}
+
+func TestTelegramIdentitySubjectPrefersNumericID(t *testing.T) {
+	claims := models.TelegramIDClaims{ID: 424242, Subject: "sub-424242"}
+	if got := claims.IdentitySubject(); got != "424242" {
+		t.Fatalf("subject = %q", got)
+	}
+
+	claims.ID = 0
+	if got := claims.IdentitySubject(); got != "sub-424242" {
+		t.Fatalf("fallback subject = %q", got)
+	}
+}
+
+func TestTelegramIdentityDataMapsOIDCClaims(t *testing.T) {
+	claims := models.TelegramIDClaims{
+		Name:       "Аня Ким",
+		GivenName:  "Аня",
+		FamilyName: "Ким",
+		Username:   "anya",
+		Picture:    "https://cdn4.telesco.pe/anya.jpg",
+	}
+	data := claims.IdentityData()
+	if data["first_name"] != "Аня" || data["last_name"] != "Ким" || data["username"] != "anya" {
+		t.Fatalf("data = %v", data)
+	}
+	if data["photo_url"] != "https://cdn4.telesco.pe/anya.jpg" {
+		t.Fatalf("photo = %v", data["photo_url"])
+	}
+
+	// given_name отсутствует — имя берётся из первого слова name.
+	claims = models.TelegramIDClaims{Name: "Юра Смирнов", Username: "yura"}
+	data = claims.IdentityData()
+	if data["first_name"] != "Юра" {
+		t.Fatalf("first from name = %v", data["first_name"])
+	}
+	if _, hasLast := data["last_name"]; hasLast {
+		t.Fatalf("last_name must be absent, got %v", data["last_name"])
 	}
 }
 
@@ -111,20 +197,5 @@ func TestTelegramDisplayNameFallbacks(t *testing.T) {
 	}
 	if got := models.TelegramDisplayName(map[string]any{}); got != "Telegram" {
 		t.Fatalf("fallback = %q", got)
-	}
-}
-
-func TestTelegramLoginDoRequiresConfiguredToken(t *testing.T) {
-	uc := telegramTestUseCase("", time.Now())
-	_, err := uc.Do(t.Context(), TelegramLoginInput{Telegram: models.TelegramAuthFields{ID: 1}})
-	if err == nil {
-		t.Fatal("login without bot token must fail")
-	}
-}
-
-func TestTelegramSubjectIsTgID(t *testing.T) {
-	fields := models.TelegramAuthFields{ID: 424242}
-	if got := strconv.FormatInt(fields.ID, 10); got != "424242" {
-		t.Fatalf("subject = %q", got)
 	}
 }

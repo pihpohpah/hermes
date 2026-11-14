@@ -108,6 +108,31 @@ type ConditionAssessment struct {
 // presenters for a persisted assessment.
 type ConditionScore = ConditionAssessment
 
+// ConditionPick is the best-scored hour of one place within a calendar day
+// plus the number of comfortable hours — the payload of the trip picker that
+// answers "куда поехать по погоде".
+type ConditionPick struct {
+	PlaceID      string
+	PlaceName    string
+	PlaceSlug    string
+	Scenario     string
+	Category     string
+	District     string
+	Score        Score
+	Verdict      Verdict
+	ForecastTime time.Time
+	Summary      string
+	GoodHours    int
+	TotalHours   int
+}
+
+// PickQuery is the parsed input of the picker read use case.
+type PickQuery struct {
+	Activity Activity
+	Date     time.Time
+	Limit    int
+}
+
 func NewActivityFromPlaceType(pt PlaceType) Activity {
 	switch pt {
 	case PlaceTypeTrailhead:

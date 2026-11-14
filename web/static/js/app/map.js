@@ -29,6 +29,28 @@ const ICONS = {
   help: 'hand-helping', other: 'message-circle',
 };
 
+/** Догружает вендор карты, если его ещё нет (при hx-boost-переходах head
+ * страницы не перечитывается, а maplibre/pmtiles подключены только на
+ * страницах с картой). */
+export function ensureMapVendor() {
+  if (window.maplibregl && window.pmtiles) return Promise.resolve();
+  if (!document.querySelector('link[href="/map/vendor/maplibre-gl.css"]')) {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = '/map/vendor/maplibre-gl.css';
+    document.head.append(css);
+  }
+  const load = (src) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Не загрузился ${src}`));
+      document.head.append(script);
+    });
+  return load('/map/vendor/maplibre-gl.js').then(() => load('/map/vendor/pmtiles.js'));
+}
+
 const iconSvg = (name) => `<svg class="icon" aria-hidden="true"><use href="${SPRITE}#i-${name}"></use></svg>`;
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;

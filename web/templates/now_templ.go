@@ -855,7 +855,7 @@ func createPinStepPlace() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<form class=\"preview create-pin\" x-show=\"step === 'place'\" x-cloak @submit.prevent=\"submitPlace\"><div class=\"preview__bar\"><button type=\"button\" class=\"btn btn--sm btn--ghost\" data-action=\"cancel-create\" @click=\"cancel\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<form class=\"preview create-pin\" x-show=\"step === 'place'\" x-cloak @submit.prevent=\"submitPlace\" hx-disable><div class=\"preview__bar\"><button type=\"button\" class=\"btn btn--sm btn--ghost\" data-action=\"cancel-create\" @click=\"cancel\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -897,7 +897,7 @@ func createPinStepDetails() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<form class=\"preview create-pin\" x-show=\"step === 'details'\" x-cloak @submit.prevent=\"submitDetails\"><div class=\"preview__bar\"><button type=\"button\" class=\"btn btn--sm btn--ghost\" @click=\"step = 'place'\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "<form class=\"preview create-pin\" x-show=\"step === 'details'\" x-cloak @submit.prevent=\"submitDetails\" hx-disable><div class=\"preview__bar\"><button type=\"button\" class=\"btn btn--sm btn--ghost\" @click=\"step = 'place'\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -26,16 +26,17 @@ import (
 var ErrUnknownCommand = errors.New("unknown command")
 
 const (
-	migrateCommand          = "migrate"
-	seedCommand             = "seed"
-	elevationsEnrichCommand = "elevations_enrich"
-	coverageProbeCommand    = "coverage_probe"
-	weatherLoadCommand      = "weather_load"
-	conditionsAssessCommand = "conditions_assess"
-	forecastRefreshCommand  = "forecast_refresh"
-	userCreateCommand       = "user_create"
-	pinsCleanupCommand      = "pins_cleanup"
-	eventsImportCommand     = "events_import"
+	migrateCommand           = "migrate"
+	seedCommand              = "seed"
+	elevationsEnrichCommand  = "elevations_enrich"
+	coverageProbeCommand     = "coverage_probe"
+	weatherLoadCommand       = "weather_load"
+	conditionsAssessCommand  = "conditions_assess"
+	forecastRefreshCommand   = "forecast_refresh"
+	userCreateCommand        = "user_create"
+	pinsCleanupCommand       = "pins_cleanup"
+	eventsImportCommand      = "events_import"
+	eventsImportCacheCommand = "events_import_cache"
 )
 
 type Command interface {
@@ -76,7 +77,7 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 	case migrateCommand:
 		cmd = commands.NewMigrateCommand(deps.logger, deps.pool, opts.migrationsDir)
 	case seedCommand:
-		cmd = commands.NewSeedCommand(deps.logger, deps.places)
+		cmd = commands.NewSeedCommand(deps.logger, deps.places, repository.NewEventRepository(deps.pool))
 	case elevationsEnrichCommand:
 		enricher := usecase.NewEnrichElevationsUseCase(
 			deps.places,
@@ -145,6 +146,21 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 			deps.cfg.EventAgentConfig.PollInterval,
 			deps.cfg.EventAgentConfig.MaxWait,
 		)
+		cmd = commands.NewEventsImportCommand(deps.logger, importer)
+	case eventsImportCacheCommand:
+		agent := eventagent.NewClient(eventagent.Config{
+			BaseURL: deps.cfg.EventAgentConfig.BaseURL,
+			Timeout: deps.cfg.EventAgentConfig.Timeout,
+			Logger:  deps.logger,
+		})
+		geo := geocoder.NewNominatim(geocoder.Config{
+			BaseURL:     deps.cfg.GeocoderConfig.BaseURL,
+			Timeout:     deps.cfg.GeocoderConfig.Timeout,
+			UserAgent:   deps.cfg.GeocoderConfig.UserAgent,
+			MinInterval: deps.cfg.GeocoderConfig.MinInterval,
+		})
+		eventRepo := repository.NewEventRepository(deps.pool)
+		importer := usecase.NewImportCachedEventsUseCase(agent, geo, eventRepo)
 		cmd = commands.NewEventsImportCommand(deps.logger, importer)
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownCommand, commandName)

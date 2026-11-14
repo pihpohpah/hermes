@@ -30,7 +30,7 @@ templ CatalogPage(view CatalogView) {
 						</div>
 						<a class="btn btn--outline catalog__map-link" href="/">@icon("map", "") На карте</a>
 					</div>
-					<form class="catalog__search" role="search" data-role="catalog-search">
+					<form class="catalog__search" role="search" data-role="catalog-search" hx-disable>
 						<div class="input-group">
 							@icon("search", "")
 							<input class="input input--surface catalog__search-input" type="search" name="q" value={ view.Query.Q } placeholder="Например: маяк, джаз, Русский, бесплатно" aria-label="Поиск по справочнику" autocomplete="off"/>

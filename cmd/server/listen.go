@@ -27,9 +27,20 @@ import (
 
 const idleTimeout = time.Minute
 
-// telegramGetMeTimeout ограничивает стартовый getMe: сервер не должен ждать
-// бота дольше этого, чтобы подняться.
-const telegramGetMeTimeout = 20 * time.Second
+// telegramNonceTTL — окно, в которое id_token с выданным nonce принимается:
+// диалог входа не должен жить дольше этого.
+const telegramNonceTTL = 15 * time.Minute
+
+// telegramNonceSecret выбирает секрет подписи nonce: основной — токен бота,
+// без него — client_id. Стойкость входа держит подпись Telegram по JWKS, nonce
+// лишь привязывает токен к свежему серверному вызову.
+func telegramNonceSecret(cfg config.TelegramConfig) string {
+	if cfg.BotToken != "" {
+		return cfg.BotToken
+	}
+
+	return cfg.ClientID
+}
 
 // photoStoreFromConfig resolves the photo storage root and the public URL
 // prefix. By default photos go to <WebDir>/uploads and are served at
@@ -109,8 +120,10 @@ func runListen(
 	refreshForecastUC := usecase.NewRefreshForecastUseCase(placeRepo, forecastRepo, weatherRepo, provider)
 
 	listTripsUC := usecase.NewListTripsUseCase(tripRepo)
+	getTripUC := usecase.NewGetTripUseCase(tripRepo)
 	createTripUC := usecase.NewCreateTripUseCase(tripRepo)
 	updateTripUC := usecase.NewUpdateTripUseCase(tripRepo)
+	pickTripsUC := usecase.NewPickTripsUseCase(forecastRepo, time.Now)
 
 	listReportsUC := usecase.NewListReportsUseCase(reportRepo)
 	createReportUC := usecase.NewCreateReportUseCase(reportRepo)
@@ -131,17 +144,8 @@ func runListen(
 
 	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
 	identityRepo := repository.NewIdentityRepository(pool)
-	telegramLoginUC := usecase.NewTelegramLoginUseCase(
-		cfg.TelegramConfig.BotToken,
-		userRepo,
-		identityRepo,
-		sessionRepo,
-		txManager,
-		cfg.TTL,
-	)
-
-	// Bot API: нужен для getMe (username виджета, если не задан в конфиге) и
-	// будущих серверных вызовов. Каждая неудачная попытка меняет прокси.
+	// Клиент Bot API: ретраи с ротацией прокси теперь обслуживают публичный
+	// JWKS Telegram OIDC — JWKS ходит через GetJSON, токен бота не нужен.
 	telegramClient := telegram.NewClient(telegram.Config{
 		BaseURL:     cfg.TelegramConfig.APIBase,
 		Token:       cfg.TelegramConfig.BotToken,
@@ -149,18 +153,20 @@ func runListen(
 		MaxAttempts: cfg.TelegramConfig.MaxAttempts,
 	}, logger)
 
-	telegramBotUsername := cfg.TelegramConfig.BotUsername
-	if telegramClient.Enabled() && telegramBotUsername == "" {
-		getMeCtx, getMeCancel := context.WithTimeout(ctx, telegramGetMeTimeout)
-		me, err := telegramClient.GetMe(getMeCtx)
-		getMeCancel()
-		if err != nil {
-			logger.Warn("telegram getMe failed, widget stays without username", slog.Any("error", err))
-		} else {
-			telegramBotUsername = me.Username
-			logger.Info("telegram bot resolved", slog.String("username", me.Username), slog.Int64("id", me.ID))
-		}
-	}
+	// Вход через Telegram Login library: подпись id_token проверяется по JWKS,
+	// nonce привязывает токен к свежему серверному вызову. Пустой Client ID —
+	// вход выключен.
+	telegramNonces := usecase.NewTelegramNonceIssuer(telegramNonceSecret(cfg.TelegramConfig), telegramNonceTTL)
+	telegramLoginUC := usecase.NewTelegramLoginUseCase(
+		cfg.TelegramConfig.ClientID,
+		telegram.NewIDTokenVerifier(telegramClient, cfg.TelegramConfig.ClientID),
+		telegramNonces,
+		userRepo,
+		identityRepo,
+		sessionRepo,
+		txManager,
+		cfg.TTL,
+	)
 
 	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
 
@@ -176,6 +182,9 @@ func runListen(
 	listSubmissionsUC := usecase.NewListSubmissionsUseCase(submissionRepo)
 
 	loader := httproutes.CatalogLoader(listPlacesUC, listEventsUC, getCollectionUC, placeRepo)
+	// MOCK(рекомендательная система): случайная подборка вместо скоринга;
+	// заменяется на клиент рекомендательного сервиса.
+	recommendationsUC := usecase.NewRecommendationsUseCase(placeRepo, eventRepo, time.Now)
 	pages := httproutes.NewPages(
 		logger,
 		loader,
@@ -187,6 +196,8 @@ func runListen(
 		getPinUC,
 		listCollectionsUC,
 		listSubmissionsUC,
+		listTripsUC,
+		recommendationsUC,
 	)
 
 	router := routes.NewHTTPRouter(logger, routes.Handlers{
@@ -195,6 +206,7 @@ func runListen(
 		GetPlace:          httproutes.NewGetPlaceHandler(logger, getPlaceUC),
 		CreatePlace:       httproutes.NewCreatePlaceHandler(logger, createPlaceUC),
 		GetPlaceForecast:  httproutes.NewGetPlaceForecastHandler(logger, getForecastUC),
+		GetForecastPicks:  httproutes.NewGetForecastPicksHandler(logger, pickTripsUC),
 		RefreshForecast:   httproutes.NewRefreshForecastHandler(logger, refreshForecastUC),
 		ListSimilarPlaces: httproutes.NewListSimilarPlacesHandler(logger, listSimilarUC),
 		PlaceStats:        httproutes.NewPlaceStatsHandler(logger, placeStatsUC),
@@ -209,6 +221,7 @@ func runListen(
 		SetPinGoing:       httproutes.NewSetPinGoingHandler(logger, setPinGoingUC),
 		ReportPin:         httproutes.NewReportPinHandler(logger, reportPinUC),
 		ListTrips:         httproutes.NewListTripsHandler(logger, listTripsUC),
+		GetTrip:           httproutes.NewGetTripHandler(logger, getTripUC),
 		CreateTrip:        httproutes.NewCreateTripHandler(logger, createTripUC),
 		UpdateTrip:        httproutes.NewUpdateTripHandler(logger, updateTripUC),
 		ListReports:       httproutes.NewListReportsHandler(logger, listReportsUC),
@@ -230,7 +243,7 @@ func runListen(
 		Logout:            httproutes.NewLogoutHandler(logger, sessionRepo, cfg.IsProd()),
 		UpdateUser:        httproutes.NewUpdateCurrentUserHandler(logger, userRepo),
 		TelegramLogin:     httproutes.NewTelegramLoginHandler(logger, telegramLoginUC, cfg.IsProd()),
-		TelegramWidget:    httproutes.NewTelegramWidgetConfigHandler(logger, telegramBotUsername),
+		TelegramWidget:    httproutes.NewTelegramWidgetConfigHandler(logger, cfg.TelegramConfig.ClientID, telegramNonces),
 		MapAssets:         httproutes.NewMapAssetsHandler(cfg.MapDir),
 		MapStyle:          httproutes.NewMapStyleHandler(cfg.MapDir, cfg.ReliefPath),
 		PMTiles:           httproutes.NewPMTilesHandler(logger, cfg.PMTilesPath),

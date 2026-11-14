@@ -206,15 +206,26 @@ INSERT INTO users (id, display_name, timezone)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Демо-гость', 'Asia/Vladivostok')
 ON CONFLICT (id) DO NOTHING;
 
+-- Поездка — это маршрут: сценарии city/nature/sea часто составные (море–город–гора),
+-- поэтому планируем не одно место, а упорядоченный набор точек (trip_stops) с
+-- расчётным временем прибытия. Скоринг условий считается для каждой точки.
 CREATE TABLE IF NOT EXISTS trips (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    place_id uuid NOT NULL REFERENCES places(id) ON DELETE CASCADE,
     planned_at timestamptz NOT NULL,
+    stop_minutes int NOT NULL DEFAULT 60 CHECK (stop_minutes BETWEEN 15 AND 480),
     activity text NOT NULL CHECK (activity IN ('hike', 'sup', 'run', 'walk')),
     status text NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'done', 'cancelled')),
     notes text NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS trip_stops (
+    trip_id uuid NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    place_id uuid NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+    position int NOT NULL CHECK (position BETWEEN 0 AND 9),
+    arrive_at timestamptz NOT NULL,
+    PRIMARY KEY (trip_id, place_id)
 );
 
 -- Виды меток «Сейчас» (sport/walk/music/games/help/other) — отдельный
@@ -459,6 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_pins_author_ends_at ON pins USING btree (author_i
 CREATE INDEX IF NOT EXISTS idx_pin_goings_user_id ON pin_goings USING btree (user_id);
 CREATE INDEX IF NOT EXISTS idx_trips_user_planned_at ON trips USING btree (user_id, planned_at);
 CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_trip_stops_place ON trip_stops USING btree (place_id);
 CREATE INDEX IF NOT EXISTS idx_conditions_cache_forecast_time ON conditions_cache USING btree (forecast_time);
 CREATE INDEX IF NOT EXISTS idx_weather_observations_observed_at ON weather_observations USING btree (observed_at);
 CREATE INDEX IF NOT EXISTS idx_weather_observations_place_source

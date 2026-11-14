@@ -225,6 +225,69 @@ func TestCallWithoutToken(t *testing.T) {
 	}
 }
 
+// TestGetJSONRetriesUntilSuccess: GetJSON идёт к произвольному URL (JWKS) с
+// той же ретрай-логикой, что и Bot API, и не требует токен бота.
+func TestGetJSONRetriesUntilSuccess(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempt := calls.Add(1)
+		if attempt < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+
+			return
+		}
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	}))
+	defer server.Close()
+
+	client := testClient(t, "https://api.telegram.org", nil, 6)
+	raw, err := client.GetJSON(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("get json failed: %v", err)
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("attempts = %d, want 3", calls.Load())
+	}
+	if string(raw) != `{"keys":[]}` {
+		t.Fatalf("body = %s", raw)
+	}
+}
+
+func TestGetJSONWithoutToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":1}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{Timeout: time.Second}, nil)
+	raw, err := client.GetJSON(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("get json without bot token failed: %v", err)
+	}
+	if string(raw) != `{"ok":1}` {
+		t.Fatalf("body = %s", raw)
+	}
+}
+
+func TestGetJSONDoesNotRetryClientErrors(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := testClient(t, "https://api.telegram.org", nil, 6)
+	_, err := client.GetJSON(context.Background(), server.URL)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("want APIError, got %T: %v", err, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("attempts = %d, want 1 (4xx не ретраим)", calls.Load())
+	}
+}
+
 func TestConfigAttemptsDefault(t *testing.T) {
 	var c Config
 	if got := c.attempts(); got != 6 {

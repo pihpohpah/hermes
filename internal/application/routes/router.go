@@ -19,6 +19,7 @@ type Handlers struct {
 	GetPlace          *httproutes.GetPlaceHandler
 	CreatePlace       *httproutes.CreatePlaceHandler
 	GetPlaceForecast  *httproutes.GetPlaceForecastHandler
+	GetForecastPicks  *httproutes.GetForecastPicksHandler
 	RefreshForecast   *httproutes.RefreshForecastHandler
 	ListSimilarPlaces *httproutes.ListSimilarPlacesHandler
 	PlaceStats        *httproutes.PlaceStatsHandler
@@ -33,6 +34,7 @@ type Handlers struct {
 	SetPinGoing       *httproutes.SetPinGoingHandler
 	ReportPin         *httproutes.ReportPinHandler
 	ListTrips         *httproutes.ListTripsHandler
+	GetTrip           *httproutes.GetTripHandler
 	CreateTrip        *httproutes.CreateTripHandler
 	UpdateTrip        *httproutes.UpdateTripHandler
 	ListReports       *httproutes.ListReportsHandler
@@ -125,11 +127,17 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 
 	mux.Handle("GET /forecast/place/{id}", h.GetPlaceForecast)
 	mux.Handle("POST /forecast/refresh", h.RefreshForecast)
+	if h.GetForecastPicks != nil {
+		mux.Handle("GET /forecast/picks", h.GetForecastPicks)
+	}
 
-	// Trips and report creation are personal: the owner comes from the
+	// Trips (маршрутные поездки) are personal: the owner comes from the
 	// session, so every mutation (and the personal listing) requires auth.
 	mux.Handle("GET /trips", requireAuth(h.ListTrips))
 	mux.Handle("POST /trips", requireAuth(h.CreateTrip))
+	if h.GetTrip != nil {
+		mux.Handle("GET /trips/{id}", requireAuth(h.GetTrip))
+	}
 	mux.Handle("PATCH /trips/{id}", requireAuth(h.UpdateTrip))
 
 	if h.ListReports != nil {

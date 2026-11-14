@@ -261,7 +261,9 @@ func (l catalogLoader) loadItems(ctx context.Context, state catalogQuery) (catal
 
 	filtered := make([]presenter.CatalogItem, 0, len(items))
 	for _, item := range items {
-		if item.Type == "place" && state.Type != "event" && item.Scenario != state.Scenario {
+		// Сценарий применяется к обоим типам: событие — городской объект
+		// (scenario всегда "city"), поэтому в природе и на море оно отсекается.
+		if item.Scenario != state.Scenario {
 			continue
 		}
 		if !state.Filters.Matches(item) {

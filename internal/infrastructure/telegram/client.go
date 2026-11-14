@@ -114,6 +114,57 @@ func (c *Client) Call(ctx context.Context, method string, params url.Values) (js
 	}
 
 	endpoint := fmt.Sprintf("%s/bot%s/%s", c.cfg.baseURL(), c.cfg.Token, method)
+	body, err := c.attempt(ctx, method, func(ctx context.Context, httpClient *http.Client) (json.RawMessage, error) {
+		return c.do(ctx, httpClient, endpoint, params)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
+}
+
+// GetJSON выполняет GET к произвольному URL с той же логикой ретраев и
+// ротации прокси, что и вызовы Bot API. Токен не требуется и не передаётся:
+// нужен для публичных endpoint'ов OIDC (JWKS). Ответ возвращается как есть,
+// без разбора Bot API-конверта.
+func (c *Client) GetJSON(ctx context.Context, rawURL string) (json.RawMessage, error) {
+	return c.attempt(ctx, "GET", func(ctx context.Context, httpClient *http.Client) (json.RawMessage, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		respBody, err := readAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(respBody), errBodyLimit))
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, &APIError{StatusCode: resp.StatusCode, Body: truncate(string(respBody), errBodyLimit)}
+		}
+
+		return json.RawMessage(respBody), nil
+	})
+}
+
+// attempt гоняет one Attempt по кругу прокси: ретраит транспортные сбои и
+// 429/5xx, на 4xx сдаётся сразу.
+func (c *Client) attempt(
+	ctx context.Context,
+	method string,
+	one func(ctx context.Context, httpClient *http.Client) (json.RawMessage, error),
+) (json.RawMessage, error) {
 	attempts := c.cfg.attempts()
 
 	var lastErr error
@@ -131,7 +182,8 @@ func (c *Client) Call(ctx context.Context, method string, params url.Values) (js
 			Timeout:   c.cfg.timeout(),
 		}
 
-		body, retryable, err := c.do(ctx, httpClient, endpoint, params)
+		body, err := one(ctx, httpClient)
+		var apiErr *APIError
 		if err == nil {
 			if i > 0 {
 				c.logger.Info("telegram api attempt succeeded", slog.String("method", method), slog.Int("attempt", i+1))
@@ -141,7 +193,7 @@ func (c *Client) Call(ctx context.Context, method string, params url.Values) (js
 		}
 
 		lastErr = err
-		if !retryable {
+		if errors.As(err, &apiErr) {
 			return nil, err
 		}
 
@@ -179,13 +231,15 @@ func (c *Client) transportFor(i int) *http.Transport {
 	return transport
 }
 
-// do выполняет одну попытку. Второе возвращаемое значение: стоит ли ретраить.
+// do выполняет одну попытку POST Bot API. *APIError — ответ исправен, ретрай
+// бессмысленен; любая другая ошибка — транспортный сбой или 429/5xx, попытку
+// можно повторить через другой прокси.
 func (c *Client) do(
 	ctx context.Context,
 	httpClient *http.Client,
 	endpoint string,
 	params url.Values,
-) (json.RawMessage, bool, error) {
+) (json.RawMessage, error) {
 	var body *strings.Reader
 	if params == nil {
 		body = strings.NewReader("")
@@ -195,27 +249,27 @@ func (c *Client) do(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := readAll(resp.Body)
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
 
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return nil, true, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(respBody), errBodyLimit))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(respBody), errBodyLimit))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, &APIError{StatusCode: resp.StatusCode, Body: truncate(string(respBody), errBodyLimit)}
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: truncate(string(respBody), errBodyLimit)}
 	}
 
 	var envelope struct {
@@ -224,11 +278,11 @@ func (c *Client) do(
 		Description string          `json:"description"`
 	}
 	if err := json.Unmarshal(respBody, &envelope); err != nil {
-		return nil, false, fmt.Errorf("decode telegram response: %w", err)
+		return nil, fmt.Errorf("decode telegram response: %w", err)
 	}
 	if !envelope.OK {
-		return nil, false, &APIError{StatusCode: resp.StatusCode, Body: envelope.Description}
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: envelope.Description}
 	}
 
-	return envelope.Result, false, nil
+	return envelope.Result, nil
 }

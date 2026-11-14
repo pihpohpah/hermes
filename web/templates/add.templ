@@ -35,7 +35,7 @@ templ AddPage(view AddView) {
 						x-init="init()"
 					>
 						@addStepper()
-						<form class="add__form" novalidate @submit.prevent="submit">
+						<form class="add__form" novalidate @submit.prevent="submit" hx-disable>
 							<h2 class="add__step-title" tabindex="-1" x-ref="stepTitle" x-text="steps[step - 1]"></h2>
 							@addStepWhat(view)
 							@addStepDetails(view)

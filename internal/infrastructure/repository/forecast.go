@@ -151,6 +151,100 @@ func (r *ForecastRepository) ListByPlaceAndRange(
 	return result, nil
 }
 
+// ListDayPicks returns the best-scored hour of every place within the window
+// for one activity, together with the count of comfortable hours (score >=
+// goodScore) and total assessed hours. Only the cache is read: the refresh
+// job keeps the whole horizon scored, so the picker stays a cheap query.
+func (r *ForecastRepository) ListDayPicks(
+	ctx context.Context,
+	activity models.Activity,
+	from time.Time,
+	to time.Time,
+	goodScore int,
+	limit int,
+) ([]models.ConditionPick, error) {
+	const query = `
+		SELECT DISTINCT ON (c.place_id)
+			c.place_id::text,
+			p.name,
+			COALESCE(p.slug, ''),
+			p.layer_code,
+			COALESCE(p.category, ''),
+			p.district,
+			c.score,
+			c.verdict,
+			c.forecast_time,
+			c.summary,
+			COALESCE(g.good_hours, 0),
+			COALESCE(g.total_hours, 0)
+		FROM conditions_cache c
+		JOIN places p ON p.id = c.place_id
+		LEFT JOIN (
+			SELECT place_id,
+				count(*) FILTER (WHERE score >= $4) AS good_hours,
+				count(*) AS total_hours
+			FROM conditions_cache
+			WHERE activity = $1 AND forecast_time >= $2 AND forecast_time < $3
+			GROUP BY place_id
+		) g ON g.place_id = c.place_id
+		WHERE c.activity = $1
+		  AND c.forecast_time >= $2
+		  AND c.forecast_time < $3
+		ORDER BY c.place_id, c.score DESC, c.forecast_time ASC
+		LIMIT $5
+	`
+
+	rows, err := r.pool.Query(ctx, query, string(activity), from, to, goodScore, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query day picks: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]models.ConditionPick, 0)
+	for rows.Next() {
+		var (
+			pick     models.ConditionPick
+			scoreRaw int
+			verdict  string
+		)
+		if err := rows.Scan(
+			&pick.PlaceID,
+			&pick.PlaceName,
+			&pick.PlaceSlug,
+			&pick.Scenario,
+			&pick.Category,
+			&pick.District,
+			&scoreRaw,
+			&verdict,
+			&pick.ForecastTime,
+			&pick.Summary,
+			&pick.GoodHours,
+			&pick.TotalHours,
+		); err != nil {
+			return nil, fmt.Errorf("scan day pick: %w", err)
+		}
+
+		parsedScore, err := models.NewScore(scoreRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse pick score: %w", err)
+		}
+		parsedVerdict, err := models.NewVerdict(verdict)
+		if err != nil {
+			return nil, fmt.Errorf("parse pick verdict: %w", err)
+		}
+
+		pick.Score = parsedScore
+		pick.Verdict = parsedVerdict
+		pick.ForecastTime = pick.ForecastTime.UTC()
+		result = append(result, pick)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate day picks: %w", err)
+	}
+
+	return result, nil
+}
+
 func (r *ForecastRepository) DeleteBefore(ctx context.Context, cutoff time.Time) error {
 	const query = `DELETE FROM conditions_cache WHERE forecast_time < $1`
 	if _, err := r.pool.Exec(ctx, query, cutoff); err != nil {
@@ -289,6 +383,30 @@ func scanAssessment(row pgx.Row) (models.ConditionAssessment, error) {
 	if err != nil {
 		return models.ConditionAssessment{}, fmt.Errorf("parse activity from db `%s`: %w", activityRaw, err)
 	}
+
+	return buildAssessment(placeID, activity, forecastTime, scoreRaw, verdictRaw, confidenceRaw,
+		rawData, factorsRaw, contributionsRaw, warningsRaw, limitationsRaw, summary, sourcesRaw, demo, algorithm)
+}
+
+// buildAssessment decodes raw conditions_cache columns into the domain model.
+// Shared by the plain row scan and the lateral joins that score trip stops.
+func buildAssessment(
+	placeID string,
+	activity models.Activity,
+	forecastTime time.Time,
+	scoreRaw int,
+	verdictRaw string,
+	confidenceRaw string,
+	rawData []byte,
+	factorsRaw []byte,
+	contributionsRaw []byte,
+	warningsRaw []byte,
+	limitationsRaw []byte,
+	summary string,
+	sourcesRaw []byte,
+	demo bool,
+	algorithm string,
+) (models.ConditionAssessment, error) {
 	score, err := models.NewScore(scoreRaw)
 	if err != nil {
 		return models.ConditionAssessment{}, fmt.Errorf("parse score from db: %w", err)

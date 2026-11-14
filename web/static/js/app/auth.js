@@ -87,14 +87,14 @@ export function openAuthDialog({ reason = '' } = {}) {
   });
 }
 
-/* Вход через Telegram: официальный Login Widget. Конфиг отдаёт бэкенд
- * (GET /auth/telegram/widget); без токена бота блок просто не показывается.
- * Виджет вызывает глобальный коллбек с подписанными полями — подпись
- * перепроверяет сервер, клиентскому коду она не доверяет. */
+/* Вход через Telegram: официальная Login library (OIDC-поток в popup).
+ * Конфиг отдаёт бэкенд (GET /auth/telegram/widget): client_id и nonce.
+ * Библиотека вызывает коллбек с id_token — подпись, iss, aud и exp токена
+ * перепроверяет сервер, клиентскому коду он не доверяет. */
 let telegramHandler = null;
 
-window.__vlruTelegramAuth = (tgUser) => {
-  if (telegramHandler) telegramHandler(tgUser);
+window.__vlruTelegramAuth = (result) => {
+  if (telegramHandler) telegramHandler(result);
 };
 
 function clientTimezone() {
@@ -108,15 +108,24 @@ async function initTelegramLogin(root, alt, { form, onSuccess }) {
   } catch {
     return; /* конфиг недоступен — остаётся только вход по имени */
   }
-  if (!config || !config.enabled || !config.bot_username) return;
+  if (!config || !config.enabled || !config.client_id || !config.nonce) return;
 
   root.hidden = false;
   alt.hidden = false;
 
-  telegramHandler = async (tgUser) => {
-    const rulesError = $('#auth-rules-error', form);
+  const rulesError = $('#auth-rules-error', form);
+
+  telegramHandler = async (result) => {
+    if (!result || result.error || !result.id_token) {
+      if (!result || result.error !== 'popup_closed') {
+        rulesError.textContent = 'Не получилось войти через Telegram. Попробуйте ещё раз';
+      }
+
+      return;
+    }
     if (!form.elements.rules.checked) {
       rulesError.textContent = 'Чтобы продолжить, примите правила';
+
       return;
     }
     rulesError.textContent = '';
@@ -124,7 +133,7 @@ async function initTelegramLogin(root, alt, { form, onSuccess }) {
     try {
       const data = await api('/auth/telegram', {
         method: 'POST',
-        body: { ...tgUser, timezone: clientTimezone() },
+        body: { id_token: result.id_token, timezone: clientTimezone() },
       });
       storage.set(CSRF_KEY, data.csrf_token || '');
       toast(`Готово, ${data.display_name}. Теперь можно ставить метки`, { type: 'success' });
@@ -135,11 +144,21 @@ async function initTelegramLogin(root, alt, { form, onSuccess }) {
   };
 
   const script = document.createElement('script');
-  script.src = 'https://telegram.org/js/telegram-widget.js?22';
+  script.src = 'https://telegram.org/js/telegram-login.js';
   script.async = true;
-  script.setAttribute('data-telegram-login', config.bot_username);
-  script.setAttribute('data-size', 'large');
-  script.setAttribute('data-onauth', 'window.__vlruTelegramAuth');
+  script.onload = () => {
+    if (!window.Telegram || !window.Telegram.Login) return;
+    root.innerHTML = '<button type="button" class="tg-auth-button">Войти через Telegram</button>';
+    window.Telegram.Login.init(
+      {
+        client_id: Number(config.client_id),
+        scope: ['profile'],
+        lang: 'ru',
+        nonce: config.nonce,
+      },
+      (result) => window.__vlruTelegramAuth(result),
+    );
+  };
   root.append(script);
 }
 

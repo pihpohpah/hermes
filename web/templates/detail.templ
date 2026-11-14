@@ -78,6 +78,16 @@ templ DetailPage(view DetailView) {
 							title="Поделиться"
 						>@icon("share-2", "")</button>
 						@routeToggleButton(item, "btn btn--outline")
+						if item.Type == "place" {
+							<button
+								type="button"
+								class="btn btn--outline"
+								data-action="plan-place"
+								data-place-id={ item.ID }
+								data-place-name={ item.Title }
+								data-activity={ string(models.NewActivityFromPlaceType(models.PlaceType(item.Type))) }
+							>@icon("calendar-plus", "") Запланировать поход</button>
+						}
 						<a class="btn btn--primary" href={ templ.SafeURL("/?s=" + item.Scenario + "&place=" + item.ID) }>@icon("map", "") На карте</a>
 					</div>
 				</header>

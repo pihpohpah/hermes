@@ -1,9 +1,12 @@
 package templates
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/pihpohpah/hermes/internal/application/presenter"
+	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
 // Профиль: метки, отметки «Я приду» и предложения со статусом проверки.
@@ -39,9 +42,6 @@ templ profileGuest() {
 }
 
 templ profileUser(view ProfileView) {
-	{{
-		counts := profileTabCounts(view)
-	}}
 	<div class="page container profile">
 		<header class="profile__head">
 			@avatar(view.User.DisplayName, "xl")
@@ -66,7 +66,10 @@ templ profileUser(view ProfileView) {
 					aria-pressed={ strconv.FormatBool(view.Tab == tab.ID) }
 				>
 					@icon(tab.Icon, "")
-{ tab.Label }<span class="tab__count">{ strconv.Itoa(counts[tab.ID]) }</span>
+					{ tab.Label }
+					if count, ok := profileTabCounts(view)[tab.ID]; ok {
+						<span class="tab__count">{ strconv.Itoa(count) }</span>
+					}
 				</a>
 			}
 		</div>
@@ -114,14 +117,16 @@ type profileTabDef struct {
 
 func profileTabs() []profileTabDef {
 	return []profileTabDef{
+		{ID: "foryou", Label: "Для вас", Icon: "sparkles"},
 		{ID: "pins", Label: "Мои метки", Icon: "radio"},
 		{ID: "going", Label: "Я иду", Icon: "users"},
+		{ID: "trips", Label: "Походы", Icon: "footprints"},
 		{ID: "submissions", Label: "Предложения", Icon: "flag"},
 	}
 }
 
 func profileTabURL(id string) string {
-	if id == "pins" {
+	if id == "foryou" {
 		return "/profile"
 	}
 
@@ -129,7 +134,12 @@ func profileTabURL(id string) string {
 }
 
 func profileTabCounts(view ProfileView) map[string]int {
-	counts := map[string]int{"pins": 0, "going": 0, "submissions": len(view.Submissions)}
+	counts := map[string]int{
+		"pins":        0,
+		"going":       0,
+		"trips":       len(view.Trips),
+		"submissions": len(view.Submissions),
+	}
 	for _, pin := range view.Pins {
 		if pin.Mine {
 			counts["pins"]++
@@ -143,13 +153,307 @@ func profileTabCounts(view ProfileView) map[string]int {
 
 // ProfileTab — содержимое вкладки (htmx-фрагмент).
 templ ProfileTab(view ProfileView) {
-	if view.Tab == "going" {
+	if view.Tab == "foryou" {
+		@profileForYou(view)
+	} else if view.Tab == "going" {
 		@profileGoing(view)
+	} else if view.Tab == "trips" {
+		@profileTrips(view)
 	} else if view.Tab == "submissions" {
 		@profileSubmissions(view)
 	} else {
 		@profilePins(view)
 	}
+}
+
+// profileForYou — лента «Для вас»: баннер «Мне повезёт» и подборки мест,
+// маршрутов и событий.
+//
+// MOCK(рекомендательная система): подборки случайные (случайные места,
+// ближайшие-соседи маршруты) — см. usecase/recommendations.go. Персонализированные
+// подписи «почему это вам» намеренно не выдумываются; заголовки секций нейтральные.
+templ profileForYou(view ProfileView) {
+	<!-- MOCK(рекомендательная система): лента собирается случайно, без скоринга и истории пользователя -->
+	<div class="lucky-banner">
+		<span class="lucky-banner__icon">@icon("dices", "icon--lg")</span>
+		<div class="lucky-banner__text">
+			<strong>Хочется чего-то нового?</strong>
+			<p>Случайное место, событие или целый маршрут в один клик.</p>
+		</div>
+		<button type="button" class="btn btn--primary" data-action="lucky">@icon("dices", "") Мне повезёт</button>
+	</div>
+	{{
+		forYou := view.ForYou
+		empty := forYou == nil || (len(forYou.Places) == 0 && len(forYou.Events) == 0 && len(forYou.Routes) == 0)
+	}}
+	if empty {
+		<div class="empty">
+			<span class="empty__icon">@icon("sparkles", "icon--lg")</span>
+			<h2 class="empty__title">Подборка пока пустая</h2>
+			<p class="empty__text">В справочнике ещё нет мест — загляните позже.</p>
+			<div class="empty__actions"><a class="btn btn--outline" href="/catalog">Открыть справочник</a></div>
+		</div>
+	} else {
+		if forYou != nil && len(forYou.Places) > 0 {
+			@forYouSection("foryou-places", "Места для вас") {
+				<ul class="catalog__grid" role="list">
+					for i, item := range forYou.Places {
+						<li>@placeCard(item, "grid", i < 4)</li>
+					}
+				</ul>
+			}
+		}
+		if forYou != nil && len(forYou.Routes) > 0 {
+			@forYouSection("foryou-routes", "Маршруты для вас") {
+				<div class="foryou__routes">
+					for _, route := range forYou.Routes {
+						@forYouRoute(route)
+					}
+				</div>
+			}
+		}
+		if forYou != nil && len(forYou.Events) > 0 {
+			@forYouSection("foryou-events", "События для вас") {
+				<ul class="catalog__grid" role="list">
+					for i, item := range forYou.Events {
+						<li>@placeCard(item, "grid", i < 4)</li>
+					}
+				</ul>
+			}
+		}
+	}
+}
+
+templ forYouSection(id, title string) {
+	<section class="foryou__section" aria-labelledby={ id }>
+		<h2 class="foryou__title" id={ id }>{ title }</h2>
+		{ children... }
+	</section>
+}
+
+// forYouRoute — один мок-маршрут: цепочка остановок, собранная ближайшими
+// соседями (без маршрутизации). MOCK.
+templ forYouRoute(route ForYouRoute) {
+	<article class="foryou-route" data-scenario={ route.Scenario }>
+		<header class="foryou-route__head">
+			<strong>@icon("route", "") { route.Title }</strong>
+			<span class="foryou-route__note">@icon("shuffle", "icon--sm") Точки подобраны близко друг к другу</span>
+		</header>
+		<ol class="foryou-route__stops" role="list">
+			for _, stop := range route.Stops {
+				<li class="foryou-route__stop">
+					<a class="foryou-route__link" href={ templ.SafeURL("/place/" + stop.ID) }>{ stop.Title }</a>
+					<span class="foryou-route__meta">{ presenter.CategoryInfo(stop.Scenario, stop.Category, stop.Type).Label }</span>
+				</li>
+			}
+		</ol>
+		<footer class="foryou-route__actions">
+			<button type="button" class="btn btn--sm btn--outline" data-action="route-load" data-ids={ routeStopIDs(route) }>@icon("route", "icon--sm") Проложить по точкам</button>
+		</footer>
+	</article>
+}
+
+// routeStopIDs склеивает id остановок маршрута для клиентского routeStore.
+func routeStopIDs(route ForYouRoute) string {
+	ids := make([]string, 0, len(route.Stops))
+	for _, stop := range route.Stops {
+		ids = append(ids, stop.ID)
+	}
+
+	return strings.Join(ids, ",")
+}
+
+// profileTrips — «Мои походы»: запланированные маршруты с оценкой каждой точки.
+templ profileTrips(view ProfileView) {
+	if len(view.Trips) == 0 {
+		<div class="empty">
+			<span class="empty__icon">@icon("footprints", "icon--lg")</span>
+			<h2 class="empty__title">Походов пока нет</h2>
+			<p class="empty__text">Соберите маршрут на карте и запланируйте его на время — здесь появятся ваши планы с оценкой условий у каждой точки. Или подберите место по погоде.</p>
+			<div class="empty__actions">
+				<a class="btn btn--primary" href="/">@icon("map", "") Собрать маршрут</a>
+				<button type="button" class="btn btn--outline" data-action="trip-picker">@icon("sun", "") Подобрать по погоде</button>
+			</div>
+		</div>
+	} else {
+		<ul class="trip-list" role="list">
+			for _, trip := range view.Trips {
+				@tripCard(trip)
+			}
+		</ul>
+	}
+}
+
+templ tripCard(trip presenter.Trip) {
+	{{
+		status := tripStatusMeta(trip.Status)
+	}}
+	<li class={ "trip-card trip-card--" + tripWorstClass(trip) }>
+		<header class="trip-card__head">
+			<div class="trip-card__title">
+				<strong>@icon(tripActivityIcon(trip.Activity), "") { tripActivityLabel(trip.Activity) } · { countLabel(len(trip.Stops), [3]string{"точка", "точки", "точек"}) }</strong>
+				<span class="trip-card__when">{ formatEventWhen(trip.PlannedAt) } · на точке ~{ strconv.Itoa(trip.StopMinutes) } мин</span>
+			</div>
+			<span class={ "badge badge--" + status.badge }>@icon(status.icon, "")
+{ status.label }</span>
+		</header>
+		<ol class="trip-card__stops" role="list">
+			for _, stop := range trip.Stops {
+				@tripStopRow(stop)
+			}
+		</ol>
+		{{
+			hints := tripPlanHints(trip)
+		}}
+		if len(hints) > 0 {
+			<ul class="trip-card__hints" role="list">
+				for _, hint := range hints {
+					<li class={ "trip-hint trip-hint--" + hint.level }>@icon(hint.icon, "")<span>{ hint.text }</span></li>
+				}
+			</ul>
+		}
+		<footer class="trip-card__actions">
+			<a class="btn btn--sm btn--outline" href={ templ.SafeURL("/?panel=route&trip=" + trip.ID) }>@icon("route", "icon--sm") На карте</a>
+			if trip.Status == "planned" {
+				<button type="button" class="btn btn--sm btn--outline" data-action="trip-done" data-id={ trip.ID }>Состоялся</button>
+				<button
+					type="button"
+					class="icon-btn icon-btn--sm"
+					data-action="trip-cancel"
+					data-id={ trip.ID }
+					aria-label="Отменить поход"
+					title="Отменить поход"
+				>@icon("x", "")</button>
+			}
+		</footer>
+	</li>
+}
+
+templ tripStopRow(stop presenter.TripStop) {
+	<li class="trip-stop">
+		<span class={ "trip-stop__num trip-stop__num--" + tripStopClass(stop) }>{ strconv.Itoa(stop.Position + 1) }</span>
+		<div class="trip-stop__main">
+			<a class="trip-stop__name" href={ stop.PlaceURL }>{ stop.PlaceName }</a>
+			<span class="trip-stop__meta">
+				прибытие ~{ formatTimeOnly(stop.ArriveAt) }
+				if len(stop.Warnings) > 0 {
+					<span class="trip-stop__warn">@icon("triangle-alert", "icon--sm") { stop.Warnings[0].Message }</span>
+				}
+			</span>
+		</div>
+		if stop.Score != nil {
+			<span
+				class={ "trip-stop__score trip-stop__score--" + verdictClass(stop.Verdict) }
+				title={ verdictLabel(stop.Verdict) }
+			>{ strconv.Itoa(*stop.Score) }</span>
+		} else {
+			<span class="trip-stop__score trip-stop__score--na">—</span>
+		}
+	</li>
+}
+
+func tripStatusMeta(status string) statusMeta {
+	switch status {
+	case string(models.TripStatusDone):
+		return statusMeta{label: "Состоялся", badge: "success", icon: "circle-check"}
+	case string(models.TripStatusCancelled):
+		return statusMeta{label: "Отменён", badge: "danger", icon: "circle-x"}
+	default:
+		return statusMeta{label: "Запланирован", badge: "timed", icon: "calendar"}
+	}
+}
+
+func tripActivityLabel(activity string) string {
+	switch activity {
+	case "run":
+		return "Пробежка"
+	case "hike":
+		return "Поход"
+	case "sup":
+		return "SUP"
+	default:
+		return "Прогулка"
+	}
+}
+
+func tripActivityIcon(activity string) string {
+	switch activity {
+	case "run":
+		return "zap"
+	case "hike":
+		return "mountain"
+	case "sup":
+		return "sailboat"
+	default:
+		return "footprints"
+	}
+}
+
+// tripWorstClass colors the card accent by the weakest node verdict.
+func tripWorstClass(trip presenter.Trip) string {
+	worst := ""
+	for _, stop := range trip.Stops {
+		switch stop.Verdict {
+		case models.VerdictNoGo:
+			return "no-go"
+		case models.VerdictCaution:
+			worst = "caution"
+		case models.VerdictGo:
+			if worst == "" {
+				worst = "go"
+			}
+		}
+	}
+
+	return worst
+}
+
+func tripStopClass(stop presenter.TripStop) string {
+	if stop.Verdict == "" {
+		return "na"
+	}
+
+	return verdictClass(stop.Verdict)
+}
+
+type tripHint struct {
+	level string
+	icon  string
+	text  string
+}
+
+// tripPlanHints turns per-stop scorings into actionable hints: no-go stops,
+// better hours within the same day and missing assessments.
+func tripPlanHints(trip presenter.Trip) []tripHint {
+	hints := make([]tripHint, 0, len(trip.Stops))
+	for _, stop := range trip.Stops {
+		name := stop.PlaceName
+		switch {
+		case stop.Score == nil:
+			hints = append(hints, tripHint{
+				level: "tip",
+				icon:  "info",
+				text:  "«" + name + "»: оценки условий на время прибытия пока нет",
+			})
+		case stop.Verdict == models.VerdictNoGo:
+			hints = append(hints, tripHint{
+				level: "danger",
+				icon:  "triangle-alert",
+				text:  "«" + name + "» в запланированное время не рекомендуется",
+			})
+		case stop.BestScore != nil && *stop.BestScore >= *stop.Score+15:
+			hints = append(hints, tripHint{
+				level: "tip",
+				icon:  "sun",
+				text: fmt.Sprintf(
+					"«%s»: лучшее время %s — там %d баллов вместо %d",
+					name, formatTimeOnly(stop.BestAt), *stop.BestScore, *stop.Score,
+				),
+			})
+		}
+	}
+
+	return hints
 }
 
 templ profilePins(view ProfileView) {

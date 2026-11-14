@@ -55,7 +55,7 @@ func CatalogPage(view CatalogView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " На карте</a></div><form class=\"catalog__search\" role=\"search\" data-role=\"catalog-search\"><div class=\"input-group\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " На карте</a></div><form class=\"catalog__search\" role=\"search\" data-role=\"catalog-search\" hx-disable><div class=\"input-group\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

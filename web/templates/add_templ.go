@@ -83,7 +83,7 @@ func AddPage(view AddView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<form class=\"add__form\" novalidate @submit.prevent=\"submit\"><h2 class=\"add__step-title\" tabindex=\"-1\" x-ref=\"stepTitle\" x-text=\"steps[step - 1]\"></h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<form class=\"add__form\" novalidate @submit.prevent=\"submit\" hx-disable><h2 class=\"add__step-title\" tabindex=\"-1\" x-ref=\"stepTitle\" x-text=\"steps[step - 1]\"></h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

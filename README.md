@@ -103,7 +103,7 @@ go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate   # пересобра�
 
 ### Файлы окружения
 
-- `.env` — секреты и прикладные настройки (`TELEGRAM_BOT_TOKEN`, `OPENMETEO_API_KEY`, `SENTRY_DSN` и т.п.). Compose передаёт этот файл в контейнеры через `env_file`; `DATABASE_URL` и `PORT` контейнеры получают из `compose.yaml`, дублировать их в `.env` не нужно.
+- `.env` — секреты и прикладные настройки (`TELEGRAM_CLIENT_ID`, `TELEGRAM_BOT_TOKEN`, `OPENMETEO_API_KEY`, `SENTRY_DSN` и т.п.). Compose передаёт этот файл в контейнеры через `env_file`; `DATABASE_URL` и `PORT` контейнеры получают из `compose.yaml`, дублировать их в `.env` не нужно.
 - `deploy.env` — не секретные параметры образа, HTTP-порта, кредов базы и SSH-деплоя. Эти значения используются для подстановок Compose; SSH-настройки скрипта в контейнер не передаются.
 
 Оба файла игнорируются Git и Docker build context. В репозитории хранятся только `.env.example` и `deploy.env.example`.

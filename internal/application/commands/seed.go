@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/pihpohpah/hermes/internal/application/commands/seeddata"
 	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
@@ -12,22 +13,51 @@ type seedPlaceRepo interface {
 	Create(ctx context.Context, in models.CreatePlaceInput) (models.Place, error)
 }
 
-// SeedCommand only creates places. Weather and scoring are separate commands,
-// so seeding never produces fake "ready" recommendations.
+// seedEventRepo сидит редакционные события макета. Upsert по slug, чтобы
+// повторный seed обновлял те же строки.
+type seedEventRepo interface {
+	UpsertBySlug(ctx context.Context, event models.Event) (models.Event, error)
+}
+
+// SeedCommand наполняет каталог контентом дизайн-прототипа (vlru-places):
+// ручные outdoor-сиды, все места, прогулки и события макета. Weather and
+// scoring are separate commands, so seeding never produces fake "ready"
+// recommendations.
 type SeedCommand struct {
 	logger *slog.Logger
 	places seedPlaceRepo
+	events seedEventRepo
 }
 
-func NewSeedCommand(logger *slog.Logger, places seedPlaceRepo) *SeedCommand {
-	return &SeedCommand{logger: logger, places: places}
+func NewSeedCommand(logger *slog.Logger, places seedPlaceRepo, events seedEventRepo) *SeedCommand {
+	return &SeedCommand{logger: logger, places: places, events: events}
 }
 
 func (c *SeedCommand) Run(ctx context.Context) error {
-	for _, item := range vladivostokSeeds() {
-		place, err := c.places.Create(ctx, item)
+	// placeIDsBySlug собирает slug → id всех засиженных мест: события макета
+	// ссылаются на площадки именно слагами из places.json.
+	placeIDsBySlug, err := c.seedPlaces(ctx)
+	if err != nil {
+		return err
+	}
+
+	return c.seedEvents(ctx, placeIDsBySlug)
+}
+
+func (c *SeedCommand) seedPlaces(ctx context.Context) (map[string]string, error) {
+	mockupPlaces, err := seeddata.MockupPlaces()
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make(map[string]string, len(mockupPlaces)+8)
+	seed := func(in models.CreatePlaceInput) error {
+		place, err := c.places.Create(ctx, in)
 		if err != nil {
-			return fmt.Errorf("seed place `%s`: %w", item.Name, err)
+			return fmt.Errorf("seed place `%s`: %w", in.Name, err)
+		}
+		if place.Slug != nil {
+			ids[*place.Slug] = place.ID
 		}
 
 		c.logger.Info(
@@ -36,10 +66,56 @@ func (c *SeedCommand) Run(ctx context.Context) error {
 			slog.String("name", place.Name),
 			slog.String("type", string(place.Type)),
 		)
+
+		return nil
+	}
+
+	for _, item := range vladivostokSeeds() {
+		if err := seed(item); err != nil {
+			return nil, err
+		}
+	}
+	for _, item := range mockupPlaces {
+		if err := seed(item); err != nil {
+			return nil, err
+		}
+	}
+
+	return ids, nil
+}
+
+func (c *SeedCommand) seedEvents(ctx context.Context, placeIDsBySlug map[string]string) error {
+	events, placeSlugs, err := seeddata.MockupEvents()
+	if err != nil {
+		return err
+	}
+
+	for i, event := range events {
+		if slug := placeSlugs[i]; slug != "" {
+			if placeID, ok := placeIDsBySlug[slug]; ok {
+				event.PlaceID = stringPtr(placeID)
+			} else {
+				c.logger.Warn("mockup event venue slug not found among seeded places", slog.String("event", event.Title), slog.String("slug", slug))
+			}
+		}
+
+		saved, err := c.events.UpsertBySlug(ctx, event)
+		if err != nil {
+			return fmt.Errorf("seed event `%s`: %w", event.Title, err)
+		}
+
+		c.logger.Info(
+			"seeded event",
+			slog.String("id", saved.ID),
+			slog.String("title", saved.Title),
+			slog.String("category", string(saved.Category)),
+		)
 	}
 
 	return nil
 }
+
+func stringPtr(value string) *string { return &value }
 
 const (
 	tokarevskyLat  = 43.0732

@@ -110,10 +110,15 @@ func CatalogItemFromPlace(in Place) CatalogItem {
 
 // CatalogItemFromEvent строит view-model события; собственные координаты
 // импортированного события берутся из него самого, иначе — от места проведения.
+// Событие всегда городской объект: сценарий не наследуется от места проведения,
+// даже если площадка в природе или на море.
 func CatalogItemFromEvent(in Event, place *Place) CatalogItem {
 	out := CatalogItem{
 		ID:          in.ID,
 		Type:        "event",
+		// тут нужна пост доработка. Ивент может быть и морский, и природным
+		// пока не разделяем, пока нет доработанных провайдеров
+		Scenario:    "city",
 		Category:    in.Category,
 		Title:       in.Title,
 		Short:       in.Short,
@@ -133,11 +138,9 @@ func CatalogItemFromEvent(in Event, place *Place) CatalogItem {
 		out.Lat = *in.Lat
 		out.Lon = *in.Lon
 		out.HasCoords = true
-		out.Scenario = "city"
 		out.DistanceKm = DistanceFromCenterKm(*in.Lat, *in.Lon)
 	}
 	if place != nil {
-		out.Scenario = string(place.Layer)
 		out.District = place.District
 		out.Address = firstNonEmpty(in.Venue, place.Address)
 		out.Lat = place.Lat
@@ -145,9 +148,6 @@ func CatalogItemFromEvent(in Event, place *Place) CatalogItem {
 		out.HasCoords = true
 		out.Photos = place.Photos
 		out.DistanceKm = DistanceFromCenterKm(place.Lat, place.Lon)
-		if out.Scenario == "" {
-			out.Scenario = "city"
-		}
 	}
 
 	return out

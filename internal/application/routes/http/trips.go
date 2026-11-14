@@ -13,7 +13,7 @@ import (
 )
 
 type ListTripsUC interface {
-	Do(ctx context.Context, filter models.TripFilter) ([]models.Trip, error)
+	Do(ctx context.Context, filter models.TripFilter) ([]models.TripWithConditions, error)
 }
 
 type ListTripsHandler struct {
@@ -65,7 +65,49 @@ func (h *ListTripsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.responseWriter.Success(w, presenter.TripsToHTTP(trips))
+	h.responseWriter.Success(w, presenter.TripsWithConditionsToHTTP(trips))
+}
+
+type GetTripUC interface {
+	Do(ctx context.Context, id string, userID string) (models.TripWithConditions, error)
+}
+
+type GetTripHandler struct {
+	logger         *slog.Logger
+	responseWriter *APIResponseWriter[presenter.Trip]
+	useCase        GetTripUC
+}
+
+func NewGetTripHandler(logger *slog.Logger, uc GetTripUC) *GetTripHandler {
+	return &GetTripHandler{
+		logger:         logger,
+		responseWriter: NewAPIResponseWriter[presenter.Trip](logger),
+		useCase:        uc,
+	}
+}
+
+func (h *GetTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.responseWriter.Error(w, http.StatusMethodNotAllowed, errors.New("method GET expected"))
+
+		return
+	}
+
+	auth, ok := AuthFromContext(r.Context())
+	if !ok {
+		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
+
+		return
+	}
+
+	trip, err := h.useCase.Do(r.Context(), r.PathValue("id"), auth.User.ID)
+	if err != nil {
+		h.responseWriter.Error(w, statusCode(err), err)
+
+		return
+	}
+
+	h.responseWriter.Success(w, presenter.TripWithConditionsToHTTP(trip))
 }
 
 type CreateTripUC interface {
@@ -86,14 +128,17 @@ func NewCreateTripHandler(logger *slog.Logger, uc CreateTripUC) *CreateTripHandl
 	}
 }
 
+type createTripStopRequest struct {
+	PlaceID  string `json:"place_id"`
+	ArriveAt string `json:"arrive_at"`
+}
+
 type createTripRequest struct {
-	// UserID is accepted for backward compatibility and deliberately ignored:
-	// the owner is always the user from the session context.
-	UserID    string `json:"user_id"`
-	PlaceID   string `json:"place_id"`
-	PlannedAt string `json:"planned_at"`
-	Activity  string `json:"activity"`
-	Notes     string `json:"notes"`
+	PlannedAt   string                  `json:"planned_at"`
+	StopMinutes int                     `json:"stop_minutes"`
+	Activity    string                  `json:"activity"`
+	Notes       string                  `json:"notes"`
+	Stops       []createTripStopRequest `json:"stops"`
 }
 
 func (h *CreateTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +170,23 @@ func (h *CreateTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stops := make([]models.TripStop, 0, len(body.Stops))
+	for _, item := range body.Stops {
+		arriveAt, err := time.Parse(time.RFC3339, item.ArriveAt)
+		if err != nil {
+			h.responseWriter.Error(w, http.StatusBadRequest,
+				models.Invalid("`arrive_at` must be an RFC3339 timestamp"))
+
+			return
+		}
+
+		stops = append(stops, models.TripStop{
+			PlaceID:  item.PlaceID,
+			Position: len(stops),
+			ArriveAt: arriveAt,
+		})
+	}
+
 	auth, ok := AuthFromContext(r.Context())
 	if !ok {
 		h.responseWriter.Error(w, http.StatusUnauthorized, models.ErrUnauthorized)
@@ -133,11 +195,12 @@ func (h *CreateTripHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	trip, err := h.useCase.Do(r.Context(), models.CreateTripInput{
-		UserID:    auth.User.ID,
-		PlaceID:   body.PlaceID,
-		PlannedAt: plannedAt,
-		Activity:  activity,
-		Notes:     body.Notes,
+		UserID:      auth.User.ID,
+		PlannedAt:   plannedAt,
+		StopMinutes: body.StopMinutes,
+		Activity:    activity,
+		Notes:       body.Notes,
+		Stops:       stops,
 	})
 	if err != nil {
 		h.responseWriter.Error(w, statusCode(err), err)

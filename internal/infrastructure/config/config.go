@@ -98,15 +98,17 @@ type GeocoderConfig struct {
 	MinInterval time.Duration `koanf:"GEOCODER_MIN_INTERVAL" validate:"required"`
 }
 
-// TelegramConfig включает вход через Telegram Login Widget. Пустой BotToken
-// означает «вход выключен»: эндпоинт остаётся, но подпись не проверить, а
-// виджет фронтенд не рисует.
+// TelegramConfig включает вход через Telegram Login library
+// (https://core.telegram.org/bots/telegram-login). Пустой ClientID означает
+// «вход выключен»: эндпоинт остаётся, но id_token не проверить, а кнопку
+// фронтенд не рисует.
 type TelegramConfig struct {
-	// BotToken — токен бота от @BotFather; ключ HMAC проверки коллбека.
+	// ClientID — Client ID бота из раздела Login Widget у @BotFather
+	// (числовой id бота). Им же проверяется aud id_token.
+	ClientID string `koanf:"TELEGRAM_CLIENT_ID"`
+	// BotToken — токен бота от @BotFather. Для входа не нужен, остался как
+	// основа секрета nonce и для будущих серверных вызовов Bot API.
 	BotToken string `koanf:"TELEGRAM_BOT_TOKEN"`
-	// BotUsername — username бота без «@»; имя поддомена виджета на странице.
-	// Пусто — username выясняется через getMe при старте.
-	BotUsername string `koanf:"TELEGRAM_BOT_USERNAME"`
 	// APIBase — Bot API; по умолчанию https://api.telegram.org.
 	APIBase string `koanf:"TELEGRAM_API_BASE"`
 	// ProxyList — список через запятую http(s)-прокси для вызовов к Bot API

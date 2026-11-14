@@ -5,7 +5,58 @@ import { panelSwap, refreshMapItems, refreshPins, selectItem, selectPin } from '
 import { nowCreateComponent } from './pins.js';
 import { paintRouteOnMap } from './route.js';
 import { layoutSlots, updatePadding } from './layout.js';
-import { createMiniMap, createPlacesMap } from './map.js';
+import { createMiniMap, createPlacesMap, ensureMapVendor } from './map.js';
+
+/* Глобальные обработчики сцены вешаются один раз за жизнь страницы:
+ * при hx-boost-переходах body подменяется без перезагрузки, поэтому
+ * состояние читаем из живого DOM, а не из замыкания конкретной сцены. */
+let stageGlobalsBound = false;
+
+function bindStageGlobals() {
+  if (stageGlobalsBound) return;
+  stageGlobalsBound = true;
+
+  // Наведение на карточку подсвечивает маркер на карте.
+  document.addEventListener('mouseover', (event) => {
+    const card = event.target.closest('.pin-card[data-id], .result-row[data-id]');
+    if (card) window.placesMap?.hover(card.dataset.id);
+  });
+
+  window.addEventListener(
+    'resize',
+    debounce(() => {
+      layoutSlots();
+      window.placesMap?.resize();
+    }, 150),
+  );
+
+  // Escape закрывает превью метки.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;
+    const stage = document.getElementById('map-stage');
+    if (!stage || stage.dataset.stageMode !== 'pins') return;
+    const pin = currentParams().get('pin');
+    if (!pin) return;
+    const params = currentParams();
+    params.delete('pin');
+    const qs = params.toString();
+    panelSwap(`/fragments/pins${qs ? `?${qs}` : ''}`, `/now${qs ? `?${qs}` : ''}`);
+  });
+
+  // Автообновление меток раз в минуту (только режим «Сейчас»).
+  setInterval(() => {
+    const stage = document.getElementById('map-stage');
+    if (!stage || stage.dataset.stageMode !== 'pins') return;
+    if (document.hidden || document.querySelector('dialog[open]')) return;
+    const now = nowCreateComponent();
+    if (now && now.step !== 'list') return;
+    refreshPins();
+    const pin = currentParams().get('pin');
+    if (pin) htmx.ajax('GET', `/fragments/pin/${encodeURIComponent(pin)}`, { target: '#map-panel-inner' });
+    else htmx.ajax('GET', '/fragments/pins', { target: '#map-panel-inner' });
+  }, 60000);
+}
 
 /** Нижняя шторка панели на мобильном: peek → half → full (порт ui/sheet.js). */
 function bindSheet(panel) {
@@ -134,7 +185,9 @@ export function initStage() {
     }
   };
 
-  mount();
+  // Вендор карты при буст-переходе с другой страницы может быть ещё не загружен
+  // (head при свопе не перечитывается) — догружаем перед созданием сцены.
+  ensureMapVendor().then(mount, () => showError('crash'));
   window.__remountMap = () => {
     try {
       window.placesMap?.destroy?.();
@@ -144,6 +197,8 @@ export function initStage() {
     error.hidden = true;
     mount();
   };
+
+  bindStageGlobals();
 
   // Выбор маркера: превью в панели (если не идёт выбор точки для метки).
   stage.addEventListener('places:select', (event) => {
@@ -158,10 +213,6 @@ export function initStage() {
     $$('.pin-card[data-id], .result-row[data-id]').forEach((card) =>
       card.classList.toggle('is-hovered', card.dataset.id === event.detail.id),
     );
-  });
-  document.addEventListener('mouseover', (event) => {
-    const card = event.target.closest('.pin-card[data-id], .result-row[data-id]');
-    if (card) window.placesMap?.hover(card.dataset.id);
   });
 
   bindSheet(stage.querySelector('#map-panel'));
@@ -183,46 +234,27 @@ export function initStage() {
       if (isMobileLayout()) stage.style.setProperty('--sheet-top', `${Math.ceil(top.getBoundingClientRect().height) + 20}px`);
     }).observe(top);
   }
-
-  window.addEventListener(
-    'resize',
-    debounce(() => {
-      layoutSlots();
-      window.placesMap?.resize();
-    }, 150),
-  );
-
-  // Escape закрывает превью метки.
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (document.querySelector('dialog[open]')) return;
-    if (mode !== 'pins') return;
-    const pin = currentParams().get('pin');
-    if (!pin) return;
-    const params = currentParams();
-    params.delete('pin');
-    const qs = params.toString();
-    panelSwap(`/fragments/pins${qs ? `?${qs}` : ''}`, `/now${qs ? `?${qs}` : ''}`);
-  });
-
-  // Автообновление меток раз в минуту (только режим «Сейчас»).
-  setInterval(() => {
-    if (mode !== 'pins') return;
-    if (document.hidden || document.querySelector('dialog[open]')) return;
-    const now = nowCreateComponent();
-    if (now && now.step !== 'list') return;
-    refreshPins();
-    const pin = currentParams().get('pin');
-    if (pin) htmx.ajax('GET', `/fragments/pin/${encodeURIComponent(pin)}`, { target: '#map-panel-inner' });
-    else htmx.ajax('GET', '/fragments/pins', { target: '#map-panel-inner' });
-  }, 60000);
 }
 
 /* ── Мини-карта на странице места ── */
 
 export function initMiniMaps() {
   $$('[data-mini-map]').forEach((node) => {
-    if (!window.maplibregl) return;
+    if (node.dataset.minimapInit || node.dataset.minimapPending) return;
+    if (!window.maplibregl) {
+      node.dataset.minimapPending = '1';
+      ensureMapVendor()
+        .then(() => {
+          delete node.dataset.minimapPending;
+          initMiniMaps();
+        })
+        .catch(() => {
+          delete node.dataset.minimapPending;
+          node.hidden = true;
+        });
+      return;
+    }
+    node.dataset.minimapInit = '1';
     const lat = Number(node.dataset.lat);
     const lon = Number(node.dataset.lon);
     if (!lat || !lon) return;

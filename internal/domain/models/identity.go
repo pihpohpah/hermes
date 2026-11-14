@@ -90,61 +90,59 @@ func TelegramDisplayName(data map[string]any) string {
 	return "Telegram"
 }
 
-// TelegramAuthFields is the raw payload of the Telegram Login Widget callback
-// (https://core.telegram.org/widgets/login). Hash is the HMAC-SHA256 of the
-// data-check string with the bot-token key; the use case re-verifies it and
-// never trusts the client beyond that.
-type TelegramAuthFields struct {
-	ID        int64  `json:"id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Username  string `json:"username"`
-	PhotoURL  string `json:"photo_url"`
-	AuthDate  int64  `json:"auth_date"`
-	Hash      string `json:"hash"`
+// TelegramIDClaims — claims id_token нового OIDC-входа Telegram
+// (https://core.telegram.org/bots/telegram-login). Подпись токена, iss, aud и
+// exp перепроверяет инфраструктурный верификатор; use case получает уже
+// доверенные claims и не верит клиенту ничего сверх них.
+type TelegramIDClaims struct {
+	Issuer     string `json:"iss"`
+	Audience   any    `json:"aud"` // строка или массив строк
+	Subject    string `json:"sub"`
+	ExpiresAt  int64  `json:"exp"`
+	IssuedAt   int64  `json:"iat"`
+	ID         int64  `json:"id"`   // числовой tgId — субъект идентичности
+	Name       string `json:"name"` // полное имя «First Last»
+	GivenName  string `json:"given_name"`
+	FamilyName string `json:"family_name"`
+	Username   string `json:"preferred_username"`
+	Picture    string `json:"picture"`
+	Nonce      string `json:"nonce"`
 }
-
-// dataCheckPairs — максимум полей виджета, влияющих на подпись.
-const dataCheckPairs = 6
 
 // telegramNameParts — first + last name в отображаемом имени профиля.
 const telegramNameParts = 2
 
-// DataCheckString is the canonical string Telegram signs: "key=value" pairs
-// for every field except hash, sorted by key, joined with newlines. Only
-// present fields take part — the widget omits empty ones.
-func (f TelegramAuthFields) DataCheckString() string {
-	pairs := make([]string, 0, dataCheckPairs)
-	add := func(key, value string) {
-		if value != "" {
-			pairs = append(pairs, key+"="+value)
-		}
+// IdentitySubject — стабильный идентификатор привязки: числовой tgId из claim
+// id, при его отсутствии — sub. Формат совпадает с тем, что раньше писал
+// legacy-виджет, поэтому уже созданные привязки продолжают матчиться.
+func (c TelegramIDClaims) IdentitySubject() string {
+	if c.ID > 0 {
+		return strconv.FormatInt(c.ID, 10)
 	}
 
-	// Пары должны быть отсортированы по ключу: auth_date, first_name, id,
-	// last_name, photo_url, username.
-	add("auth_date", strconv.FormatInt(f.AuthDate, 10))
-	add("first_name", f.FirstName)
-	add("id", strconv.FormatInt(f.ID, 10))
-	add("last_name", f.LastName)
-	add("photo_url", f.PhotoURL)
-	add("username", f.Username)
-
-	return strings.Join(pairs, "\n")
+	return strings.TrimSpace(c.Subject)
 }
 
-// IdentityData normalizes the payload for storage in the identity row.
-func (f TelegramAuthFields) IdentityData() map[string]any {
+// IdentityData normalizes the claims for storage in the identity row в форме,
+// которую понимает TelegramDisplayName: first_name/last_name/username.
+func (c TelegramIDClaims) IdentityData() map[string]any {
+	first := strings.TrimSpace(c.GivenName)
+	if first == "" {
+		// given_name может отсутствовать, а name — полным «First Last»:
+		// берём первое слово, чтобы DisplayName не склеивал имя дважды.
+		first, _, _ = strings.Cut(strings.TrimSpace(c.Name), " ")
+	}
+
 	data := map[string]any{
-		"first_name": f.FirstName,
-		"username":   f.Username,
-		"auth_date":  f.AuthDate,
+		"first_name": first,
+		"username":   c.Username,
+		"auth_date":  c.IssuedAt,
 	}
-	if f.LastName != "" {
-		data["last_name"] = f.LastName
+	if last := strings.TrimSpace(c.FamilyName); last != "" {
+		data["last_name"] = last
 	}
-	if f.PhotoURL != "" {
-		data["photo_url"] = f.PhotoURL
+	if c.Picture != "" {
+		data["photo_url"] = c.Picture
 	}
 
 	return data

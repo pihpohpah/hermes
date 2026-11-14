@@ -1,16 +1,17 @@
 /* Делегированные data-action: логин/выход, поделиться, календарь, фото,
  * маршрут, выбор карточки, метки «Сейчас», зум/геолокация, поиск.
  * Модуль подключается за эффект — обработчик встаёт при импорте. */
-import { $, $$, currentParams, storage } from './util.js';
+import { $, $$, countLabel, currentParams, storage } from './util.js';
 import { api, CSRF_KEY } from './api.js';
 import { confirmDialog, toast } from './ui.js';
 import { openAuthDialog, requireAuth } from './auth.js';
 import { downloadIcs, openLightbox, openRenameDialog, openReportDialog, shareLink } from './media.js';
-import { clearRoute, ROUTE_KEY, toggleRoute } from './route.js';
+import { clearRoute, replaceRoute, ROUTE_KEY, toggleRoute } from './route.js';
 import { panelSwap, refreshPins, selectItem, selectPin } from './nav.js';
 import { nowCreateComponent } from './pins.js';
 import { openFiltersDialog } from './catalog.js';
 import { openLuckyDialog } from './lucky.js';
+import { openPlanDialog, openTripPicker, tripCancel, tripSetStatus } from './trips.js';
 
 // Эти действия уже имеют инлайновые Alpine-обработчики на самих элементах.
 const INLINE_ACTIONS = ['toggle-panel', 'mobile-menu', 'hide-intro', 'toggle-picker', 'cancel-create'];
@@ -76,6 +77,15 @@ document.addEventListener('click', (event) => {
       toggleRoute(id, el.dataset.title || '');
       if (window.Alpine) window.Alpine.store('route').ids = storage.get(ROUTE_KEY, []);
       break;
+    case 'route-load': {
+      // Лента «Для вас»: загрузить готовый набор точек (data-ids через запятую) в маршрут.
+      const ids = (el.dataset.ids || '').split(',').map((value) => value.trim()).filter(Boolean);
+      if (!ids.length) break;
+      replaceRoute(ids);
+      toast(`Маршрут: ${ids.length} ${countLabel(ids.length, ['точка', 'точки', 'точек'])}. Считаем путь…`);
+      location.href = '/?panel=route';
+      break;
+    }
     case 'route-clear': {
       clearRoute();
       if (window.Alpine) window.Alpine.store('route').ids = [];
@@ -132,6 +142,24 @@ document.addEventListener('click', (event) => {
       break;
     case 'create':
       nowCreateComponent()?.start();
+      break;
+    case 'plan-route':
+      openPlanDialog({ activity: el.dataset.activity || 'hike' });
+      break;
+    case 'plan-place':
+      openPlanDialog({
+        stops: [{ id: el.dataset.placeId, title: el.dataset.placeName }],
+        activity: el.dataset.activity || 'walk',
+      });
+      break;
+    case 'trip-picker':
+      openTripPicker();
+      break;
+    case 'trip-done':
+      tripSetStatus(id, 'done');
+      break;
+    case 'trip-cancel':
+      tripCancel(id);
       break;
     case 'zoom-in':
       window.placesMap?.zoomIn();

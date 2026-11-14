@@ -2,26 +2,18 @@ package usecase
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
-// telegramAuthMaxAge отсекает подписанные виджетом данные, которым больше
-// суток: перехваченный коллбек не должен давать вход вечно.
-const telegramAuthMaxAge = 24 * time.Hour
-
-// TelegramLoginInput — всё, что нужно для входа через Telegram Login Widget.
-// Поля Telegram проверяются по подписи; Timezone — обычное поле профиля из
-// браузера клиента.
+// TelegramLoginInput — всё, что нужно для входа через Telegram Login library.
+// IDToken — OIDC id_token из её коллбека; use case проверяет подпись по JWKS
+// и свежесть, Timezone — обычное поле профиля из браузера клиента.
 type TelegramLoginInput struct {
-	Telegram models.TelegramAuthFields
+	IDToken  string
 	Timezone string
 }
 
@@ -41,11 +33,19 @@ type identityStore interface {
 	Create(ctx context.Context, identity models.UserIdentity) (models.UserIdentity, error)
 }
 
-// TelegramLoginUseCase принимает подписанный виджетом коллбек Telegram,
+// idTokenVerifier — инфраструктурная проверка id_token Telegram: подпись RS256
+// по JWKS, iss, aud, exp. Реализует *telegram.IDTokenVerifier.
+type idTokenVerifier interface {
+	Verify(ctx context.Context, rawToken string) (models.TelegramIDClaims, error)
+}
+
+// TelegramLoginUseCase принимает id_token коллбека Telegram Login library,
 // находит или создаёт профиль по identity (tgId — источник входа; телефон
 // пользователь может добавить в аккаунте позже) и выдаёт сессию.
 type TelegramLoginUseCase struct {
-	botToken string
+	clientID string
+	verifier idTokenVerifier
+	nonces   *TelegramNonceIssuer
 	users    userCreator
 	ids      identityStore
 	sessions sessionCreator
@@ -55,7 +55,9 @@ type TelegramLoginUseCase struct {
 }
 
 func NewTelegramLoginUseCase(
-	botToken string,
+	clientID string,
+	verifier idTokenVerifier,
+	nonces *TelegramNonceIssuer,
 	users userCreator,
 	ids identityStore,
 	sessions sessionCreator,
@@ -63,7 +65,9 @@ func NewTelegramLoginUseCase(
 	ttl time.Duration,
 ) *TelegramLoginUseCase {
 	return &TelegramLoginUseCase{
-		botToken: botToken,
+		clientID: clientID,
+		verifier: verifier,
+		nonces:   nonces,
 		users:    users,
 		ids:      ids,
 		sessions: sessions,
@@ -74,15 +78,16 @@ func NewTelegramLoginUseCase(
 }
 
 func (u *TelegramLoginUseCase) Do(ctx context.Context, in TelegramLoginInput) (TelegramLoginResult, error) {
-	if u.botToken == "" {
+	if u.clientID == "" {
 		return TelegramLoginResult{}, errors.New("telegram login is not configured")
 	}
 
-	if err := u.verify(in.Telegram); err != nil {
+	claims, err := u.verify(ctx, in.IDToken)
+	if err != nil {
 		return TelegramLoginResult{}, err
 	}
 
-	user, created, err := u.resolveUser(ctx, in)
+	user, created, err := u.resolveUser(ctx, claims, in.Timezone)
 	if err != nil {
 		return TelegramLoginResult{}, err
 	}
@@ -108,35 +113,28 @@ func (u *TelegramLoginUseCase) Do(ctx context.Context, in TelegramLoginInput) (T
 	return result, nil
 }
 
-// verify повторяет проверку подписи из документации Login Widget:
-// secret_key = SHA256(bot_token), hash = HMAC_SHA256(secret_key,
-// data_check_string). Подпись и свежесть auth_date проверяются в constant time.
-func (u *TelegramLoginUseCase) verify(fields models.TelegramAuthFields) error {
-	if fields.ID <= 0 {
-		return models.Invalid("`id` must be a positive telegram user id")
+// verify перепроверяет id_token полностью: подпись, iss, aud и exp — в
+// верификаторе; nonce — выданный нами и ещё не просроченный. Без доверенного
+// токена claims дальше не идут никогда.
+func (u *TelegramLoginUseCase) verify(ctx context.Context, rawToken string) (models.TelegramIDClaims, error) {
+	if rawToken == "" {
+		return models.TelegramIDClaims{}, models.Invalid("`id_token` is required")
 	}
 
-	if fields.Hash == "" {
-		return models.Invalid("`hash` is required")
+	claims, err := u.verifier.Verify(ctx, rawToken)
+	if err != nil {
+		return models.TelegramIDClaims{}, models.Invalidf("invalid telegram id_token: %v", err)
 	}
 
-	if fields.AuthDate <= 0 {
-		return models.Invalid("`auth_date` is required")
+	if claims.IdentitySubject() == "" {
+		return models.TelegramIDClaims{}, models.Invalid("telegram id_token has no user id")
 	}
 
-	if age := u.now().Sub(time.Unix(fields.AuthDate, 0)); age > telegramAuthMaxAge || age < -time.Minute {
-		return models.Invalidf("telegram auth data is stale (age %s)", age.Truncate(time.Second))
+	if claims.Nonce == "" || !u.nonces.Valid(claims.Nonce) {
+		return models.TelegramIDClaims{}, models.Invalid("telegram id_token has no valid nonce")
 	}
 
-	sum := sha256.Sum256([]byte(u.botToken))
-	mac := hmac.New(sha256.New, sum[:])
-	_, _ = mac.Write([]byte(fields.DataCheckString()))
-	given, err := hex.DecodeString(fields.Hash)
-	if err != nil || !hmac.Equal(given, mac.Sum(nil)) {
-		return models.Invalid("invalid telegram signature")
-	}
-
-	return nil
+	return claims, nil
 }
 
 // resolveUser находит профиль по (telegram, tgId). Первый вход создаёт и
@@ -144,9 +142,10 @@ func (u *TelegramLoginUseCase) verify(fields models.TelegramAuthFields) error {
 // tgId проигрывает вставку уникальности и перечитывает чужой результат.
 func (u *TelegramLoginUseCase) resolveUser(
 	ctx context.Context,
-	in TelegramLoginInput,
+	claims models.TelegramIDClaims,
+	timezone string,
 ) (models.User, bool, error) {
-	subject := strconv.FormatInt(in.Telegram.ID, 10)
+	subject := claims.IdentitySubject()
 
 	identity, err := u.ids.GetByProviderSubject(ctx, models.IdentityProviderTelegram, subject)
 	if err == nil {
@@ -162,7 +161,7 @@ func (u *TelegramLoginUseCase) resolveUser(
 		return models.User{}, false, fmt.Errorf("load telegram identity: %w", err)
 	}
 
-	user, err := u.createUser(ctx, in, subject)
+	user, err := u.createUser(ctx, claims, timezone, subject)
 	if err == nil {
 		return user, true, nil
 	}
@@ -184,15 +183,16 @@ func (u *TelegramLoginUseCase) resolveUser(
 // createUser атомарно создаёт профиль с именем из Telegram и привязку к tgId.
 func (u *TelegramLoginUseCase) createUser(
 	ctx context.Context,
-	in TelegramLoginInput,
+	claims models.TelegramIDClaims,
+	timezone string,
 	subject string,
 ) (models.User, error) {
 	var created models.User
 
 	err := u.tx.Run(ctx, func(txCtx context.Context) error {
 		user, err := models.NewUser(
-			models.TelegramDisplayName(in.Telegram.IdentityData()),
-			in.Timezone,
+			models.TelegramDisplayName(claims.IdentityData()),
+			timezone,
 		)
 		if err != nil {
 			return err
@@ -207,7 +207,7 @@ func (u *TelegramLoginUseCase) createUser(
 			user.ID,
 			models.IdentityProviderTelegram,
 			subject,
-			in.Telegram.IdentityData(),
+			claims.IdentityData(),
 		)
 		if err != nil {
 			return err

@@ -12,14 +12,14 @@ import (
 // каждая view несёт Query, а хелперы строят ссылки и htmx-адреса.
 
 type MapQueryView struct {
-	Scenario  string
-	Q         string
-	Category  string
-	Type      string
-	Selected  string
-	Panel     string
-	Tab       string
-	Filters   presenter.CatalogFilter
+	Scenario string
+	Q        string
+	Category string
+	Type     string
+	Selected string
+	Panel    string
+	Tab      string
+	Filters  presenter.CatalogFilter
 }
 
 type MapView struct {
@@ -109,6 +109,27 @@ type ProfileView struct {
 	Tab         string
 	Pins        []presenter.Pin
 	Submissions []presenter.Submission
+	Trips       []presenter.Trip
+	// ForYou — лента «Для вас»; заполняется только для вкладки foryou.
+	// MOCK(рекомендательная система): сейчас это случайная подборка,
+	// а не персональные рекомендации.
+	ForYou *ForYouView
+}
+
+// ForYouView — лента «Для вас» профиля (вкладка foryou).
+type ForYouView struct {
+	Places []presenter.CatalogItem
+	Events []presenter.CatalogItem
+	Routes []ForYouRoute
+}
+
+// ForYouRoute — мок-маршрут ленты «Для вас»: точки подобраны жадно
+// «ближайшая к предыдущей», без маршрутизации. MOCK.
+type ForYouRoute struct {
+	ID       string
+	Title    string
+	Scenario string // city | nature | sea
+	Stops    []presenter.CatalogItem
 }
 
 type RulesView struct {

@@ -19,7 +19,7 @@ go mod download
 [tasks.dev]
 description = "Поднять всю систему: Postgres, миграции, данные, фронтенд, архивы карты — и запустить сервер"
 # depends = ["data-load", "assets", "map-ensure"]
-depends = ["data-load", "assets"]
+depends = ["assets"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail

@@ -69,7 +69,7 @@ func Layout(v LayoutView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</head><body><a class=\"skip-link\" href=\"#main\">Перейти к содержимому</a><div class=\"app\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</head><body hx-boost=\"true\"><a class=\"skip-link\" href=\"#main\">Перейти к содержимому</a><div class=\"app\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -436,7 +436,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</button><div class=\"menu\" id=\"user-menu\" role=\"menu\" x-show=\"open\" x-transition @click.outside=\"open = false\" @click=\"open = false\"><div class=\"menu__header\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</button><div class=\"menu\" id=\"user-menu\" role=\"menu\" x-show=\"open\" x-cloak @click.outside=\"open = false\" @click=\"open = false\"><div class=\"menu__header\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -12,9 +12,8 @@ import (
 // скрапера, дожидается завершения, прогеокодирует площадки и кладёт события в
 // каталог по стабильному external_id.
 type ImportEventsUseCase struct {
+	eventImportSink
 	agent        eventAgentClient
-	geocoder     venueGeocoder
-	events       importedEventStore
 	pollInterval time.Duration
 	maxWait      time.Duration
 	sleep        func(ctx context.Context, d time.Duration) error
@@ -48,12 +47,11 @@ func NewImportEventsUseCase(
 	}
 
 	return &ImportEventsUseCase{
-		agent:        agent,
-		geocoder:     geocoder,
-		events:       events,
-		pollInterval: pollInterval,
-		maxWait:      maxWait,
-		sleep:        sleepCtx,
+		eventImportSink: newEventImportSink(geocoder, events),
+		agent:           agent,
+		pollInterval:    pollInterval,
+		maxWait:         maxWait,
+		sleep:           sleepCtx,
 	}
 }
 
@@ -103,14 +101,34 @@ func (u *ImportEventsUseCase) Do(ctx context.Context) (ImportReport, error) {
 		return report, fmt.Errorf("agent run `%s` failed: %s", run.ID, detail)
 	}
 
-	cache := make(map[string]*models.Point)
-	for i := range run.Events {
-		event := run.Events[i]
-		event.Location = u.resolveLocation(waitCtx, event, cache)
+	if err := u.importEvents(waitCtx, run.Events, &report); err != nil {
+		return report, err
+	}
+	report.FinishedAt = time.Now().UTC()
 
-		inserted, err := u.events.UpsertImported(ctx, event)
+	return report, nil
+}
+
+// eventImportSink — общий финальный шаг обоих сценариев импорта: геокодинг
+// площадок (с кэшем на прогон) и идемпотентный upsert событий.
+type eventImportSink struct {
+	geocoder venueGeocoder
+	events   importedEventStore
+}
+
+func newEventImportSink(geocoder venueGeocoder, events importedEventStore) eventImportSink {
+	return eventImportSink{geocoder: geocoder, events: events}
+}
+
+func (s eventImportSink) importEvents(ctx context.Context, batch []models.Event, report *ImportReport) error {
+	cache := make(map[string]*models.Point)
+	for i := range batch {
+		event := batch[i]
+		event.Location = s.resolveLocation(ctx, event, cache)
+
+		inserted, err := s.events.UpsertImported(ctx, event)
 		if err != nil {
-			return report, fmt.Errorf("store event `%s`: %w", eventTitle(event), err)
+			return fmt.Errorf("store event `%s`: %w", eventTitle(event), err)
 		}
 		if inserted {
 			report.Created++
@@ -121,16 +139,15 @@ func (u *ImportEventsUseCase) Do(ctx context.Context) (ImportReport, error) {
 
 	report.Geocoded = countGeocoded(cache)
 	report.GeocodeFailed = countFailed(cache)
-	report.NoVenue = countNoVenue(run.Events)
-	report.FinishedAt = time.Now().UTC()
+	report.NoVenue = countNoVenue(batch)
 
-	return report, nil
+	return nil
 }
 
 // resolveLocation отдаёт координаты площадки: из кэша прогона или из геокодера.
 // Ошибки геокодинга и пустой venue — не повод прерывать импорт: событие просто
 // остаётся без координат.
-func (u *ImportEventsUseCase) resolveLocation(
+func (s eventImportSink) resolveLocation(
 	ctx context.Context,
 	event models.Event,
 	cache map[string]*models.Point,
@@ -143,7 +160,7 @@ func (u *ImportEventsUseCase) resolveLocation(
 		return point
 	}
 
-	point, err := u.geocoder.Geocode(ctx, event.Venue)
+	point, err := s.geocoder.Geocode(ctx, event.Venue)
 	if err != nil {
 		cache[event.Venue] = nil
 

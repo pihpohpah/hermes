@@ -58,6 +58,8 @@ export function toast(message, { type = 'info', action = null, duration = 4500, 
 export function openDialog({ title = '', lead = '', body = '', footer = '', className = '', wide = false, onMount } = {}) {
   const dialog = document.createElement('dialog');
   dialog.className = ['dialog', wide ? 'dialog--wide' : '', className].filter(Boolean).join(' ');
+  // Формы внутри диалогов обрабатываются своим JS — boost не нужен.
+  dialog.setAttribute('hx-disable', '');
   dialog.innerHTML = `
     <div class="dialog__header">
       <h2 class="dialog__title">${escapeHtml(title)}</h2>

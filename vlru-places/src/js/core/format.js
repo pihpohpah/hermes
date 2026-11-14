@@ -18,25 +18,25 @@ export function plural(count, forms) {
 }
 
 export function countLabel(count, forms) {
-  return `${numberFormat.format(count)} ${plural(count, forms)}`;
+  return `${numberFormat.format(count)} ${plural(count, forms)}`;
 }
 
 export function formatDistance(km) {
-  if (km < 1) return `${Math.max(50, Math.round((km * 1000) / 50) * 50)} м`;
-  if (km < 10) return `${decimalFormat.format(Math.round(km * 10) / 10)} км`;
-  return `${numberFormat.format(Math.round(km))} км`;
+  if (km < 1) return `${Math.max(50, Math.round((km * 1000) / 50) * 50)} м`;
+  if (km < 10) return `${decimalFormat.format(Math.round(km * 10) / 10)} км`;
+  return `${numberFormat.format(Math.round(km))} км`;
 }
 
 export function formatDuration(minutes) {
   const total = Math.max(1, Math.round(minutes));
-  if (total < 60) return `${total} мин`;
+  if (total < 60) return `${total} мин`;
   const hours = Math.floor(total / 60);
   const rest = total % 60;
   if (hours >= 24) {
     const days = Math.round(hours / 24);
-    return `${days} ${plural(days, ['день', 'дня', 'дней'])}`;
+    return `${days} ${plural(days, ['день', 'дня', 'дней'])}`;
   }
-  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
 }
 
 const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: TIME_ZONE });
@@ -98,9 +98,9 @@ export function pinTiming(startsAt, endsAt, now = Date.now()) {
 export function formatAgo(iso, now = Date.now()) {
   const minutes = Math.round((now - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return 'только что';
-  if (minutes < 60) return `${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])} назад`;
+  if (minutes < 60) return `${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])} назад`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ${plural(hours, ['час', 'часа', 'часов'])} назад`;
+  if (hours < 24) return `${hours} ${plural(hours, ['час', 'часа', 'часов'])} назад`;
   return formatDay(iso);
 }
 

@@ -68,6 +68,12 @@ func (r runResponse) toDomain() (models.ImportedRun, error) {
 }
 
 func (e eventResponse) toDomain() (models.Event, error) {
+	return e.toDomainWithID(e.ID)
+}
+
+// toDomainWithID мапит событие с явным внешним ключом: в /state id лежит в
+// ключе мапы, а не внутри самого события.
+func (e eventResponse) toDomainWithID(externalID string) (models.Event, error) {
 	category, err := models.NewEventCategoryCode(e.Category)
 	if err != nil {
 		return models.Event{}, err
@@ -83,7 +89,6 @@ func (e eventResponse) toDomain() (models.Event, error) {
 		return models.Event{}, err
 	}
 
-	externalID := e.ID
 	event := models.Event{
 		ExternalID:  &externalID,
 		Title:       e.Title,

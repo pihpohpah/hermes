@@ -126,6 +126,46 @@ func (c *Client) closeBody(resp *http.Response) {
 	}
 }
 
+// GetState отдаёт содержимое кеша агента (GET /state): все известные ему
+// события, а не только новые с последнего прогона. Импорт по нему — разовая
+// пересборка каталога без запуска скрапинга.
+func (c *Client) GetState(ctx context.Context) ([]models.Event, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base()+"/state", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build get state request: %w", err)
+	}
+	req.Header.Set("User-Agent", "hermes-events-import/1.0")
+
+	resp, err := c.cfg.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get state request: %w", err)
+	}
+	defer c.closeBody(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get state: unexpected status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxStateBodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("read state response: %w", err)
+	}
+
+	var dto stateResponse
+	if err := json.Unmarshal(body, &dto); err != nil {
+		return nil, fmt.Errorf("unmarshal state response: %w", err)
+	}
+
+	events, err := dto.toDomainEvents()
+	if err != nil {
+		return nil, fmt.Errorf("map state response: %w", err)
+	}
+
+	return events, nil
+}
+
+const maxStateBodyBytes = 16 << 20
+
 const maxRunBodyBytes = 8 << 20
 
 func decodeRun(resp *http.Response) (models.ImportedRun, error) {

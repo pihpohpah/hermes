@@ -292,6 +292,9 @@ html {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   color-scheme: light;
+  /* Стабильная геометрия: центральный «остров» сценариев не должен смещаться
+   * между страницами с прокруткой и без. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -1552,7 +1555,8 @@ a:hover {
 }
 
 .dialog__lead {
-  margin-bottom: var(--space-5);
+  margin: var(--space-2) 0 var(--space-5);
+  padding: 0 var(--space-6);
   color: var(--color-text-secondary);
 }
 
@@ -1576,6 +1580,20 @@ a:hover {
 
 @keyframes sheet-in {
   from { transform: translateY(100%); }
+}
+
+/* Плавное появление содержимого при hx-boost-переходах между страницами
+ * (htmx-settling на body — только при свопе всей страницы, фрагменты
+ * этот селектор не затрагивают). */
+body.htmx-settling > .app > .main {
+  animation: page-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
 }
 
 @media (max-width: 47.99rem) {
@@ -1611,6 +1629,10 @@ a:hover {
 
   .dialog__body {
     padding: var(--space-4) var(--space-5) var(--space-5);
+  }
+
+  .dialog__lead {
+    padding: 0 var(--space-5);
   }
 
   .dialog__footer {
@@ -1657,7 +1679,9 @@ a:hover {
   font-weight: var(--weight-semibold);
 }
 
-.menu__header span {
+/* Подзаголовок под именем; специфичнее, чтобы не ловить аватар (.avatar —
+ * grid со своей вёрсткой букв). */
+.menu__header div span {
   display: block;
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
@@ -2630,11 +2654,17 @@ a:hover {
 
 .header__inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-6);
   height: 100%;
   padding-inline: var(--space-6);
+}
+
+/* С переключателем сценариев он занимает центральную колонку,
+ * без него (профиль и др.) действия прижимаются к правому краю. */
+.header__inner:has(.scenario-switcher) {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .header__main {
@@ -5847,5 +5877,517 @@ a:hover {
 
   .lucky-banner .btn {
     flex-basis: 100%;
+  }
+}
+
+/* ── «Для вас» (профиль) ─────────────────────────────────────
+ * .foryou__section — одна подборка ленты (места / маршруты / события).
+ * .foryou-route   — мок-маршрут: цепочка остановок без маршрутизации. */
+
+.foryou__section {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.foryou__title {
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-snug);
+}
+
+.foryou__routes {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.foryou-route {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.foryou-route__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.foryou-route__head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-snug);
+}
+
+.foryou-route__note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.foryou-route__stops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.foryou-route__stop {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1-5);
+}
+
+.foryou-route__stop + .foryou-route__stop::before {
+  content: "→";
+  color: var(--color-text-tertiary);
+}
+
+.foryou-route__link {
+  font-weight: var(--weight-semibold);
+}
+
+.foryou-route__meta {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.foryou-route__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Походы: планирование маршрутов, скоринг узлов, подбор по погоде ──
+ * trip-score   — цветной чип балла (go / caution / no_go / нет оценки),
+ *                общий для карточек профиля, диалога планирования и подбора.
+ * trip-picker  — модалка «куда поехать по погоде».
+ * trip-plan    — диалог планирования маршрута на время.
+ * trip-card    — карточка запланированного похода во вкладке «Походы». */
+
+.trip-score {
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  padding: 0.2rem var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1.4;
+}
+
+.trip-score--is-go {
+  background: var(--color-success-soft, #e8f6ec);
+  color: var(--color-success);
+  border-color: rgb(46 160 103 / 0.35);
+}
+
+.trip-score--is-caution {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text, var(--color-warning));
+  border-color: rgb(217 138 0 / 0.35);
+}
+
+.trip-score--is-no-go {
+  background: var(--color-danger-soft, #fdecec);
+  color: var(--color-danger);
+  border-color: rgb(216 43 43 / 0.35);
+}
+
+.trip-score--na {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-tertiary);
+}
+
+.map-panel__toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.preview__bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Модалка «по погоде» ── */
+
+.trip-picker__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.trip-picker__hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.trip-picker__results {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.trip-picker__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.trip-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.trip-pick__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.trip-pick__name {
+  font-weight: var(--weight-semibold);
+}
+
+.trip-pick__meta,
+.trip-pick__summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.trip-pick__summary {
+  color: var(--color-text-secondary);
+}
+
+.trip-pick__actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* ── Диалог планирования ── */
+
+.trip-plan__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-3);
+}
+
+.trip-plan__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.trip-plan__stops {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.trip-plan__stop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.trip-plan__stop-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.trip-plan__stop-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.trip-plan__stop-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  font-size: var(--text-xs);
+}
+
+.trip-plan__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+.trip-plan__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+}
+
+/* ── Вкладка «Походы» ── */
+
+.trip-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+}
+
+.trip-card {
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.trip-card--go {
+  border-left-color: var(--color-success);
+}
+
+.trip-card--caution {
+  border-left-color: var(--color-warning);
+}
+
+.trip-card--no-go {
+  border-left-color: var(--color-danger);
+}
+
+.trip-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.trip-card__title strong {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.trip-card__when {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.trip-card__stops {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+}
+
+.trip-stop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px dashed var(--color-border);
+}
+
+.trip-stop__num {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+}
+
+.trip-stop__num--is-go {
+  background: var(--color-success-soft, #e8f6ec);
+  color: var(--color-success);
+}
+
+.trip-stop__num--is-caution {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+.trip-stop__num--is-no-go {
+  background: var(--color-danger-soft, #fdecec);
+  color: var(--color-danger);
+}
+
+.trip-stop__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip-stop__name {
+  font-weight: var(--weight-semibold);
+}
+
+.trip-stop__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.trip-stop__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+.trip-stop__score {
+  flex-shrink: 0;
+  min-width: 2.25rem;
+  padding: 0.2rem var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  text-align: center;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+}
+
+.trip-stop__score--is-go {
+  background: var(--color-success-soft, #e8f6ec);
+  color: var(--color-success);
+  border-color: rgb(46 160 103 / 0.35);
+}
+
+.trip-stop__score--is-caution {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text, var(--color-warning));
+  border-color: rgb(217 138 0 / 0.35);
+}
+
+.trip-stop__score--is-no-go {
+  background: var(--color-danger-soft, #fdecec);
+  color: var(--color-danger);
+  border-color: rgb(216 43 43 / 0.35);
+}
+
+.trip-stop__score--na {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-tertiary);
+}
+
+.trip-card__hints {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  font-size: var(--text-sm);
+}
+
+.trip-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.trip-hint .icon {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.trip-hint--tip .icon {
+  color: var(--color-primary);
+}
+
+.trip-hint--danger .icon {
+  color: var(--color-danger);
+}
+
+.trip-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ── Подсветка узлов в редакторе маршрута ── */
+
+.route-stop__score {
+  align-self: center;
+}
+
+.route-stop__warn {
+  font-size: var(--text-xs);
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+.trip-editor-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  font-size: var(--text-sm);
+}
+
+.trip-editor-note .icon {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  color: var(--color-warning-text, var(--color-warning));
+}
+
+@media (max-width: 30rem) {
+  .trip-picker-btn-text {
+    display: none;
+  }
+
+  .trip-pick__actions {
+    flex-direction: row;
   }
 }

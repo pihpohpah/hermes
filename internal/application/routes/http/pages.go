@@ -9,9 +9,17 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/pihpohpah/hermes/internal/application/presenter"
+	"github.com/pihpohpah/hermes/internal/application/usecase"
 	"github.com/pihpohpah/hermes/internal/domain/models"
 	"github.com/pihpohpah/hermes/web/templates"
 )
+
+// RecommendationsUC — MOCK(рекомендательная система): сейчас это случайная
+// подборка из каталога (usecase/recommendations.go), заменяется на клиент
+// реального рекомендательного сервиса.
+type RecommendationsUC interface {
+	Do(ctx context.Context) (usecase.Recommendations, error)
+}
 
 // Pages собирает серверно-рендеренные экраны продукта «Места VL.ru».
 // Каждый handler рендерит полную страницу; динамические части обновляются
@@ -28,6 +36,10 @@ type Pages struct {
 	getPin          GetPinUC
 	listCollections ListCollectionsUC
 	listSubmissions ListSubmissionsUC
+	listTrips       ListTripsUC
+	// MOCK(рекомендательная система): случайная подборка вместо скоринга,
+	// заменяется на клиент рекомендательного сервиса (см. usecase/recommendations.go).
+	recommendations RecommendationsUC
 }
 
 func NewPages(
@@ -41,6 +53,8 @@ func NewPages(
 	getPin GetPinUC,
 	listCollections ListCollectionsUC,
 	listSubmissions ListSubmissionsUC,
+	listTrips ListTripsUC,
+	recommendations RecommendationsUC,
 ) *Pages {
 	return &Pages{
 		logger:          logger,
@@ -53,6 +67,8 @@ func NewPages(
 		getPin:          getPin,
 		listCollections: listCollections,
 		listSubmissions: listSubmissions,
+		listTrips:       listTrips,
+		recommendations: recommendations,
 	}
 }
 
@@ -449,8 +465,8 @@ func (p *Pages) ProfilePage(w http.ResponseWriter, r *http.Request) {
 
 func parseProfileTab(r *http.Request) string {
 	tab := r.URL.Query().Get("tab")
-	if tab != "going" && tab != "submissions" {
-		tab = "pins"
+	if tab != "pins" && tab != "going" && tab != "trips" && tab != "submissions" {
+		tab = "foryou"
 	}
 
 	return tab
@@ -467,12 +483,74 @@ func (p *Pages) loadProfileView(ctx context.Context, r *http.Request, user *pres
 		return templates.ProfileView{}, err
 	}
 
-	return templates.ProfileView{
+	trips, err := p.listTrips.Do(ctx, models.TripFilter{UserID: user.ID, Limit: 50})
+	if err != nil {
+		return templates.ProfileView{}, err
+	}
+
+	view := templates.ProfileView{
 		User:        user,
 		Tab:         tab,
 		Pins:        presenter.PinsToHTTP(pins),
 		Submissions: presenter.SubmissionsToHTTP(submissions),
-	}, nil
+		Trips:       presenter.TripsWithConditionsToHTTP(trips),
+	}
+
+	// Лента «Для вас» тянет весь каталог — грузим её только для своей вкладки.
+	// MOCK(рекомендательная система): сейчас это случайная подборка.
+	if tab == "foryou" {
+		recs, err := p.recommendations.Do(ctx)
+		if err != nil {
+			return templates.ProfileView{}, err
+		}
+		view.ForYou = forYouView(recs)
+	}
+
+	return view, nil
+}
+
+// forYouView превращает мок-рекомендации во view-модель ленты: события
+// подтягивают места проведения, чтобы карточки выглядели как в справочнике.
+func forYouView(recs usecase.Recommendations) *templates.ForYouView {
+	placesByID := map[string]*presenter.Place{}
+	for _, place := range recs.Places {
+		item := presenter.PlaceToHTTP(place)
+		placesByID[item.ID] = &item
+	}
+
+	events := make([]presenter.CatalogItem, 0, len(recs.Events))
+	for _, event := range recs.Events {
+		var venue *presenter.Place
+		if event.PlaceID != nil {
+			venue = placesByID[*event.PlaceID]
+		}
+		events = append(events, presenter.CatalogItemFromEvent(presenter.EventToHTTP(event), venue))
+	}
+
+	routes := make([]templates.ForYouRoute, 0, len(recs.Routes))
+	for _, route := range recs.Routes {
+		stops := make([]presenter.CatalogItem, 0, len(route.Stops))
+		for _, stop := range route.Stops {
+			stops = append(stops, presenter.CatalogItemFromPlace(presenter.PlaceToHTTP(stop)))
+		}
+		routes = append(routes, templates.ForYouRoute{
+			ID:       route.ID,
+			Title:    route.Title,
+			Scenario: string(route.Scenario),
+			Stops:    stops,
+		})
+	}
+
+	places := make([]presenter.CatalogItem, 0, len(recs.Places))
+	for _, place := range recs.Places {
+		places = append(places, presenter.CatalogItemFromPlace(presenter.PlaceToHTTP(place)))
+	}
+
+	return &templates.ForYouView{
+		Places: places,
+		Events: events,
+		Routes: routes,
+	}
 }
 
 // GET /rules — правила меток и модерации.

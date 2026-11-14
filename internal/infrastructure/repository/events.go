@@ -139,6 +139,79 @@ func (r *EventRepository) GetByID(ctx context.Context, id string) (models.Event,
 	return event, nil
 }
 
+// UpsertBySlug вставляет редакционное событие или обновляет его по slug —
+// путь сида и будущих админских правок. В отличие от UpsertImported
+// (импорт event-agent по external_id) пишет все редакционные поля: short,
+// place_id, organizer и age. Повторный seed обновляет ту же строку.
+func (r *EventRepository) UpsertBySlug(ctx context.Context, event models.Event) (models.Event, error) {
+	if event.Slug == nil || *event.Slug == "" {
+		return models.Event{}, errors.New("upsert event by slug: empty slug")
+	}
+
+	var lon, lat *float64
+	if event.Location != nil {
+		lon, lat = &event.Location.Lon, &event.Location.Lat
+	}
+
+	status := event.Status
+	if status == "" {
+		status = models.EventStatusScheduled
+	}
+
+	const query = `
+		INSERT INTO events (
+			slug, title, category, short, description,
+			place_id, venue, organizer, age, status,
+			price_free, price_label, starts_at, ends_at, location
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+			CASE WHEN $15::float8 IS NULL THEN NULL
+			     ELSE ST_SetSRID(ST_MakePoint($15::float8, $16::float8), 4326)::geography END)
+		ON CONFLICT (slug) DO UPDATE SET
+			title = EXCLUDED.title,
+			category = EXCLUDED.category,
+			short = EXCLUDED.short,
+			description = EXCLUDED.description,
+			place_id = EXCLUDED.place_id,
+			venue = EXCLUDED.venue,
+			organizer = EXCLUDED.organizer,
+			age = EXCLUDED.age,
+			status = EXCLUDED.status,
+			price_free = EXCLUDED.price_free,
+			price_label = EXCLUDED.price_label,
+			starts_at = EXCLUDED.starts_at,
+			ends_at = EXCLUDED.ends_at,
+			location = COALESCE(EXCLUDED.location, events.location)
+		RETURNING id
+	`
+
+	var id string
+	err := r.pool.QueryRow(
+		ctx, query,
+		*event.Slug,
+		event.Title,
+		string(event.Category),
+		event.Short,
+		event.Description,
+		event.PlaceID,
+		event.Venue,
+		event.Organizer,
+		event.Age,
+		string(status),
+		event.PriceFree,
+		event.PriceLabel,
+		event.StartsAt,
+		event.EndsAt,
+		lon,
+		lat,
+	).Scan(&id)
+	if err != nil {
+		return models.Event{}, fmt.Errorf("upsert event by slug: %w", err)
+	}
+
+	return r.GetByID(ctx, id)
+}
+
 // GetManyByIDs loads a set of events for collection hydration.
 func (r *EventRepository) GetManyByIDs(ctx context.Context, ids []string) ([]models.Event, error) {
 	if len(ids) == 0 {

@@ -7,11 +7,10 @@ import (
 
 	"github.com/pihpohpah/hermes/internal/application/presenter"
 	"github.com/pihpohpah/hermes/internal/application/usecase"
-	"github.com/pihpohpah/hermes/internal/domain/models"
 )
 
-// TelegramLoginHandler принимает POST /auth/telegram: подписанный Telegram
-// Login Widget коллбек. Успех — session cookie в ответе и профиль с csrf_token
+// TelegramLoginHandler принимает POST /auth/telegram: id_token коллбека
+// Telegram Login library. Успех — session cookie в ответе и профиль с csrf_token
 // в теле, ровно как у POST /users.
 type TelegramLoginHandler struct {
 	logger        *slog.Logger
@@ -34,7 +33,7 @@ func NewTelegramLoginHandler(
 }
 
 type telegramLoginRequest struct {
-	models.TelegramAuthFields
+	IDToken  string `json:"id_token"`
 	Timezone string `json:"timezone"`
 }
 
@@ -54,7 +53,7 @@ func (h *TelegramLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	result, err := h.useCase.Do(r.Context(), usecase.TelegramLoginInput{
-		Telegram: body.TelegramAuthFields,
+		IDToken:  body.IDToken,
 		Timezone: body.Timezone,
 	})
 	if err != nil {
@@ -73,22 +72,33 @@ func (h *TelegramLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}))
 }
 
-// TelegramWidgetConfigHandler отдаёт настройки виджета для фронтенда. Без
-// токена бота Telegram-вход выключен — клиент рисует только вход по имени.
+// TelegramWidgetConfigHandler отдаёт настройки для фронтенд-инициализации
+// Telegram Login library. Без Client ID Telegram-вход выключен — клиент
+// рисует только вход по имени. Каждый ответ несёт свежий nonce: id_token без
+// выданного нами nonce сервер не примет.
 type TelegramWidgetConfigHandler struct {
-	botUsername string
-	writer      *APIResponseWriter[telegramWidgetConfig]
+	clientID string
+	nonces   *usecase.TelegramNonceIssuer
+	writer   *APIResponseWriter[telegramWidgetConfig]
+	logger   *slog.Logger
 }
 
 type telegramWidgetConfig struct {
-	Enabled    bool   `json:"enabled"`
-	BotUsername string `json:"bot_username"`
+	Enabled  bool   `json:"enabled"`
+	ClientID string `json:"client_id"`
+	Nonce    string `json:"nonce"`
 }
 
-func NewTelegramWidgetConfigHandler(logger *slog.Logger, botUsername string) *TelegramWidgetConfigHandler {
+func NewTelegramWidgetConfigHandler(
+	logger *slog.Logger,
+	clientID string,
+	nonces *usecase.TelegramNonceIssuer,
+) *TelegramWidgetConfigHandler {
 	return &TelegramWidgetConfigHandler{
-		botUsername: botUsername,
-		writer:      NewAPIResponseWriter[telegramWidgetConfig](logger),
+		clientID: clientID,
+		nonces:   nonces,
+		writer:   NewAPIResponseWriter[telegramWidgetConfig](logger),
+		logger:   logger,
 	}
 }
 
@@ -100,8 +110,23 @@ func (h *TelegramWidgetConfigHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	if h.clientID == "" {
+		h.writer.Success(w, telegramWidgetConfig{Enabled: false})
+
+		return
+	}
+
+	nonce, err := h.nonces.Issue()
+	if err != nil {
+		h.logger.Error("issue telegram nonce failed", slog.Any("error", err))
+		h.writer.Error(w, http.StatusInternalServerError, errors.New("nonce issue failed"))
+
+		return
+	}
+
 	h.writer.Success(w, telegramWidgetConfig{
-		Enabled:    h.botUsername != "",
-		BotUsername: h.botUsername,
+		Enabled:  true,
+		ClientID: h.clientID,
+		Nonce:    nonce,
 	})
 }

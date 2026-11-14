@@ -348,35 +348,165 @@ type ForecastRefreshResult struct {
 	RefreshedAt  string `json:"refreshed_at"`
 }
 
-// Trip is the HTTP representation of a planned outing.
-type Trip struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
+// TripStop is one route node with the scoring for its planned arrival; the
+// best-* fields describe the most comfortable hour of that day and drive the
+// «подсказки» in the UI.
+type TripStop struct {
 	PlaceID   string `json:"place_id"`
-	PlannedAt string `json:"planned_at"`
-	Activity  string `json:"activity"`
-	Status    string `json:"status"`
-	Notes     string `json:"notes"`
-	CreatedAt string `json:"created_at"`
+	PlaceName string `json:"place_name,omitempty"`
+	PlaceURL  string `json:"place_url,omitempty"`
+	Position  int    `json:"position"`
+	ArriveAt  string `json:"arrive_at"`
+
+	Score    *int           `json:"score,omitempty"`
+	Verdict  models.Verdict `json:"verdict,omitempty"`
+	Summary  string         `json:"summary,omitempty"`
+	ScoreAt  string         `json:"score_at,omitempty"`
+	Warnings []WarningDTO   `json:"warnings,omitempty"`
+
+	BestScore   *int           `json:"best_score,omitempty"`
+	BestVerdict models.Verdict `json:"best_verdict,omitempty"`
+	BestAt      string         `json:"best_at,omitempty"`
+}
+
+// Trip is the HTTP representation of a planned route outing.
+type Trip struct {
+	ID          string     `json:"id"`
+	UserID      string     `json:"user_id"`
+	PlannedAt   string     `json:"planned_at"`
+	StopMinutes int        `json:"stop_minutes"`
+	Activity    string     `json:"activity"`
+	Status      string     `json:"status"`
+	Notes       string     `json:"notes"`
+	Stops       []TripStop `json:"stops"`
+	CreatedAt   string     `json:"created_at"`
+}
+
+func tripStopsToHTTP(stops []models.TripStopConditions) []TripStop {
+	out := make([]TripStop, len(stops))
+	for i, stop := range stops {
+		item := TripStop{
+			PlaceID:   stop.PlaceID,
+			PlaceName: stop.PlaceName,
+			PlaceURL:  "/place/" + stop.PlaceID,
+			Position:  stop.Position,
+			ArriveAt:  stop.ArriveAt.UTC().Format(time.RFC3339),
+		}
+		if stop.Score != nil {
+			score := int(*stop.Score)
+			item.Score = &score
+			item.Verdict = *stop.Verdict
+			item.Summary = stop.Summary
+		}
+		if stop.ScoreAt != nil {
+			item.ScoreAt = stop.ScoreAt.UTC().Format(time.RFC3339)
+		}
+		item.Warnings = warningsToHTTP(stop.Warnings)
+		if stop.BestScore != nil {
+			best := int(*stop.BestScore)
+			item.BestScore = &best
+			item.BestVerdict = *stop.BestVerdict
+		}
+		if stop.BestAt != nil {
+			item.BestAt = stop.BestAt.UTC().Format(time.RFC3339)
+		}
+
+		out[i] = item
+	}
+
+	return out
+}
+
+func warningsToHTTP(in []models.Warning) []WarningDTO {
+	out := make([]WarningDTO, 0, len(in))
+	for _, item := range in {
+		out = append(out, WarningDTO{
+			Code:    item.Code,
+			Level:   item.Level,
+			Factor:  item.Factor,
+			Value:   item.Value,
+			Message: item.Message,
+		})
+	}
+
+	return out
 }
 
 func TripToHTTP(in models.Trip) Trip {
+	stops := make([]TripStop, 0, len(in.Stops))
+	for _, stop := range in.Stops {
+		stops = append(stops, TripStop{
+			PlaceID:  stop.PlaceID,
+			Position: stop.Position,
+			ArriveAt: stop.ArriveAt.UTC().Format(time.RFC3339),
+		})
+	}
+
 	return Trip{
-		ID:        in.ID,
-		UserID:    in.UserID,
-		PlaceID:   in.PlaceID,
-		PlannedAt: in.PlannedAt.UTC().Format(time.RFC3339),
-		Activity:  string(in.Activity),
-		Status:    string(in.Status),
-		Notes:     in.Notes,
-		CreatedAt: in.CreatedAt.UTC().Format(time.RFC3339),
+		ID:          in.ID,
+		UserID:      in.UserID,
+		PlannedAt:   in.PlannedAt.UTC().Format(time.RFC3339),
+		StopMinutes: in.StopMinutes,
+		Activity:    string(in.Activity),
+		Status:      string(in.Status),
+		Notes:       in.Notes,
+		Stops:       stops,
+		CreatedAt:   in.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
-func TripsToHTTP(in []models.Trip) []Trip {
+func TripWithConditionsToHTTP(in models.TripWithConditions) Trip {
+	out := TripToHTTP(in.Trip)
+	out.Stops = tripStopsToHTTP(in.Stops)
+
+	return out
+}
+
+func TripsWithConditionsToHTTP(in []models.TripWithConditions) []Trip {
 	out := make([]Trip, len(in))
 	for i := range in {
-		out[i] = TripToHTTP(in[i])
+		out[i] = TripWithConditionsToHTTP(in[i])
+	}
+
+	return out
+}
+
+// ConditionPickDTO is one row of the trip picker: the best hour of a place
+// within the chosen day.
+type ConditionPickDTO struct {
+	PlaceID      string         `json:"place_id"`
+	PlaceName    string         `json:"place_name"`
+	PlaceURL     string         `json:"place_url"`
+	Scenario     string         `json:"scenario"`
+	District     string         `json:"district,omitempty"`
+	Score        int            `json:"score"`
+	Verdict      models.Verdict `json:"verdict"`
+	ForecastTime string         `json:"forecast_time"`
+	Summary      string         `json:"summary"`
+	GoodHours    int            `json:"good_hours"`
+	TotalHours   int            `json:"total_hours"`
+}
+
+func ConditionPickToHTTP(in models.ConditionPick) ConditionPickDTO {
+	return ConditionPickDTO{
+		PlaceID:      in.PlaceID,
+		PlaceName:    in.PlaceName,
+		PlaceURL:     "/place/" + in.PlaceID,
+		Scenario:     in.Scenario,
+		District:     in.District,
+		Score:        int(in.Score),
+		Verdict:      in.Verdict,
+		ForecastTime: in.ForecastTime.UTC().Format(time.RFC3339),
+		Summary:      in.Summary,
+		GoodHours:    in.GoodHours,
+		TotalHours:   in.TotalHours,
+	}
+}
+
+func ConditionPicksToHTTP(in []models.ConditionPick) []ConditionPickDTO {
+	out := make([]ConditionPickDTO, len(in))
+	for i := range in {
+		out[i] = ConditionPickToHTTP(in[i])
 	}
 
 	return out

@@ -209,3 +209,78 @@ func TestEventResponseToDomainExtras(t *testing.T) {
 func ptr(s string) *string { return &s }
 
 func ptrBool(b bool) *bool { return &b }
+
+func TestStateResponseToDomainEvents(t *testing.T) {
+	t.Parallel()
+
+	dto := stateResponse{
+		Events: map[string]stateEntryResponse{
+			"deadbeef01": {
+				Event: eventResponse{
+					Title:     "Концерт из кеша",
+					Category:  "concert",
+					StartDate: "2026-11-20",
+					StartTime: ptr("19:00"),
+				},
+				Sources: []string{
+					"https://vladivostok.ticketland.ru/spectacle",
+					"https://afishagorodov.ru/vladivostok/concerts",
+				},
+			},
+			"deadbeef02": {
+				Event: eventResponse{
+					Title:     "Событие без источников",
+					Category:  "quiz",
+					StartDate: "2026-11-21",
+				},
+			},
+		},
+	}
+
+	events, err := dto.toDomainEvents()
+	if err != nil {
+		t.Fatalf("toDomainEvents: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2", len(events))
+	}
+
+	byID := make(map[string]models.Event, len(events))
+	for _, event := range events {
+		if event.ExternalID == nil {
+			t.Fatal("external id must come from the state map key")
+		}
+		byID[*event.ExternalID] = event
+	}
+
+	cached := byID["deadbeef01"]
+	if cached.Venue != "" || cached.Title != "Концерт из кеша" {
+		t.Errorf("unexpected event: %+v", cached)
+	}
+	if len(cached.SourceURLs) != 2 {
+		t.Fatalf("SourceURLs = %v, want 2 entries keyed by host", cached.SourceURLs)
+	}
+	if cached.SourceURLs["vladivostok.ticketland.ru"] == "" ||
+		cached.SourceURLs["afishagorodov.ru"] == "" {
+		t.Errorf("SourceURLs keyed by host: %v", cached.SourceURLs)
+	}
+
+	noSources := byID["deadbeef02"]
+	if len(noSources.SourceURLs) != 0 {
+		t.Errorf("SourceURLs = %v, want empty", noSources.SourceURLs)
+	}
+}
+
+func TestStateResponseToDomainEventsBadEntry(t *testing.T) {
+	t.Parallel()
+
+	dto := stateResponse{
+		Events: map[string]stateEntryResponse{
+			"bad": {Event: eventResponse{Title: "?", Category: "nonsense", StartDate: "2026-11-20"}},
+		},
+	}
+
+	if _, err := dto.toDomainEvents(); err == nil {
+		t.Fatal("invalid entry must fail the mapping loudly")
+	}
+}

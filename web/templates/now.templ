@@ -239,7 +239,7 @@ func pinDuration(pin presenter.Pin) string {
 
 // createPinStepPlace — шаг 1 создания метки: точка на карте.
 templ createPinStepPlace() {
-	<form class="preview create-pin" x-show="step === 'place'" x-cloak @submit.prevent="submitPlace">
+	<form class="preview create-pin" x-show="step === 'place'" x-cloak @submit.prevent="submitPlace" hx-disable>
 		<div class="preview__bar">
 			<button type="button" class="btn btn--sm btn--ghost" data-action="cancel-create" @click="cancel">
 				@icon("x", "icon--sm") Отмена
@@ -261,7 +261,7 @@ templ createPinStepPlace() {
 
 // createPinStepDetails — шаг 2: тип, заголовок, время, состав.
 templ createPinStepDetails() {
-	<form class="preview create-pin" x-show="step === 'details'" x-cloak @submit.prevent="submitDetails">
+	<form class="preview create-pin" x-show="step === 'details'" x-cloak @submit.prevent="submitDetails" hx-disable>
 		<div class="preview__bar">
 			<button type="button" class="btn btn--sm btn--ghost" @click="step = 'place'">
 				@icon("arrow-left", "icon--sm") Место
