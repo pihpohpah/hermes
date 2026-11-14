@@ -384,8 +384,6 @@ a:hover {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-
-.icon--xs { width: 0.875rem; height: 0.875rem; stroke-width: 2; }
 .icon--sm { width: 1rem; height: 1rem; stroke-width: 2; }
 .icon--lg { width: 1.5rem; height: 1.5rem; }
 .icon--xl { width: 2rem; height: 2rem; stroke-width: 1.5; }
@@ -826,15 +824,6 @@ a:hover {
   opacity: 0.6;
 }
 
-.place-card__category {
-  font-weight: var(--weight-semibold);
-}
-
-.place-card__category[data-scenario="city"] { color: var(--color-city-text); }
-.place-card__category[data-scenario="nature"] { color: var(--color-nature-text); }
-.place-card__category[data-scenario="sea"] { color: var(--color-sea-text); }
-.place-card__category[data-scenario="timed"] { color: var(--color-timed-text); }
-
 .place-card__title {
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
@@ -1006,16 +995,6 @@ a:hover {
   background: currentColor;
   opacity: 0.6;
 }
-
-.result-row__category {
-  flex: none;
-  font-weight: var(--weight-semibold);
-}
-
-.result-row__category[data-scenario="city"] { color: var(--color-city-text); }
-.result-row__category[data-scenario="nature"] { color: var(--color-nature-text); }
-.result-row__category[data-scenario="sea"] { color: var(--color-sea-text); }
-.result-row__category[data-scenario="timed"] { color: var(--color-timed-text); }
 
 .result-row__facts {
   display: flex;
@@ -2216,12 +2195,6 @@ a:hover {
 .badge--warning { background: var(--color-warning-soft); color: var(--color-warning); }
 .badge--inverse { background: var(--color-bg-inverse); color: var(--color-text-inverse); }
 
-/* Поверх фото */
-.badge--overlay {
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: var(--shadow-sm);
-}
 
 /* Точка «идёт сейчас» */
 .live-dot {
@@ -4325,10 +4298,6 @@ a:hover {
   white-space: nowrap;
 }
 
-.catalog__type {
-  display: inline-flex;
-}
-
 .catalog__view .segmented__item {
   min-height: 1.75rem;
   padding: 0 var(--space-2);
@@ -5195,13 +5164,6 @@ a:hover {
   list-style: none;
 }
 
-.profile__subtitle {
-  margin: var(--space-8) 0 var(--space-3);
-  font-size: var(--text-md);
-  color: var(--color-text-secondary);
-  letter-spacing: 0;
-}
-
 .profile__rows {
   display: grid;
   padding: 0;
@@ -5232,27 +5194,6 @@ a:hover {
   color: var(--color-text-tertiary);
 }
 
-.profile-row--muted {
-  color: var(--color-text-tertiary);
-  grid-template-columns: auto 1fr;
-}
-
-.profile__demo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-top: var(--space-12);
-  padding: var(--space-4) var(--space-5);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-}
-
-.profile__demo p {
-  color: var(--color-text-tertiary);
-}
-
 @media (max-width: 47.99rem) {
   .profile__head {
     flex-wrap: wrap;
@@ -5278,11 +5219,6 @@ a:hover {
   .profile-row .badge {
     grid-column: 2;
     justify-self: start;
-  }
-
-  .profile__demo {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 /*
@@ -5394,12 +5330,6 @@ a:hover {
   margin-top: var(--space-2);
 }
 
-.state-page__note {
-  margin-top: var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-}
-
 /* ── Правила ── */
 
 .rules-list {
@@ -5442,41 +5372,6 @@ a:hover {
   gap: var(--space-4);
 }
 
-.auth-form__legal,
-.auth-form__resend {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-  text-align: center;
-}
-
-.input-prefix {
-  position: relative;
-}
-
-.input-prefix__text {
-  position: absolute;
-  top: 50%;
-  left: var(--space-3-5);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-secondary);
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.input-prefix .input {
-  padding-left: 2.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.input--code {
-  min-height: var(--control-lg);
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.6em;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  padding-left: 0.6em;
-}
 
 /* ── Фильтры ── */
 

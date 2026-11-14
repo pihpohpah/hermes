@@ -68,7 +68,7 @@ function forYou(recs) {
       <div class="empty">
         <span class="empty__icon">${icon('sparkles', 'icon--lg')}</span>
         <h2 class="empty__title">Подборка пока пустая</h2>
-        <p class="empty__text">Открывайте карточки мест, ищите и отмечайте «Уже были здесь» — лента подстроится под вас.</p>
+        <p class="empty__text">В справочнике для этого сценария ещё нет мест — загляните позже.</p>
         <div class="empty__actions"><a class="btn btn--outline" href="#/catalog">Открыть справочник</a></div>
       </div>
     `;
