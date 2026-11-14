@@ -113,7 +113,7 @@ function paintColors() {
         ${CONTRAST_PAIRS.map(([fg, bg, label]) => {
           const ratio = contrast(resolve(fg), resolve(bg));
           const verdict = ratio >= 4.5 ? html`<span class="badge badge--success">текст</span>` : ratio >= 3 ? html`<span class="badge badge--warning">UI и крупный текст</span>` : html`<span class="badge badge--danger">не для текста</span>`;
-          return html`<tr><td>${label}<br /><code>${fg} / ${bg}</code></td><td><span style="padding: 0.25rem 0.5rem; border-radius: 6px; background: var(${bg}); color: var(${fg}); font-weight: 600">Аа Места</span></td><td class="tabular">${ratio.toFixed(2)}:1</td><td>${verdict}</td></tr>`;
+          return html`<tr><td>${label}<br /><code>${fg} / ${bg}</code></td><td><span style="padding: 0.25rem 0.5rem; border-radius: 6px; background: var(${bg}); color: var(${fg}); font-weight: 600">Аа Пошли</span></td><td class="tabular">${ratio.toFixed(2)}:1</td><td>${verdict}</td></tr>`;
         })}
       </tbody>
     `,

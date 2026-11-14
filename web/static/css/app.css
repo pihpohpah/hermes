@@ -1521,6 +1521,11 @@ a:hover {
   width: min(40rem, calc(100vw - var(--space-8)));
 }
 
+/* Постоянная высота для окон, чьё содержимое меняется на месте (иначе окно «прыгает»). */
+.dialog--fixed {
+  height: min(44rem, var(--dialog-max-height, calc(100vh - var(--space-12))));
+}
+
 .dialog__header {
   display: flex;
   align-items: flex-start;
@@ -2735,6 +2740,12 @@ a:hover {
   letter-spacing: var(--tracking-snug);
 }
 
+.brand__arrow {
+  display: block;
+  flex: none;
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .nav {
   display: flex;
   align-items: center;
@@ -2931,7 +2942,8 @@ a:hover {
   }
 
   .brand__divider,
-  .brand__name {
+  .brand__name,
+  .brand__arrow {
     display: none;
   }
 }
@@ -2984,6 +2996,7 @@ a:hover {
 
   .brand__divider,
   .brand__name,
+  .brand__arrow,
   .header__add,
   .header__login-text {
     display: none;
@@ -3224,6 +3237,15 @@ a:hover {
   transform: translateX(calc(-100% - var(--space-6)));
   opacity: 0;
   pointer-events: none;
+}
+
+/* Внутренности панели — flex-колонка, иначе .map-panel__body не ограничен
+ * по высоте и список не скроллится (тело растёт вместе с контентом). */
+#map-panel-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .map-panel__handle {
@@ -5679,4 +5701,151 @@ a:hover {
   background: var(--color-danger-soft, #fdecec);
   color: var(--color-text);
   border: 1px solid rgb(216 43 43 / 0.35);
+}
+
+/* ── «Мне повезёт» ───────────────────────────────────────────
+ * .lucky        — содержимое окна: условия броска (.lucky__options) и сцена результата (.lucky__stage).
+ * .lucky-banner — приглашение бросить кубик (профиль, вкладка «Для вас»). */
+
+.lucky {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.lucky__options {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.lucky__options .segmented {
+  max-width: 20rem;
+}
+
+.lucky__stage {
+  display: grid;
+  min-height: 11rem;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+}
+
+.lucky__idle {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.lucky__idle .empty__icon {
+  margin-bottom: 0;
+}
+
+/* Кадр перебора: миниатюра и название быстро сменяют друг друга */
+.lucky__spin {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: center;
+  align-self: center;
+  gap: var(--space-4);
+  animation: lucky-flick 90ms var(--ease-out);
+}
+
+.lucky__spin .media {
+  border-radius: var(--radius-md);
+}
+
+.lucky__spin strong {
+  display: block;
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-snug);
+}
+
+.lucky__spin > span > span {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.lucky__card,
+.lucky__route {
+  animation: dialog-in var(--dur-slow) var(--ease-out);
+}
+
+.lucky__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-4);
+  font-weight: var(--weight-semibold);
+}
+
+.lucky__actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-right: auto;
+}
+
+@keyframes lucky-flick {
+  from { opacity: 0.4; transform: translateY(-0.25rem); }
+}
+
+/* Кнопка в шапке: с подписью только на очень широком экране, иначе квадратная с кубиком */
+@media (max-width: 99.99rem) {
+  .header__lucky-text {
+    display: none;
+  }
+
+  .header__lucky {
+    --btn-px: 0;
+    width: var(--control-md);
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .header__lucky {
+    display: none;
+  }
+}
+
+/* Приглашение бросить кубик (вкладка «Для вас») */
+.lucky-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-soft);
+}
+
+.lucky-banner__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.lucky-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lucky-banner__text p {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 47.99rem) {
+  .lucky-banner {
+    flex-wrap: wrap;
+  }
+
+  .lucky-banner .btn {
+    flex-basis: 100%;
+  }
 }

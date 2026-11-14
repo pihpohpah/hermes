@@ -10,6 +10,7 @@ import { clearRoute, ROUTE_KEY, toggleRoute } from './route.js';
 import { panelSwap, refreshPins, selectItem, selectPin } from './nav.js';
 import { nowCreateComponent } from './pins.js';
 import { openFiltersDialog } from './catalog.js';
+import { openLuckyDialog } from './lucky.js';
 
 // Эти действия уже имеют инлайновые Alpine-обработчики на самих элементах.
 const INLINE_ACTIONS = ['toggle-panel', 'mobile-menu', 'hide-intro', 'toggle-picker', 'cancel-create'];
@@ -41,6 +42,9 @@ document.addEventListener('click', (event) => {
       break;
     case 'rename':
       openRenameDialog();
+      break;
+    case 'lucky':
+      openLuckyDialog();
       break;
     case 'share':
       event.preventDefault();

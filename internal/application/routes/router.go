@@ -49,6 +49,7 @@ type Handlers struct {
 	Pages             *httproutes.Pages
 	Fragments         *httproutes.Fragments
 	MapItems          *httproutes.MapItems
+	Lucky             *httproutes.Lucky
 	Item              *httproutes.Item
 	Logout            *httproutes.LogoutHandler
 	UpdateUser        *httproutes.UpdateCurrentUserHandler
@@ -160,6 +161,9 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	}
 	if h.MapItems != nil {
 		mux.Handle("GET /api/map-items", loadAuth(h.MapItems))
+	}
+	if h.Lucky != nil {
+		mux.Handle("GET /api/lucky", loadAuth(h.Lucky))
 	}
 	if h.Item != nil {
 		mux.Handle("GET /api/items/{id}", loadAuth(h.Item))

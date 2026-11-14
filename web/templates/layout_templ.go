@@ -49,7 +49,7 @@ func Layout(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><meta name=\"description\" content=\"Места, события и быстрые метки Владивостока и Приморья на одной карте: город, природа и море.\"><meta name=\"theme-color\" content=\"#ffffff\"><link rel=\"icon\" href=\"/brand/vlru-seagull.svg\" type=\"image/svg+xml\"><link rel=\"preload\" href=\"/fonts/InterVariable.woff2\" as=\"font\" type=\"font/woff2\" crossorigin>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><meta name=\"description\" content=\"Места, события и быстрые метки Владивостока и Приморья на одной карте: город, природа и море.\"><meta name=\"theme-color\" content=\"#ffffff\"><link rel=\"icon\" href=\"/brand/poshli-mark.svg\" type=\"image/svg+xml\"><link rel=\"preload\" href=\"/fonts/InterVariable.woff2\" as=\"font\" type=\"font/woff2\" crossorigin>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -110,7 +110,7 @@ func header(v LayoutView) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<header class=\"header\" id=\"header\" x-data=\"{ menuOpen: false }\"><div class=\"header__inner\"><div class=\"header__main\"><a class=\"brand\" href=\"/\" aria-label=\"VL.ru Места — на главную\"><img class=\"brand__logo\" src=\"/brand/vlru-logo.svg\" alt=\"\" width=\"58\" height=\"30\"> <span class=\"brand__divider\" aria-hidden=\"true\"></span> <span class=\"brand__name\">Места</span></a><nav class=\"nav\" aria-label=\"Разделы\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<header class=\"header\" id=\"header\" x-data=\"{ menuOpen: false }\"><div class=\"header__inner\"><div class=\"header__main\"><a class=\"brand\" href=\"/\" aria-label=\"Пошли — на главную\"><img class=\"brand__logo\" src=\"/brand/poshli-mark.svg\" alt=\"\" width=\"30\" height=\"30\"> <span class=\"brand__name\">Пошли</span> <svg class=\"brand__arrow\" width=\"18\" height=\"13\" viewBox=\"0 0 20 14\" fill=\"none\" aria-hidden=\"true\"><path d=\"M1 7h15M12 1l6 6-6 6\" stroke=\"#EA580C\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg></a><nav class=\"nav\" aria-label=\"Разделы\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -152,7 +152,7 @@ func header(v LayoutView) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(v.Scenario).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 74, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 76, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -170,7 +170,7 @@ func header(v LayoutView) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.SafeURL(v.scenarioHref(scenario.ID))).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 78, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 80, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
@@ -183,7 +183,7 @@ func header(v LayoutView) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(scenario.Label).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 79, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 81, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 				if templ_7745c5c3_Err != nil {
@@ -196,7 +196,7 @@ func header(v LayoutView) templ.Component {
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(strconv.FormatBool(scenario.ID == v.Scenario)).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 80, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 82, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 				if templ_7745c5c3_Err != nil {
@@ -209,7 +209,7 @@ func header(v LayoutView) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(scenario.Description).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 81, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 83, Col: 35}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -230,7 +230,7 @@ func header(v LayoutView) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(scenario.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 83, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 85, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -246,7 +246,15 @@ func header(v LayoutView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"header__actions\"><a class=\"btn btn--primary header__add\" href=\"/add\" aria-label=\"Добавить место или событие\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<div class=\"header__actions\"><button type=\"button\" class=\"btn btn--ghost header__lucky\" data-action=\"lucky\" aria-label=\"Мне повезёт: случайное место, событие или маршрут\" title=\"Мне повезёт\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = icon("dices", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<span class=\"header__lucky-text\">Мне повезёт</span></button> <a class=\"btn btn--primary header__add\" href=\"/add\" aria-label=\"Добавить место или событие\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -254,7 +262,7 @@ func header(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<span class=\"header__add-text\">Добавить</span></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<span class=\"header__add-text\">Добавить</span></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -262,7 +270,7 @@ func header(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<button type=\"button\" class=\"icon-btn header__burger\" data-action=\"mobile-menu\" @click=\"menuOpen = !menuOpen\" :aria-expanded=\"menuOpen\" aria-controls=\"mobile-menu\" aria-label=\"Меню\"><template x-if=\"!menuOpen\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<button type=\"button\" class=\"icon-btn header__burger\" data-action=\"mobile-menu\" @click=\"menuOpen = !menuOpen\" :aria-expanded=\"menuOpen\" aria-controls=\"mobile-menu\" aria-label=\"Меню\"><template x-if=\"!menuOpen\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -270,7 +278,7 @@ func header(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</template><template x-if=\"menuOpen\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</template><template x-if=\"menuOpen\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -278,7 +286,7 @@ func header(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</template></button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</template></button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -286,7 +294,7 @@ func header(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</header>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -311,43 +319,43 @@ func navLink(href, label, section string, v LayoutView) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<a class=\"nav__link\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<a class=\"nav__link\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(href).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 112, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 123, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if v.Section == section {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, " aria-current")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, " aria-current")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, ">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, ">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 112, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 123, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -373,7 +381,7 @@ func userBlock(user *presenter.User) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if user == nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<button type=\"button\" class=\"btn btn--ghost header__login\" data-action=\"login\" aria-label=\"Войти\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<button type=\"button\" class=\"btn btn--ghost header__login\" data-action=\"login\" aria-label=\"Войти\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -381,25 +389,25 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<span class=\"header__login-text\">Войти</span></button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<span class=\"header__login-text\">Войти</span></button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"menu-anchor\" x-data=\"{ open: false }\" @keydown.escape.window=\"open = false\"><button type=\"button\" class=\"header__user\" id=\"user-menu-button\" aria-haspopup=\"menu\" :aria-expanded=\"open\" aria-controls=\"user-menu\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div class=\"menu-anchor\" x-data=\"{ open: false }\" @keydown.escape.window=\"open = false\"><button type=\"button\" class=\"header__user\" id=\"user-menu-button\" aria-haspopup=\"menu\" :aria-expanded=\"open\" aria-controls=\"user-menu\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression("Меню профиля: " + user.DisplayName).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 129, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 140, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" @click=\"open = !open\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" @click=\"open = !open\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -407,20 +415,20 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<span class=\"header__user-name\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<span class=\"header__user-name\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(user.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 132, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 143, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -428,7 +436,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</button><div class=\"menu\" id=\"user-menu\" role=\"menu\" x-show=\"open\" x-transition @click.outside=\"open = false\" @click=\"open = false\"><div class=\"menu__header\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</button><div class=\"menu\" id=\"user-menu\" role=\"menu\" x-show=\"open\" x-transition @click.outside=\"open = false\" @click=\"open = false\"><div class=\"menu__header\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -436,20 +444,20 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(user.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 145, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 156, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</strong><span>Гостевой профиль</span></div></div><a class=\"menu__item\" role=\"menuitem\" href=\"/profile\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</strong><span>Гостевой профиль</span></div></div><a class=\"menu__item\" role=\"menuitem\" href=\"/profile\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -457,7 +465,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, " Профиль</a> <a class=\"menu__item\" role=\"menuitem\" href=\"/profile\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, " Профиль</a> <a class=\"menu__item\" role=\"menuitem\" href=\"/profile\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -465,7 +473,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, " Мои метки</a> <a class=\"menu__item\" role=\"menuitem\" href=\"/profile?tab=submissions\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, " Мои метки</a> <a class=\"menu__item\" role=\"menuitem\" href=\"/profile?tab=submissions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -473,7 +481,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, " Мои предложения</a><div class=\"menu__separator\" role=\"separator\"></div><button type=\"button\" class=\"menu__item\" role=\"menuitem\" data-action=\"logout\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, " Мои предложения</a><div class=\"menu__separator\" role=\"separator\"></div><button type=\"button\" class=\"menu__item\" role=\"menuitem\" data-action=\"logout\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -481,7 +489,7 @@ func userBlock(user *presenter.User) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, " Выйти</button></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, " Выйти</button></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -507,7 +515,7 @@ func mobileMenu(v LayoutView) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<template x-if=\"menuOpen\"><div><div class=\"mobile-menu-backdrop\" id=\"mobile-menu-backdrop\" @click=\"menuOpen = false\"></div><nav class=\"mobile-menu\" id=\"mobile-menu\" aria-label=\"Разделы\" x-transition @click=\"menuOpen = false\"><div class=\"mobile-menu__nav\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<template x-if=\"menuOpen\"><div><div class=\"mobile-menu-backdrop\" id=\"mobile-menu-backdrop\" @click=\"menuOpen = false\"></div><nav class=\"mobile-menu\" id=\"mobile-menu\" aria-label=\"Разделы\" x-transition @click=\"menuOpen = false\"><div class=\"mobile-menu__nav\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -523,15 +531,15 @@ func mobileMenu(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<a class=\"mobile-menu__link\" href=\"/add\"><span class=\"mobile-menu__icon\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<button type=\"button\" class=\"mobile-menu__link\" data-action=\"lucky\"><span class=\"mobile-menu__icon\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = icon("circle-plus", "").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = icon("dices", "").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span> <span><strong>Добавить</strong><small>Место, событие или правку</small></span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</span> <span><strong>Мне повезёт</strong><small>Случайное место, событие или маршрут</small></span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -539,12 +547,28 @@ func mobileMenu(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</a></div><div class=\"mobile-menu__footer\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</button> <a class=\"mobile-menu__link\" href=\"/add\"><span class=\"mobile-menu__icon\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = icon("circle-plus", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</span> <span><strong>Добавить</strong><small>Место, событие или правку</small></span>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = icon("chevron-right", "icon--sm").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</a></div><div class=\"mobile-menu__footer\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if v.User != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<a class=\"btn btn--outline btn--block\" href=\"/profile\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<a class=\"btn btn--outline btn--block\" href=\"/profile\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -552,12 +576,12 @@ func mobileMenu(v LayoutView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, " Профиль</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, " Профиль</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<button type=\"button\" class=\"btn btn--inverse btn--block\" data-action=\"login\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<button type=\"button\" class=\"btn btn--inverse btn--block\" data-action=\"login\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -565,12 +589,12 @@ func mobileMenu(v LayoutView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " Войти или зарегистрироваться</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, " Войти или зарегистрироваться</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<div class=\"mobile-menu__links\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"mobile-menu__links\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -578,7 +602,7 @@ func mobileMenu(v LayoutView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</div></div></nav></div></template>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</div></div></nav></div></template>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -603,30 +627,30 @@ func mobileNavLink(href, label, section, description string, v LayoutView) templ
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<a class=\"mobile-menu__link\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<a class=\"mobile-menu__link\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(href).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 188, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 204, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if v.Section == section {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, " aria-current")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " aria-current")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "><span class=\"mobile-menu__icon\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "><span class=\"mobile-menu__icon\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -634,33 +658,33 @@ func mobileNavLink(href, label, section, description string, v LayoutView) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</span> <span><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</span> <span><strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 190, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 206, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</strong><small>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "</strong><small>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 190, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 206, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</small></span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</small></span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -668,7 +692,7 @@ func mobileNavLink(href, label, section, description string, v LayoutView) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -704,7 +728,7 @@ func vlruLinks() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<a href=\"https://www.vl.ru/\" target=\"_blank\" rel=\"noopener\">VL.ru</a> <a href=\"https://www.vl.ru/afisha\" target=\"_blank\" rel=\"noopener\">Афиша</a> <a href=\"https://www.vl.ru/weather\" target=\"_blank\" rel=\"noopener\">Погода</a> <a href=\"https://www.farpost.ru/\" target=\"_blank\" rel=\"noopener\">Фарпост</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<a href=\"https://www.vl.ru/\" target=\"_blank\" rel=\"noopener\">VL.ru</a> <a href=\"https://www.vl.ru/afisha\" target=\"_blank\" rel=\"noopener\">Афиша</a> <a href=\"https://www.vl.ru/weather\" target=\"_blank\" rel=\"noopener\">Погода</a> <a href=\"https://www.farpost.ru/\" target=\"_blank\" rel=\"noopener\">Фарпост</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -729,7 +753,7 @@ func footer() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<footer class=\"footer\"><div class=\"container\"><div class=\"footer__top\"><div class=\"footer__about\"><a class=\"brand\" href=\"/\" aria-label=\"VL.ru Места — на главную\"><img class=\"brand__logo\" src=\"/brand/vlru-logo.svg\" alt=\"\" width=\"58\" height=\"30\"> <span class=\"brand__divider\" aria-hidden=\"true\"></span> <span class=\"brand__name\">Места</span></a><p>Город, природа и море Владивостока и Приморья на одной карте. Места добавляют жители, редакция проверяет.</p></div><div><h2 class=\"footer__title\">Места</h2><ul class=\"footer__list\"><li><a href=\"/\">Карта</a></li><li><a href=\"/catalog\">Справочник</a></li><li><a href=\"/now\">Сейчас</a></li><li><a href=\"/add\">Добавить место</a></li></ul></div><div><h2 class=\"footer__title\">Помощь</h2><ul class=\"footer__list\"><li><a href=\"/rules\">Правила меток</a></li><li><a href=\"/rules?section=moderation\">Как мы проверяем места</a></li><li><a href=\"/add?type=fix\">Сообщить об ошибке</a></li></ul></div><div><h2 class=\"footer__title\">VL.ru</h2><ul class=\"footer__list\"><li><a href=\"https://www.vl.ru/\" target=\"_blank\" rel=\"noopener\">VL.ru</a></li><li><a href=\"https://www.vl.ru/afisha\" target=\"_blank\" rel=\"noopener\">Афиша</a></li><li><a href=\"https://www.vl.ru/weather\" target=\"_blank\" rel=\"noopener\">Погода</a></li><li><a href=\"https://www.farpost.ru/\" target=\"_blank\" rel=\"noopener\">Фарпост</a></li></ul></div></div><div class=\"footer__bottom\"><span>© 2003–2026 ООО «Фарпост». Портал VL.ru</span> <span>Описания и метки проверяются редакцией. Фото — Wikimedia Commons, авторы указаны на страницах мест.</span></div></div></footer>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<footer class=\"footer\"><div class=\"container\"><div class=\"footer__top\"><div class=\"footer__about\"><a class=\"brand\" href=\"/\" aria-label=\"Пошли — на главную\"><img class=\"brand__logo\" src=\"/brand/poshli-mark.svg\" alt=\"\" width=\"30\" height=\"30\"> <span class=\"brand__name\">Пошли</span> <svg class=\"brand__arrow\" width=\"18\" height=\"13\" viewBox=\"0 0 20 14\" fill=\"none\" aria-hidden=\"true\"><path d=\"M1 7h15M12 1l6 6-6 6\" stroke=\"#EA580C\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg></a><p>Город, природа и море Владивостока и Приморья на одной карте. Места добавляют жители, редакция проверяет.</p></div><div><h2 class=\"footer__title\">Пошли</h2><ul class=\"footer__list\"><li><a href=\"/\">Карта</a></li><li><a href=\"/catalog\">Справочник</a></li><li><a href=\"/now\">Сейчас</a></li><li><a href=\"/add\">Добавить место</a></li></ul></div><div><h2 class=\"footer__title\">Помощь</h2><ul class=\"footer__list\"><li><a href=\"/rules\">Правила меток</a></li><li><a href=\"/rules?section=moderation\">Как мы проверяем места</a></li><li><a href=\"/add?type=fix\">Сообщить об ошибке</a></li></ul></div><div><h2 class=\"footer__title\">VL.ru</h2><ul class=\"footer__list\"><li><a href=\"https://www.vl.ru/\" target=\"_blank\" rel=\"noopener\">VL.ru</a></li><li><a href=\"https://www.vl.ru/afisha\" target=\"_blank\" rel=\"noopener\">Афиша</a></li><li><a href=\"https://www.vl.ru/weather\" target=\"_blank\" rel=\"noopener\">Погода</a></li><li><a href=\"https://www.farpost.ru/\" target=\"_blank\" rel=\"noopener\">Фарпост</a></li></ul></div></div><div class=\"footer__bottom\"><span>© 2003–2026 ООО «Фарпост». Портал VL.ru</span> <span>Описания и метки проверяются редакцией. Фото — Wikimedia Commons, авторы указаны на страницах мест.</span></div></div></footer>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -756,33 +780,33 @@ func LiveCount(count int) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if count > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<span class=\"nav__live\"><span class=\"live-dot\" aria-hidden=\"true\"></span><span aria-hidden=\"true\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<span class=\"nav__live\"><span class=\"live-dot\" aria-hidden=\"true\"></span><span aria-hidden=\"true\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 264, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 282, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</span><span class=\"visually-hidden\">, активных меток: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</span><span class=\"visually-hidden\">, активных меток: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 264, Col: 189}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 282, Col: 189}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</span></span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</span></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

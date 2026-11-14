@@ -148,6 +148,12 @@ export function clearRoute() {
   routeState.recompute();
 }
 
+/** Полная замена состава маршрута (например, «Мне повезёт» подставил готовый). */
+export function replaceRoute(ids) {
+  storage.set(ROUTE_KEY, ids.slice(0, MAX_STOPS));
+  routeState.recompute();
+}
+
 export function setRouteMode(mode) {
   storage.set(ROUTE_MODE_KEY, mode);
   routeState.recompute();

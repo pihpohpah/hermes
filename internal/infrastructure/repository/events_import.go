@@ -38,8 +38,8 @@ func (r *EventRepository) UpsertImported(ctx context.Context, event models.Event
 			starts_at, ends_at, external_id, location
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-			CASE WHEN $13 IS NULL THEN NULL
-			     ELSE ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography END)
+			CASE WHEN $13::float8 IS NULL THEN NULL
+			     ELSE ST_SetSRID(ST_MakePoint($13::float8, $14::float8), 4326)::geography END)
 		ON CONFLICT (external_id) WHERE external_id IS NOT NULL
 		DO UPDATE SET
 			title = EXCLUDED.title,

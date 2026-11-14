@@ -257,7 +257,7 @@ export const detailView = {
       const category = categoryOf(item);
       const scenario = SCENARIO_BY_ID[item.scenario];
       const place = item.placeId ? peekItem(item.placeId) : null;
-      document.title = `${item.title} — Места VL.ru`;
+      document.title = `${item.title} — Пошли VL.ru`;
 
       render(
         target,

@@ -6,7 +6,7 @@ import "github.com/pihpohpah/hermes/internal/application/presenter"
 
 templ RulesPage(view RulesView) {
 	@Layout(LayoutView{
-		Title:   "Правила — Места VL.ru",
+		Title:   "Правила — Пошли VL.ru",
 		Section: "",
 		User:    view.User,
 	}) {
@@ -72,7 +72,7 @@ func rulesList() []ruleDef {
 // NotFoundPage — 404 для несуществующих путей.
 templ NotFoundPage(user *presenter.User) {
 	@Layout(LayoutView{
-		Title:   "Страница не найдена — Места VL.ru",
+		Title:   "Страница не найдена — Пошли VL.ru",
 		Section: "",
 		User:    user,
 	}) {

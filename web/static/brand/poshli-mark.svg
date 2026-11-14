@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Пошли">
+  <defs>
+    <linearGradient id="poshli-bg" x1="48" y1="4" x2="48" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="88" height="88" rx="26" fill="url(#poshli-bg)"/>
+  <path fill="#FFFFFF" d="M48 78c-8-13-21-21-21-33a21 21 0 1 1 42 0c0 12-13 20-21 33z"/>
+  <circle cx="51" cy="43" r="9.5" fill="#5B21B6"/>
+  <circle cx="48" cy="40" r="8.5" fill="#EA580C"/>
+</svg>

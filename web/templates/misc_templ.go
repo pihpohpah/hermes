@@ -73,7 +73,7 @@ func RulesPage(view RulesView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   "Правила — Места VL.ru",
+			Title:   "Правила — Пошли VL.ru",
 			Section: "",
 			User:    view.User,
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
@@ -224,7 +224,7 @@ func NotFoundPage(user *presenter.User) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   "Страница не найдена — Места VL.ru",
+			Title:   "Страница не найдена — Пошли VL.ru",
 			Section: "",
 			User:    user,
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)

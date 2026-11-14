@@ -1,5 +1,5 @@
 /**
- * Схематичный стиль карты «Места».
+ * Схематичный стиль карты «Пошли».
  *
  * Данные — векторные тайлы OpenStreetMap в схеме OpenMapTiles от OpenFreeMap (без ключа, бесплатно).
  * Стиль собран с нуля: только суша, вода, зелень, дороги, паромы и подписи на русском.
@@ -54,7 +54,7 @@ export function buildStyle() {
 
   return {
     version: 8,
-    name: 'VL.ru Места — схематичный',
+    name: 'VL.ru Пошли — схематичный',
     glyphs: GLYPHS_URL,
     sources: {
       osm: { type: 'vector', url: TILES_URL, attribution: ATTRIBUTION },

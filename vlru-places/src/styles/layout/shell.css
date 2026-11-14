@@ -133,6 +133,12 @@
   letter-spacing: var(--tracking-snug);
 }
 
+.brand__arrow {
+  display: block;
+  flex: none;
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .nav {
   display: flex;
   align-items: center;
@@ -331,7 +337,8 @@
   }
 
   .brand__divider,
-  .brand__name {
+  .brand__name,
+  .brand__arrow {
     display: none;
   }
 }
@@ -396,6 +403,7 @@
 
   .brand__divider,
   .brand__name,
+  .brand__arrow,
   .header__add,
   .header__login-text {
     display: none;

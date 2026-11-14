@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "name": "Места VL.ru · Приморский край",
+  "name": "Пошли VL.ru · Приморский край",
   "metadata": {
     "attribution": "© OpenStreetMap contributors, ODbL 1.0",
     "hermes:colors": "var(--map-*) — CSS-токены из web/static/css/app.css, подставляются клиентом (web/static/js/app/map-style.js)"

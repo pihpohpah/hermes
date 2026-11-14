@@ -225,6 +225,7 @@ func runListen(
 		Pages:             pages,
 		Fragments:         httproutes.NewFragments(logger, pages),
 		MapItems:          httproutes.NewMapItems(logger, pages),
+		Lucky:             httproutes.NewLucky(logger, pages),
 		Item:              httproutes.NewItem(logger, pages),
 		Logout:            httproutes.NewLogoutHandler(logger, sessionRepo, cfg.IsProd()),
 		UpdateUser:        httproutes.NewUpdateCurrentUserHandler(logger, userRepo),

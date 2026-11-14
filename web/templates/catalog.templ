@@ -12,7 +12,7 @@ import (
 
 templ CatalogPage(view CatalogView) {
 	@Layout(LayoutView{
-		Title:    "Справочник — Места VL.ru",
+		Title:    "Справочник — Пошли VL.ru",
 		Section:  "catalog",
 		User:     view.User,
 		Scenario: view.Query.Scenario,
@@ -162,7 +162,7 @@ templ catalogGrid(view CatalogView) {
 		<div x-data={ "{ shown: " + strconv.Itoa(pageSize) + " }" }>
 			<ul class={ catalogGridClass(q.View) } role="list">
 				for i, item := range view.Items {
-					<li x-data={ "{ i: " + strconv.Itoa(i) + " }" } x-show={ "$parent.shown > i" }>
+					<li x-show={ "shown > " + strconv.Itoa(i) }>
 						@placeCard(item, layout, i < 4)
 					</li>
 				}

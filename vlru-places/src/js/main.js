@@ -23,7 +23,7 @@ import { countActivePins } from './api/pins.js';
 import { store } from './core/store.js';
 import { SCENARIO_BY_ID } from './data/taxonomy.js';
 
-const APP_TITLE = 'Места — VL.ru';
+const APP_TITLE = 'Пошли — VL.ru';
 const STAGE_VIEWS = {
   explore: { title: 'Карта', section: 'map' },
   now: { title: 'Сейчас', section: 'now' },

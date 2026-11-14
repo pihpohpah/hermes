@@ -134,7 +134,7 @@ func AddPage(view AddView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   addTitle(view.Type) + " — Места VL.ru",
+			Title:   addTitle(view.Type) + " — Пошли VL.ru",
 			Section: "",
 			User:    view.User,
 			WithMap: true,
@@ -766,7 +766,7 @@ func AddSuccessPage(view AddSuccessView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   "Отправлено — Места VL.ru",
+			Title:   "Отправлено — Пошли VL.ru",
 			Section: "",
 			User:    view.User,
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)

@@ -68,7 +68,7 @@ func ProfilePage(view ProfileView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   "Профиль — Места VL.ru",
+			Title:   "Профиль — Пошли VL.ru",
 			Section: "",
 			User:    view.User,
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)

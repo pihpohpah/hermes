@@ -12,7 +12,7 @@ import (
 
 templ AddPage(view AddView) {
 	@Layout(LayoutView{
-		Title:   addTitle(view.Type) + " — Места VL.ru",
+		Title:   addTitle(view.Type) + " — Пошли VL.ru",
 		Section: "",
 		User:    view.User,
 		WithMap: true,
@@ -351,7 +351,7 @@ templ addStepSend(view AddView) {
 // AddSuccessPage — подтверждение отправки предложения.
 templ AddSuccessPage(view AddSuccessView) {
 	@Layout(LayoutView{
-		Title:   "Отправлено — Места VL.ru",
+		Title:   "Отправлено — Пошли VL.ru",
 		Section: "",
 		User:    view.User,
 	}) {

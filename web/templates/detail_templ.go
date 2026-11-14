@@ -1191,7 +1191,7 @@ func DetailPage(view DetailView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:   item.Title + " — Места VL.ru",
+			Title:   item.Title + " — Пошли VL.ru",
 			Section: "catalog",
 			User:    view.User,
 			WithMap: true,

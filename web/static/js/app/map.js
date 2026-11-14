@@ -472,7 +472,9 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
     getCenter: () => (map ? map.getCenter().toArray() : initialView.center),
     getZoom: () => (map ? map.getZoom() : initialView.zoom),
 
-    setRoute({ stops = [], geometry = null, approximate = false } = {}) {
+    // Аргумент может быть null (очистка маршрута), дефолт `{}` срабатывает только для undefined.
+    setRoute(params) {
+      const { stops = [], geometry = null, approximate = false } = params || {};
       whenReady(() => {
         state.stopMarkers.forEach((marker) => marker.remove());
         state.stopMarkers = stops.map((stop, index) => {

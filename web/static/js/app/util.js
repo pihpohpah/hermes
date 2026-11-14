@@ -1,4 +1,4 @@
-/* Места VL.ru — базовые утилиты клиента (DOM, форматирование, хранилище). */
+/* Пошли VL.ru — базовые утилиты клиента (DOM, форматирование, хранилище). */
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));

@@ -72,7 +72,7 @@ func MapPage(view MapView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:    "Места — VL.ru",
+			Title:    "Пошли — VL.ru",
 			Section:  "map",
 			User:     view.User,
 			LivePins: view.LivePins,

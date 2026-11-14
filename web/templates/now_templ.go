@@ -72,7 +72,7 @@ func NowPage(view NowView) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(LayoutView{
-			Title:    "Сейчас — Места VL.ru",
+			Title:    "Сейчас — Пошли VL.ru",
 			Section:  "now",
 			User:     view.User,
 			LivePins: view.LivePins,

@@ -9,15 +9,17 @@ export function footer() {
       <div class="container">
         <div class="footer__top">
           <div class="footer__about">
-            <a class="brand" href="#/map" aria-label="VL.ru Места — на главную">
-              <img class="brand__logo" src="assets/brand/vlru-logo.svg" alt="" width="58" height="30" />
-              <span class="brand__divider" aria-hidden="true"></span>
-              <span class="brand__name">Места</span>
+            <a class="brand" href="#/map" aria-label="Пошли — на главную">
+              <img class="brand__logo" src="assets/brand/poshli-mark.svg" alt="" width="30" height="30" />
+              <span class="brand__name">Пошли</span>
+              <svg class="brand__arrow" width="18" height="13" viewBox="0 0 20 14" fill="none" aria-hidden="true">
+                <path d="M1 7h15M12 1l6 6-6 6" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </a>
             <p>Город, природа и море Владивостока и Приморья на одной карте. Места добавляют жители, редакция проверяет.</p>
           </div>
           <div>
-            <h2 class="footer__title">Места</h2>
+            <h2 class="footer__title">Пошли</h2>
             <ul class="footer__list">
               <li><a href="#/map">Карта</a></li>
               <li><a href="#/catalog">Справочник</a></li>
