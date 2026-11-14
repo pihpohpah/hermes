@@ -9,10 +9,119 @@
 ## Стек
 
 - Backend: Go 1.27, PostgreSQL, PostGIS
-- Frontend: htmx + Alpine.js (основа), React 18 + Vite (карта)
-  - Карта: MapLibre GL JS + PMTiles (векторные тайлы, офлайн-архив региона)
-  - Клиентский кеш: IndexedDB (Dexie.js), Cache Storage
-  - Service Worker: Workbox (precache оболочки, runtime-cache фрагментов)
+- Frontend: серверный рендер templ + htmx + Alpine.js (основа, без React), картография — MapLibre GL JS + PMTiles (векторные тайлы, офлайн-архив региона)
+
+## Локальный запуск
+
+Ниже — полный цикл «с нуля до работающего сайта». Предполагается macOS/Linux, Docker для PostgreSQL.
+
+### 0. Требования
+
+- Go 1.27.3 (ставится через `mise install`, см. `mise.toml`)
+- Docker — для PostgreSQL 15+ с PostGIS (или свой инстанс с уже созданными расширениями)
+- `mise` — опционально, удобные алиасы (`mise run seed` и т.д.); все команды ниже даны и в виде `go run ...`
+
+### 1. Окружение
+
+```bash
+mise run bootstrap        # создаёт .env из .env.example и качает модули
+# или вручную: cp .env.example .env
+```
+
+Ключевые переменные (полный список — в `.env.example`):
+
+| Переменная | По умолчанию | Что влияет |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/hermes?sslmode=disable` | подключение к БД |
+| `PORT` | `8080` | порт HTTP-сервера |
+| `WEB_DIR` | `./web/static` | корень статики (CSS/JS/загруженные фото) |
+| `WEATHER_MODE` | `real` | `mock` — демо-данные без сети; `real` — запросы к Open-Meteo |
+| `PHOTOS_STORAGE_DIR` | `<WEB_DIR>/uploads` | куда писать загруженные фото |
+| `PHOTOS_MAX_UPLOAD_MB` | `10` | лимит одной загрузки фото |
+
+### 2. Поднять PostgreSQL
+
+```bash
+docker run -d --name postgres-1 \
+  -e POSTGRES_DB=hermes \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 5432:5432 \
+  postgis/postgis:15-3.4
+```
+
+Имена контейнера/БД/пользователя должны совпадать с `POSTGRES_CONTAINER`, `POSTGRES_DB`, `POSTGRES_USER` в `.env` (таска миграций использует их). Со своим инстансом просто поправьте `DATABASE_URL`.
+
+### 3. Применить миграции
+
+Миграции — идемпотентные SQL-файлы в `migrations/` (`CREATE ... IF NOT EXISTS`), накатываются в любом порядке повторно:
+
+```bash
+mise run migrate-up
+# или вручную, без mise/docker-exec:
+psql "postgres://postgres:postgres@localhost:5432/hermes?sslmode=disable" \
+  -v ON_ERROR_STOP=1 -f migrations/001_init.sql
+```
+
+Откат таблиц: `mise run migrate-down`.
+
+### 4. Наполнить тестовыми данными
+
+```bash
+mise run seed        # 5 мест вокруг Владивостока (we смотровые, бухты, парк)
+# = go run ./cmd/server seed
+```
+
+Сид создаёт только места. Погода и оценки условий считаются отдельными командами — так сид никогда не выдаёт фейковые «готовые» рекомендации:
+
+```bash
+# вариант А: без интернета к Open-Meteo — явные демо-данные
+WEATHER_MODE=mock go run ./cmd/server weather_load
+WEATHER_MODE=mock go run ./cmd/server conditions_assess
+
+# вариант Б: реальный прогноз (нужен выход к api.open-meteo.com)
+go run ./cmd/server weather_load            # скользящее окно: -6 ч + сегодня + 9 дней
+go run ./cmd/server conditions_assess       # блок «Еду / Осторожно / Нет» на карточках мест
+```
+
+Дополнительно:
+
+```bash
+go run ./cmd/server elevations_enrich       # высоты точек (нужны для горной погоды)
+NAME=Аня go run ./cmd/server user_create    # пользователь для входа (или просто войдите в UI по имени)
+go run ./cmd/server pins_cleanup            # снять просроченные метки «Сейчас»
+```
+
+### 5. Запустить сервер
+
+```bash
+mise run dev                          # air с hot-reload, если установлен; иначе go run
+# или явно:
+go run ./cmd/server listen            # аргумент listen можно опустить — он дефолтный
+```
+
+Сайт: **http://localhost:8080** — карта с панелью, каталог, «Сейчас», добавление места/события, профиль. Вход — по имени, одним шагом, сессия в cookie. Полезные страницы: `/health` (liveness), `/catalog`, `/now`, `/rules`, `/profile`.
+
+### 6. Проверка, что всё живо
+
+```bash
+curl -s localhost:8080/health                                 # {"success":true,...}
+curl -s "localhost:8080/api/map-items" | head -c 200          # точки для карты
+curl -s "localhost:8080/fragments/live-count"                 # счётчик «на карте сейчас»
+```
+
+Если карта пустая — не прогнан `seed`; если на карточках нет блока условий — не прогнан `conditions_assess`; если штормит погода — смотрите `WEATHER_MODE` (при недоступном Open-Meteo ставьте `mock`).
+
+### Полезные команды разработчика
+
+```bash
+go test ./...                              # тесты
+go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate   # пересобрать шаблоны из web/templates/*.templ
+mise run templ                             # то же через mise
+go vet ./...                               # vet
+```
+
+Загруженные пользователями фото лежат в `web/static/uploads/` (путь задаётся `PHOTOS_STORAGE_DIR`) и раздаются сами — каталог добавлен в `.gitignore`, в репозиторий не коммитится.
 
 ## Погода и оценка условий
 
@@ -162,13 +271,15 @@ WEATHER_MODE=mock go run ./cmd/server weather_load   # явный demo-режи�
 с другим телом — 409. Тип `fix` требует `fix_id` и `fix_reasons`, `event` — `date`.
 
 - `POST /submissions` · `GET /submissions?status=review` · `GET /submissions/{id}`
-- `POST /photos` — загрузка фото (multipart, поле `file`, лимит `PHOTOS_MAX_UPLOAD_MB`, по умолчанию 10 МБ). Запись сразу падает в таблицу `photos` со статусом `moderation`: id — UUIDv7 (генерируется в приложении, сортируется по времени), фиксируются `size_bytes` и `sha256`, автор — из сессии. Жизненный цикл: `moderation → active/rejected`, удаление — мягкое (`deleted`). Колонки атрибуции (`author`, `license`, `license_url`, `source_url`) заполнятся при модерации; байты файла и URL появятся с подключением хранилища. Ответ — `202 {id, status: "moderation"}`.
+- `POST /photos` — загрузка фото (multipart, поле `file`, лимит `PHOTOS_MAX_UPLOAD_MB`, по умолчанию 10 МБ; JPG/PNG/WebP). Файл сразу сохраняется на диск (`PHOTOS_STORAGE_DIR`, по умолчанию `<WEB_DIR>/uploads/photos/гггг-мм/{id}.jpg`), строка падает в `photos` со статусом `active`: id — UUIDv7 (совпадает с именем файла), фиксируются размеры и `sha256`, автор — из сессии. Хранятся два JPEG-варианта: полный (сторона ≤ 1600 px) и миниатюра (≤ 640 px). Ответ — `201 {id, status, url, url_sm, width, height}`; ошибки: 400 не-изображение, 401 без входа, 403 без CSRF, 413 сверх лимита. Фото прицепляются к заявке полем `photos[]` (`src`, `src_sm`, `width`, `height`) и показываются в профиле миниатюрой.
 
 API: `GET /forecast/place/{id}?activity=sup&date=YYYY-MM-DD` возвращает
 почасовые оценки, `sources` (источник, доступность, demo), `contributions`,
 `warnings` и `limitations`.
 
 ## Офлайн-стратегия
+
+> Текущая реализация фронтенда (`web/`) — серверный рендер + htmx/Alpine: Service Worker и IndexedDB-кэш из списка ниже пока не подключены, это план по прототипу `vlru-places`.
 
 - Оболочка (HTML/CSS/JS) - precache, обнова при деплое.
 - Страницы `/pages/*` - cache-first после первого визита.
