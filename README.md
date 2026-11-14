@@ -126,6 +126,69 @@ go vet ./...                               # vet
 
 Загруженные пользователями фото лежат в `web/static/uploads/` (путь задаётся `PHOTOS_STORAGE_DIR`) и раздаются сами — каталог добавлен в `.gitignore`, в репозиторий не коммитится.
 
+## Docker и деплой
+
+### Файлы окружения
+
+- `.env` — секреты и прикладные настройки (`TELEGRAM_BOT_TOKEN`, `OPENMETEO_API_KEY`, `SENTRY_DSN` и т.п.). Compose передаёт этот файл в контейнеры через `env_file`; `DATABASE_URL` и `PORT` контейнеры получают из `compose.yaml`, дублировать их в `.env` не нужно.
+- `deploy.env` — не секретные параметры образа, HTTP-порта, кредов базы и SSH-деплоя. Эти значения используются для подстановок Compose; SSH-настройки скрипта в контейнер не передаются.
+
+Оба файла игнорируются Git и Docker build context. В репозитории хранятся только `.env.example` и `deploy.env.example`.
+
+```bash
+cp deploy.env.example deploy.env        # заполнить параметры площадки
+chmod 600 .env
+```
+
+### Деплой на Linux-сервер
+
+Нужны Docker с buildx локально, Docker Engine и Compose plugin на сервере, SSH-доступ и право
+пользователя `DEPLOY_USER` запускать Docker. Локально и на сервере выполнить `docker login ghcr.io`.
+Токен registry в `deploy.env` не записывать. Для ARM-сервера изменить `BUILD_PLATFORM` на
+`linux/arm64`.
+
+Перед первым деплоем отдельно передать секреты (пример для значений из `deploy.env.example`):
+
+```bash
+ssh deploy@server.example.com 'install -d -m 700 /opt/hermes'
+scp .env deploy@server.example.com:/opt/hermes/.env
+ssh deploy@server.example.com 'chmod 600 /opt/hermes/.env'
+```
+
+Затем заполнить `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `HERMES_IMAGE` и другие параметры в `deploy.env`:
+
+```bash
+./scripts/deploy.sh
+```
+
+Скрипт собирает Linux-образ (включая фронтенд-ассеты), публикует его в registry с тегом короткого
+Git SHA (или `HERMES_TAG`), копирует на сервер только Compose и не секретный `deploy.env`, выполняет
+`pull`, поднимает `db`, ждёт его healthy, накатывает идемпотентные миграции из `migrations/`, поднимает
+остальное и ждёт healthy-статуса `api`. Секретный `.env` скрипт не копирует и не выводит. Для повторного
+выката уже опубликованного образа без сборки используется `SKIP_BUILD=1`.
+
+Офлайн-карты в образ не входят: соберите их (`mise run map-download`, `mise run map-relief`) и
+положите на сервер в `/opt/hermes/web/static/pmtiles/` — каталог примонтирован в контейнер read-only.
+Фото пользователей хранятся в named volume `hermes_uploads`.
+
+Частые операции на сервере:
+
+```bash
+cd /opt/hermes
+docker compose --env-file deploy.env ps
+docker compose --env-file deploy.env logs --tail=100 -f api
+curl --fail http://127.0.0.1:8080/health
+
+# Обновить Compose без пересборки того же тега (запускать локально, не на сервере):
+SKIP_BUILD=1 ./scripts/deploy.sh
+
+# Откат на ранее опубликованный образ (запускать локально):
+HERMES_TAG=<previous_git_sha> SKIP_BUILD=1 ./scripts/deploy.sh
+
+# Консольные команды (seed, user_create, events_import и т.д.):
+docker compose --env-file deploy.env run --rm --entrypoint /app/hermes console seed
+```
+
 ## Погода и оценка условий
 
 Данные и их оценка разделены:
