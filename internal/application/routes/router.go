@@ -14,49 +14,51 @@ import (
 )
 
 type Handlers struct {
-	Health             *httproutes.HealthCheckHandler
-	ListPlaces         *httproutes.ListPlacesHandler
-	GetPlace           *httproutes.GetPlaceHandler
-	CreatePlace        *httproutes.CreatePlaceHandler
-	GetPlaceForecast   *httproutes.GetPlaceForecastHandler
-	RefreshForecast    *httproutes.RefreshForecastHandler
-	ListSimilarPlaces  *httproutes.ListSimilarPlacesHandler
-	PlaceStats         *httproutes.PlaceStatsHandler
-	ListEvents         *httproutes.ListEventsHandler
-	GetEvent           *httproutes.GetEventHandler
-	ListCollections    *httproutes.ListCollectionsHandler
-	GetCollection      *httproutes.GetCollectionHandler
-	ListPins           *httproutes.ListPinsHandler
-	GetPin             *httproutes.GetPinHandler
-	CreatePin          *httproutes.CreatePinHandler
-	DeletePin          *httproutes.DeletePinHandler
-	SetPinGoing        *httproutes.SetPinGoingHandler
-	ReportPin          *httproutes.ReportPinHandler
-	ListTrips          *httproutes.ListTripsHandler
-	CreateTrip         *httproutes.CreateTripHandler
-	UpdateTrip         *httproutes.UpdateTripHandler
-	ListReports        *httproutes.ListReportsHandler
-	CreateReport       *httproutes.CreateReportHandler
-	CreateUser         *httproutes.CreateUserHandler
-	GetCurrentUser     *httproutes.GetCurrentUserHandler
-	CreateSubmission   *httproutes.CreateSubmissionHandler
-	GetSubmission      *httproutes.GetSubmissionHandler
-	ListSubmissions    *httproutes.ListSubmissionsHandler
-	PhotoUpload        *httproutes.PhotoUploadHandler
-	RequireAuth        func(http.Handler) http.Handler
-	LoadAuth           func(http.Handler) http.Handler
-	AllowedOrigins     []string
-	Pages              *httproutes.Pages
-	Fragments          *httproutes.Fragments
-	MapItems           *httproutes.MapItems
-	Item               *httproutes.Item
-	Logout             *httproutes.LogoutHandler
-	UpdateUser         *httproutes.UpdateCurrentUserHandler
-	MapAssets          *httproutes.MapAssetsHandler
-	MapStyle           *httproutes.MapStyleHandler
-	PMTiles            *httproutes.PMTilesHandler
-	Relief             *httproutes.PMTilesHandler
-	WebDir             string
+	Health            *httproutes.HealthCheckHandler
+	ListPlaces        *httproutes.ListPlacesHandler
+	GetPlace          *httproutes.GetPlaceHandler
+	CreatePlace       *httproutes.CreatePlaceHandler
+	GetPlaceForecast  *httproutes.GetPlaceForecastHandler
+	RefreshForecast   *httproutes.RefreshForecastHandler
+	ListSimilarPlaces *httproutes.ListSimilarPlacesHandler
+	PlaceStats        *httproutes.PlaceStatsHandler
+	ListEvents        *httproutes.ListEventsHandler
+	GetEvent          *httproutes.GetEventHandler
+	ListCollections   *httproutes.ListCollectionsHandler
+	GetCollection     *httproutes.GetCollectionHandler
+	ListPins          *httproutes.ListPinsHandler
+	GetPin            *httproutes.GetPinHandler
+	CreatePin         *httproutes.CreatePinHandler
+	DeletePin         *httproutes.DeletePinHandler
+	SetPinGoing       *httproutes.SetPinGoingHandler
+	ReportPin         *httproutes.ReportPinHandler
+	ListTrips         *httproutes.ListTripsHandler
+	CreateTrip        *httproutes.CreateTripHandler
+	UpdateTrip        *httproutes.UpdateTripHandler
+	ListReports       *httproutes.ListReportsHandler
+	CreateReport      *httproutes.CreateReportHandler
+	CreateUser        *httproutes.CreateUserHandler
+	GetCurrentUser    *httproutes.GetCurrentUserHandler
+	CreateSubmission  *httproutes.CreateSubmissionHandler
+	GetSubmission     *httproutes.GetSubmissionHandler
+	ListSubmissions   *httproutes.ListSubmissionsHandler
+	PhotoUpload       *httproutes.PhotoUploadHandler
+	RequireAuth       func(http.Handler) http.Handler
+	LoadAuth          func(http.Handler) http.Handler
+	AllowedOrigins    []string
+	Pages             *httproutes.Pages
+	Fragments         *httproutes.Fragments
+	MapItems          *httproutes.MapItems
+	Item              *httproutes.Item
+	Logout            *httproutes.LogoutHandler
+	UpdateUser        *httproutes.UpdateCurrentUserHandler
+	TelegramLogin     *httproutes.TelegramLoginHandler
+	TelegramWidget    *httproutes.TelegramWidgetConfigHandler
+	MapAssets         *httproutes.MapAssetsHandler
+	MapStyle          *httproutes.MapStyleHandler
+	PMTiles           *httproutes.PMTilesHandler
+	Relief            *httproutes.PMTilesHandler
+	WebDir            string
 }
 
 func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
@@ -82,6 +84,12 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	}
 	if h.Logout != nil {
 		mux.Handle("POST /users/logout", requireAuth(h.Logout))
+	}
+	if h.TelegramLogin != nil {
+		mux.Handle("POST /auth/telegram", h.TelegramLogin)
+	}
+	if h.TelegramWidget != nil {
+		mux.Handle("GET /auth/telegram/widget", h.TelegramWidget)
 	}
 
 	mux.Handle("GET /places", h.ListPlaces)

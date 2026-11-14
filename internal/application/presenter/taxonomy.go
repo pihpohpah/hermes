@@ -58,6 +58,16 @@ var EventCategories = map[string]Category{
 	"party":      {ID: "party", Label: "Андеграунд", Icon: "mic-vocal"},
 	"lecture":    {ID: "lecture", Label: "Лекция", Icon: "presentation"},
 	"market":     {ID: "market", Label: "Маркет", Icon: "shopping-bag"},
+	// Категории импорта event-agent (webscraper), миграция 002.
+	"theater":    {ID: "theater", Label: "Театр", Icon: "ticket"},
+	"workshop":   {ID: "workshop", Label: "Мастер-класс", Icon: "hammer"},
+	"meetup":     {ID: "meetup", Label: "Митап", Icon: "users"},
+	"conference": {ID: "conference", Label: "Конференция", Icon: "presentation"},
+	"standup":    {ID: "standup", Label: "Стендап", Icon: "mic-vocal"},
+	"quiz":       {ID: "quiz", Label: "Квиз", Icon: "brain"},
+	"kids":       {ID: "kids", Label: "Детям", Icon: "baby"},
+	"film":       {ID: "film", Label: "Кино", Icon: "clapperboard"},
+	"other":      {ID: "other", Label: "Разное", Icon: "map-pin"},
 }
 
 type PinKind struct {

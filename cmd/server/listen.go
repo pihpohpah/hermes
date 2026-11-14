@@ -22,9 +22,14 @@ import (
 	"github.com/pihpohpah/hermes/internal/infrastructure/openmeteo"
 	"github.com/pihpohpah/hermes/internal/infrastructure/photostore"
 	"github.com/pihpohpah/hermes/internal/infrastructure/repository"
+	"github.com/pihpohpah/hermes/internal/infrastructure/telegram"
 )
 
 const idleTimeout = time.Minute
+
+// telegramGetMeTimeout ограничивает стартовый getMe: сервер не должен ждать
+// бота дольше этого, чтобы подняться.
+const telegramGetMeTimeout = 20 * time.Second
 
 // photoStoreFromConfig resolves the photo storage root and the public URL
 // prefix. By default photos go to <WebDir>/uploads and are served at
@@ -119,10 +124,44 @@ func runListen(
 	createPhotoUC := usecase.NewCreatePhotoUseCase(photoRepo)
 	photoStore, photoPrefix := photoStoreFromConfig(cfg)
 	if photoPrefix == "" {
-		logger.Warn("photos storage dir is outside the web dir, uploads will not be served; set PHOTOS_STORAGE_DIR inside WebDir")
+		logger.Warn(
+			"photos storage dir is outside the web dir, uploads will not be served; set PHOTOS_STORAGE_DIR inside WebDir",
+		)
 	}
 
 	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
+	identityRepo := repository.NewIdentityRepository(pool)
+	telegramLoginUC := usecase.NewTelegramLoginUseCase(
+		cfg.TelegramConfig.BotToken,
+		userRepo,
+		identityRepo,
+		sessionRepo,
+		txManager,
+		cfg.TTL,
+	)
+
+	// Bot API: нужен для getMe (username виджета, если не задан в конфиге) и
+	// будущих серверных вызовов. Каждая неудачная попытка меняет прокси.
+	telegramClient := telegram.NewClient(telegram.Config{
+		BaseURL:     cfg.TelegramConfig.APIBase,
+		Token:       cfg.TelegramConfig.BotToken,
+		Proxies:     cfg.TelegramConfig.ProxyURLList(),
+		MaxAttempts: cfg.TelegramConfig.MaxAttempts,
+	}, logger)
+
+	telegramBotUsername := cfg.TelegramConfig.BotUsername
+	if telegramClient.Enabled() && telegramBotUsername == "" {
+		getMeCtx, getMeCancel := context.WithTimeout(ctx, telegramGetMeTimeout)
+		me, err := telegramClient.GetMe(getMeCtx)
+		getMeCancel()
+		if err != nil {
+			logger.Warn("telegram getMe failed, widget stays without username", slog.Any("error", err))
+		} else {
+			telegramBotUsername = me.Username
+			logger.Info("telegram bot resolved", slog.String("username", me.Username), slog.Int64("id", me.ID))
+		}
+	}
+
 	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
 
 	submissionRepo := repository.NewSubmissionRepository(pool)
@@ -151,49 +190,51 @@ func runListen(
 	)
 
 	router := routes.NewHTTPRouter(logger, routes.Handlers{
-		Health:             httproutes.NewHealthCheckHandler(logger, pool),
-		ListPlaces:         httproutes.NewListPlacesHandler(logger, listPlacesUC),
-		GetPlace:           httproutes.NewGetPlaceHandler(logger, getPlaceUC),
-		CreatePlace:        httproutes.NewCreatePlaceHandler(logger, createPlaceUC),
-		GetPlaceForecast:   httproutes.NewGetPlaceForecastHandler(logger, getForecastUC),
-		RefreshForecast:    httproutes.NewRefreshForecastHandler(logger, refreshForecastUC),
-		ListSimilarPlaces:  httproutes.NewListSimilarPlacesHandler(logger, listSimilarUC),
-		PlaceStats:         httproutes.NewPlaceStatsHandler(logger, placeStatsUC),
-		ListEvents:         httproutes.NewListEventsHandler(logger, listEventsUC),
-		GetEvent:           httproutes.NewGetEventHandler(logger, getEventUC),
-		ListCollections:    httproutes.NewListCollectionsHandler(logger, listCollectionsUC),
-		GetCollection:      httproutes.NewGetCollectionHandler(logger, getCollectionUC, placeRepo, eventRepo),
-		ListPins:           httproutes.NewListPinsHandler(logger, listPinsUC),
-		GetPin:             httproutes.NewGetPinHandler(logger, getPinUC),
-		CreatePin:          httproutes.NewCreatePinHandler(logger, createPinUC),
-		DeletePin:          httproutes.NewDeletePinHandler(logger, deletePinUC),
-		SetPinGoing:        httproutes.NewSetPinGoingHandler(logger, setPinGoingUC),
-		ReportPin:          httproutes.NewReportPinHandler(logger, reportPinUC),
-		ListTrips:          httproutes.NewListTripsHandler(logger, listTripsUC),
-		CreateTrip:         httproutes.NewCreateTripHandler(logger, createTripUC),
-		UpdateTrip:         httproutes.NewUpdateTripHandler(logger, updateTripUC),
-		ListReports:        httproutes.NewListReportsHandler(logger, listReportsUC),
-		CreateReport:       httproutes.NewCreateReportHandler(logger, createReportUC),
-		CreateUser:         httproutes.NewCreateUserHandler(logger, createUserUC, cfg.IsProd()),
-		GetCurrentUser:     httproutes.NewGetCurrentUserHandler(logger),
-		CreateSubmission:   httproutes.NewCreateSubmissionHandler(logger, createSubmissionUC),
-		GetSubmission:      httproutes.NewGetSubmissionHandler(logger, getSubmissionUC),
-		ListSubmissions:    httproutes.NewListSubmissionsHandler(logger, listSubmissionsUC),
-		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, createPhotoUC, photoStore, cfg.PhotosConfig.MaxUploadMB<<20),
-		RequireAuth:        authMiddleware.Require,
-		LoadAuth:           authMiddleware.Load,
-		AllowedOrigins:     cfg.AllowedOriginList(),
-		Pages:              pages,
-		Fragments:          httproutes.NewFragments(logger, pages),
-		MapItems:           httproutes.NewMapItems(logger, pages),
-		Item:               httproutes.NewItem(logger, pages),
-		Logout:             httproutes.NewLogoutHandler(logger, sessionRepo, cfg.IsProd()),
-		UpdateUser:         httproutes.NewUpdateCurrentUserHandler(logger, userRepo),
-		MapAssets:          httproutes.NewMapAssetsHandler(cfg.MapDir),
-		MapStyle:           httproutes.NewMapStyleHandler(cfg.MapDir, cfg.ReliefPath),
-		PMTiles:            httproutes.NewPMTilesHandler(logger, cfg.PMTilesPath),
-		Relief:             httproutes.NewPMTilesHandler(logger, cfg.ReliefPath),
-		WebDir:             cfg.WebDir,
+		Health:            httproutes.NewHealthCheckHandler(logger, pool),
+		ListPlaces:        httproutes.NewListPlacesHandler(logger, listPlacesUC),
+		GetPlace:          httproutes.NewGetPlaceHandler(logger, getPlaceUC),
+		CreatePlace:       httproutes.NewCreatePlaceHandler(logger, createPlaceUC),
+		GetPlaceForecast:  httproutes.NewGetPlaceForecastHandler(logger, getForecastUC),
+		RefreshForecast:   httproutes.NewRefreshForecastHandler(logger, refreshForecastUC),
+		ListSimilarPlaces: httproutes.NewListSimilarPlacesHandler(logger, listSimilarUC),
+		PlaceStats:        httproutes.NewPlaceStatsHandler(logger, placeStatsUC),
+		ListEvents:        httproutes.NewListEventsHandler(logger, listEventsUC),
+		GetEvent:          httproutes.NewGetEventHandler(logger, getEventUC),
+		ListCollections:   httproutes.NewListCollectionsHandler(logger, listCollectionsUC),
+		GetCollection:     httproutes.NewGetCollectionHandler(logger, getCollectionUC, placeRepo, eventRepo),
+		ListPins:          httproutes.NewListPinsHandler(logger, listPinsUC),
+		GetPin:            httproutes.NewGetPinHandler(logger, getPinUC),
+		CreatePin:         httproutes.NewCreatePinHandler(logger, createPinUC),
+		DeletePin:         httproutes.NewDeletePinHandler(logger, deletePinUC),
+		SetPinGoing:       httproutes.NewSetPinGoingHandler(logger, setPinGoingUC),
+		ReportPin:         httproutes.NewReportPinHandler(logger, reportPinUC),
+		ListTrips:         httproutes.NewListTripsHandler(logger, listTripsUC),
+		CreateTrip:        httproutes.NewCreateTripHandler(logger, createTripUC),
+		UpdateTrip:        httproutes.NewUpdateTripHandler(logger, updateTripUC),
+		ListReports:       httproutes.NewListReportsHandler(logger, listReportsUC),
+		CreateReport:      httproutes.NewCreateReportHandler(logger, createReportUC),
+		CreateUser:        httproutes.NewCreateUserHandler(logger, createUserUC, cfg.IsProd()),
+		GetCurrentUser:    httproutes.NewGetCurrentUserHandler(logger),
+		CreateSubmission:  httproutes.NewCreateSubmissionHandler(logger, createSubmissionUC),
+		GetSubmission:     httproutes.NewGetSubmissionHandler(logger, getSubmissionUC),
+		ListSubmissions:   httproutes.NewListSubmissionsHandler(logger, listSubmissionsUC),
+		PhotoUpload:       httproutes.NewPhotoUploadHandler(logger, createPhotoUC, photoStore, cfg.PhotosConfig.MaxUploadMB<<20),
+		RequireAuth:       authMiddleware.Require,
+		LoadAuth:          authMiddleware.Load,
+		AllowedOrigins:    cfg.AllowedOriginList(),
+		Pages:             pages,
+		Fragments:         httproutes.NewFragments(logger, pages),
+		MapItems:          httproutes.NewMapItems(logger, pages),
+		Item:              httproutes.NewItem(logger, pages),
+		Logout:            httproutes.NewLogoutHandler(logger, sessionRepo, cfg.IsProd()),
+		UpdateUser:        httproutes.NewUpdateCurrentUserHandler(logger, userRepo),
+		TelegramLogin:     httproutes.NewTelegramLoginHandler(logger, telegramLoginUC, cfg.IsProd()),
+		TelegramWidget:    httproutes.NewTelegramWidgetConfigHandler(logger, telegramBotUsername),
+		MapAssets:         httproutes.NewMapAssetsHandler(cfg.MapDir),
+		MapStyle:          httproutes.NewMapStyleHandler(cfg.MapDir, cfg.ReliefPath),
+		PMTiles:           httproutes.NewPMTilesHandler(logger, cfg.PMTilesPath),
+		Relief:            httproutes.NewPMTilesHandler(logger, cfg.ReliefPath),
+		WebDir:            cfg.WebDir,
 	})
 
 	server := &http.Server{

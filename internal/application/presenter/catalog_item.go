@@ -108,8 +108,8 @@ func CatalogItemFromPlace(in Place) CatalogItem {
 	return out
 }
 
-// CatalogItemFromEvent строит view-model события; venue-данные и координаты
-// подставляются из места проведения, пока своих нет.
+// CatalogItemFromEvent строит view-model события; собственные координаты
+// импортированного события берутся из него самого, иначе — от места проведения.
 func CatalogItemFromEvent(in Event, place *Place) CatalogItem {
 	out := CatalogItem{
 		ID:          in.ID,
@@ -126,6 +126,15 @@ func CatalogItemFromEvent(in Event, place *Place) CatalogItem {
 		Age:         in.Age,
 		PlaceID:     in.PlaceID,
 		PlaceName:   in.PlaceName,
+		PriceFree:   in.PriceFree,
+		PriceLabel:  in.PriceLabel,
+	}
+	if in.Lat != nil && in.Lon != nil {
+		out.Lat = *in.Lat
+		out.Lon = *in.Lon
+		out.HasCoords = true
+		out.Scenario = "city"
+		out.DistanceKm = DistanceFromCenterKm(*in.Lat, *in.Lon)
 	}
 	if place != nil {
 		out.Scenario = string(place.Layer)

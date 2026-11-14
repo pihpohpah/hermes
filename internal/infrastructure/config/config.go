@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -25,6 +26,14 @@ const (
 	defaultWeatherTimeout    = 8 * time.Second
 	defaultWeatherAttempts   = 3
 	defaultWeatherRetryDelay = 300 * time.Millisecond
+	defaultEventAgentBase    = "http://127.0.0.1:8000"
+	defaultEventAgentTimeout = 30 * time.Second
+	defaultEventAgentPoll    = 10 * time.Second
+	defaultEventAgentMaxWait = 25 * time.Minute
+	defaultGeocoderBase      = "https://nominatim.openstreetmap.org"
+	defaultGeocoderTimeout   = 10 * time.Second
+	defaultGeocoderUserAgent = "hermes-events-import/1.0"
+	defaultGeocoderInterval  = 15 * time.Second
 	defaultPMTilesPath       = "./web/static/pmtiles/primorsky-krai-z15.pmtiles"
 	defaultReliefPath        = "./web/static/pmtiles/primorsky-relief.pmtiles"
 	defaultMapDir            = "./web/map"
@@ -58,11 +67,74 @@ type Config struct {
 	AppConfig
 	DatabaseConfig
 	OpenMeteoConfig
+	EventAgentConfig
+	GeocoderConfig
 	LoggerConfig
 	SentryConfig
 	SessionConfig
 	PinsConfig
 	PhotosConfig
+	TelegramConfig
+}
+
+// EventAgentConfig — подключение к HTTP-сервису event-agent (webscraper),
+// который выполняет прогон поиска событий. Импорт дёргает POST /runs и опрашивает
+// GET /runs/{id}, пока прогон не завершится.
+type EventAgentConfig struct {
+	BaseURL      string        `koanf:"EVENTAGENT_BASE_URL" validate:"omitempty,url"`
+	Timeout      time.Duration `koanf:"EVENTAGENT_TIMEOUT" validate:"required"`
+	PollInterval time.Duration `koanf:"EVENTAGENT_POLL_INTERVAL" validate:"required"`
+	// MaxWait — потолок ожидания завершения прогона (run_timeout агента + запас).
+	MaxWait time.Duration `koanf:"EVENTAGENT_MAX_WAIT" validate:"required"`
+}
+
+// GeocoderConfig — геокодинг адресов площадок в координаты. По умолчанию
+// публичный Nominatim: без ключа, но не быстрее одного запроса в секунду
+// (MinInterval) и с обязательным идентифицирующим User-Agent.
+type GeocoderConfig struct {
+	BaseURL     string        `koanf:"GEOCODER_BASE_URL" validate:"omitempty,url"`
+	Timeout     time.Duration `koanf:"GEOCODER_TIMEOUT" validate:"required"`
+	UserAgent   string        `koanf:"GEOCODER_USER_AGENT" validate:"required"`
+	MinInterval time.Duration `koanf:"GEOCODER_MIN_INTERVAL" validate:"required"`
+}
+
+// TelegramConfig включает вход через Telegram Login Widget. Пустой BotToken
+// означает «вход выключен»: эндпоинт остаётся, но подпись не проверить, а
+// виджет фронтенд не рисует.
+type TelegramConfig struct {
+	// BotToken — токен бота от @BotFather; ключ HMAC проверки коллбека.
+	BotToken string `koanf:"TELEGRAM_BOT_TOKEN"`
+	// BotUsername — username бота без «@»; имя поддомена виджета на странице.
+	// Пусто — username выясняется через getMe при старте.
+	BotUsername string `koanf:"TELEGRAM_BOT_USERNAME"`
+	// APIBase — Bot API; по умолчанию https://api.telegram.org.
+	APIBase string `koanf:"TELEGRAM_API_BASE"`
+	// ProxyList — список через запятую http(s)-прокси для вызовов к Bot API
+	// ("http://user:pass@host:port"). Каждая новая попытка идёт через
+	// следующий прокси по кругу; пусто = напрямую.
+	ProxyList string `koanf:"TELEGRAM_PROXY_LIST"`
+	// MaxAttempts — сколько попыток (смен прокси) делать к Bot API, 0 = 6.
+	MaxAttempts int `koanf:"TELEGRAM_MAX_ATTEMPTS"`
+}
+
+// ProxyURLList разбирает список прокси, отбрасывая пустые и невалидные —
+// один битый элемент не должен ронять весь вход через Telegram.
+func (c TelegramConfig) ProxyURLList() []*url.URL {
+	parts := strings.Split(c.ProxyList, ",")
+	out := make([]*url.URL, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		u, err := url.Parse(part)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			continue
+		}
+		out = append(out, u)
+	}
+
+	return out
 }
 
 // PhotosConfig covers the photo upload endpoint: the size cap and the local
@@ -246,6 +318,18 @@ func defaultCfg() Config {
 			Timeout:           defaultWeatherTimeout,
 			Attempts:          defaultWeatherAttempts,
 			RetryBackoff:      defaultWeatherRetryDelay,
+		},
+		EventAgentConfig: EventAgentConfig{
+			BaseURL:      defaultEventAgentBase,
+			Timeout:      defaultEventAgentTimeout,
+			PollInterval: defaultEventAgentPoll,
+			MaxWait:      defaultEventAgentMaxWait,
+		},
+		GeocoderConfig: GeocoderConfig{
+			BaseURL:     defaultGeocoderBase,
+			Timeout:     defaultGeocoderTimeout,
+			UserAgent:   defaultGeocoderUserAgent,
+			MinInterval: defaultGeocoderInterval,
 		},
 		LoggerConfig: LoggerConfig{
 			Level: slog.LevelDebug,

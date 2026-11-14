@@ -15,6 +15,8 @@ export function openAuthDialog({ reason = '' } = {}) {
       lead: escapeHtml(reason || 'Имя увидят участники ваших меток и редакторы справочника.'),
       className: 'dialog--auth',
       body: `
+        <div class="auth-telegram" data-telegram-root hidden></div>
+        <p class="auth-alt" data-telegram-alt hidden><span>или</span></p>
         <form class="auth-form" novalidate>
           <div class="field">
             <label class="field__label" for="auth-name">Имя</label>
@@ -34,6 +36,14 @@ export function openAuthDialog({ reason = '' } = {}) {
         const nameError = $('#auth-name-error', form);
         const rulesError = $('#auth-rules-error', form);
         setTimeout(() => nameInput.focus(), 50);
+
+        initTelegramLogin($('[data-telegram-root]', el), $('[data-telegram-alt]', el), {
+          form,
+          onSuccess(data) {
+            result = data;
+            close();
+          },
+        });
 
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
@@ -68,10 +78,69 @@ export function openAuthDialog({ reason = '' } = {}) {
           }
         });
 
-        el.addEventListener('close', () => resolve(result));
+        el.addEventListener('close', () => {
+          telegramHandler = null;
+          resolve(result);
+        });
       },
     });
   });
+}
+
+/* Вход через Telegram: официальный Login Widget. Конфиг отдаёт бэкенд
+ * (GET /auth/telegram/widget); без токена бота блок просто не показывается.
+ * Виджет вызывает глобальный коллбек с подписанными полями — подпись
+ * перепроверяет сервер, клиентскому коду она не доверяет. */
+let telegramHandler = null;
+
+window.__vlruTelegramAuth = (tgUser) => {
+  if (telegramHandler) telegramHandler(tgUser);
+};
+
+function clientTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Vladivostok';
+}
+
+async function initTelegramLogin(root, alt, { form, onSuccess }) {
+  let config = null;
+  try {
+    config = await api('/auth/telegram/widget');
+  } catch {
+    return; /* конфиг недоступен — остаётся только вход по имени */
+  }
+  if (!config || !config.enabled || !config.bot_username) return;
+
+  root.hidden = false;
+  alt.hidden = false;
+
+  telegramHandler = async (tgUser) => {
+    const rulesError = $('#auth-rules-error', form);
+    if (!form.elements.rules.checked) {
+      rulesError.textContent = 'Чтобы продолжить, примите правила';
+      return;
+    }
+    rulesError.textContent = '';
+
+    try {
+      const data = await api('/auth/telegram', {
+        method: 'POST',
+        body: { ...tgUser, timezone: clientTimezone() },
+      });
+      storage.set(CSRF_KEY, data.csrf_token || '');
+      toast(`Готово, ${data.display_name}. Теперь можно ставить метки`, { type: 'success' });
+      onSuccess(data);
+    } catch (error) {
+      rulesError.textContent = error.message || 'Не получилось войти через Telegram. Попробуйте ещё раз';
+    }
+  };
+
+  const script = document.createElement('script');
+  script.src = 'https://telegram.org/js/telegram-widget.js?22';
+  script.async = true;
+  script.setAttribute('data-telegram-login', config.bot_username);
+  script.setAttribute('data-size', 'large');
+  script.setAttribute('data-onauth', 'window.__vlruTelegramAuth');
+  root.append(script);
 }
 
 /** Выполнить действие, сначала запросив вход для гостя. */

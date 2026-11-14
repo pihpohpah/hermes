@@ -16,6 +16,9 @@ import (
 	"github.com/pihpohpah/hermes/internal/application/commands"
 	"github.com/pihpohpah/hermes/internal/application/usecase"
 	"github.com/pihpohpah/hermes/internal/domain/models"
+	"github.com/pihpohpah/hermes/internal/infrastructure/config"
+	"github.com/pihpohpah/hermes/internal/infrastructure/eventagent"
+	"github.com/pihpohpah/hermes/internal/infrastructure/geocoder"
 	"github.com/pihpohpah/hermes/internal/infrastructure/openmeteo"
 	"github.com/pihpohpah/hermes/internal/infrastructure/repository"
 )
@@ -32,6 +35,7 @@ const (
 	forecastRefreshCommand  = "forecast_refresh"
 	userCreateCommand       = "user_create"
 	pinsCleanupCommand      = "pins_cleanup"
+	eventsImportCommand     = "events_import"
 )
 
 type Command interface {
@@ -39,6 +43,7 @@ type Command interface {
 }
 
 type commandDeps struct {
+	cfg             config.Config
 	logger          *slog.Logger
 	pool            *pgxpool.Pool
 	places          *repository.PlaceRepository
@@ -120,6 +125,27 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 		pinRepo := repository.NewPinRepository(deps.pool)
 		purger := usecase.NewPurgeExpiredPinsUseCase(pinRepo)
 		cmd = commands.NewPinsCleanupCommand(deps.logger, purger, opts.pinPurgeGrace)
+	case eventsImportCommand:
+		agent := eventagent.NewClient(eventagent.Config{
+			BaseURL: deps.cfg.EventAgentConfig.BaseURL,
+			Timeout: deps.cfg.EventAgentConfig.Timeout,
+			Logger:  deps.logger,
+		})
+		geo := geocoder.NewNominatim(geocoder.Config{
+			BaseURL:     deps.cfg.GeocoderConfig.BaseURL,
+			Timeout:     deps.cfg.GeocoderConfig.Timeout,
+			UserAgent:   deps.cfg.GeocoderConfig.UserAgent,
+			MinInterval: deps.cfg.GeocoderConfig.MinInterval,
+		})
+		eventRepo := repository.NewEventRepository(deps.pool)
+		importer := usecase.NewImportEventsUseCase(
+			agent,
+			geo,
+			eventRepo,
+			deps.cfg.EventAgentConfig.PollInterval,
+			deps.cfg.EventAgentConfig.MaxWait,
+		)
+		cmd = commands.NewEventsImportCommand(deps.logger, importer)
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownCommand, commandName)
 	}
