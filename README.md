@@ -13,99 +13,52 @@
 
 ## Локальный запуск
 
-Ниже — полный цикл «с нуля до работающего сайта». Предполагается macOS/Linux, Docker для PostgreSQL.
-
-### 0. Требования
-
-- Go 1.27.3 (ставится через `mise install`, см. `mise.toml`)
-- Docker — для PostgreSQL 15+ с PostGIS (или свой инстанс с уже созданными расширениями)
-- `mise` — опционально, удобные алиасы (`mise run seed` и т.д.); все команды ниже даны и в виде `go run ...`
-
-### 1. Окружение
+Одна команда — от нуля до работающего сайта:
 
 ```bash
-mise run bootstrap        # создаёт .env из .env.example и качает модули
-# или вручную: cp .env.example .env
+mise run dev
 ```
+
+Она по порядку: `mise install` уже поставил Go 1.27 и esbuild (см. `mise.toml`);
+далее — `.env` из `.env.example` и `go mod download` → сборка JS/CSS-бандлов
+(esbuild) → поднимает `postgis/postgis:15-3.4` в Docker (если контейнер ещё не
+работает) → накатывает миграции из `migrations/` → `seed` (5 мест вокруг
+Владивостока) + погода в `mock`-режиме (без сети) + `conditions_assess` →
+запускает сервер. Сайт: **http://localhost:8080**. Вход — по имени, одним
+шагом, сессия в cookie. Полезные страницы: `/health`, `/catalog`, `/now`,
+`/rules`, `/profile`.
+
+Требуется Docker (или смените `DATABASE_URL` на свой инстанс PostGIS — тогда
+`db-up`/`migrate-up` пойдут мимо, а миграции накатите psql-ом от руки).
+Офлайн-архивы карты (`primorsky-krai-z15.pmtiles`, `primorsky-relief.pmtiles`)
+в репозиторий не входят; без них «Природа» на карте выключена, остальное
+работает. Собрать: `mise run map-download` (полный разбор — в [MAP.md](MAP.md))
+и `mise run map-relief` (или `map-relief-local` для агломерации).
 
 Ключевые переменные (полный список — в `.env.example`):
 
 | Переменная | По умолчанию | Что влияет |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/hermes?sslmode=disable` | подключение к БД |
+| `DATABASE_URL` | `postgres://postgres:***@localhost:5432/hermes?sslmode=disable` | подключение к БД |
 | `PORT` | `8080` | порт HTTP-сервера |
 | `WEB_DIR` | `./web/static` | корень статики (CSS/JS/загруженные фото) |
 | `WEATHER_MODE` | `real` | `mock` — демо-данные без сети; `real` — запросы к Open-Meteo |
 | `PHOTOS_STORAGE_DIR` | `<WEB_DIR>/uploads` | куда писать загруженные фото |
 | `PHOTOS_MAX_UPLOAD_MB` | `10` | лимит одной загрузки фото |
 
-### 2. Поднять PostgreSQL
+Имена контейнера/БД/пользователя (`POSTGRES_CONTAINER`, `POSTGRES_DB`,
+`POSTGRES_USER` в `.env`) должны совпадать с тем, что поднимает `db-up` —
+таска миграций использует их.
 
-```bash
-docker run -d --name postgres-1 \
-  -e POSTGRES_DB=hermes \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  postgis/postgis:15-3.4
-```
+Фронтенд — ES-модули в `web/static/js/app/` и руками написанный
+`web/static/css/app.css`; шаблон подключает не исходники, а собранные
+минифицированные `app.min.js` / `app.min.css` (в `.gitignore`, артефакты
+сборки). После правки JS или CSS пересоберите их: `mise run assets`, а для
+постоянной пересборки при сохранении — `mise run assets-watch` (отдельный
+терминал). Сборка — esbuild (ставится через `mise install`, npm-бэкенд):
+15 JS-модулей → один ESM-файл (~60 КБ), CSS 124 → 92 КБ.
 
-Имена контейнера/БД/пользователя должны совпадать с `POSTGRES_CONTAINER`, `POSTGRES_DB`, `POSTGRES_USER` в `.env` (таска миграций использует их). Со своим инстансом просто поправьте `DATABASE_URL`.
-
-### 3. Применить миграции
-
-Миграции — идемпотентные SQL-файлы в `migrations/` (`CREATE ... IF NOT EXISTS`), накатываются в любом порядке повторно:
-
-```bash
-mise run migrate-up
-# или вручную, без mise/docker-exec:
-psql "postgres://postgres:postgres@localhost:5432/hermes?sslmode=disable" \
-  -v ON_ERROR_STOP=1 -f migrations/001_init.sql
-```
-
-Откат таблиц: `mise run migrate-down`.
-
-### 4. Наполнить тестовыми данными
-
-```bash
-mise run seed        # 5 мест вокруг Владивостока (we смотровые, бухты, парк)
-# = go run ./cmd/server seed
-```
-
-Сид создаёт только места. Погода и оценки условий считаются отдельными командами — так сид никогда не выдаёт фейковые «готовые» рекомендации:
-
-```bash
-# вариант А: без интернета к Open-Meteo — явные демо-данные
-WEATHER_MODE=mock go run ./cmd/server weather_load
-WEATHER_MODE=mock go run ./cmd/server conditions_assess
-
-# вариант Б: реальный прогноз (нужен выход к api.open-meteo.com)
-go run ./cmd/server weather_load            # скользящее окно: -6 ч + сегодня + 9 дней
-go run ./cmd/server conditions_assess       # блок «Еду / Осторожно / Нет» на карточках мест
-```
-
-Дополнительно:
-
-```bash
-go run ./cmd/server elevations_enrich       # высоты точек (нужны для горной погоды)
-NAME=Аня go run ./cmd/server user_create    # пользователь для входа (или просто войдите в UI по имени)
-go run ./cmd/server pins_cleanup            # снять просроченные метки «Сейчас»
-```
-
-### 5. Запустить сервер
-
-```bash
-mise run dev                          # соберёт JS-бандл, дальше air с hot-reload, иначе go run
-# или явно:
-mise run assets                       # собрать и минифицировать JS (esbuild → app.min.js)
-go run ./cmd/server listen            # аргумент listen можно опустить — он дефолтный
-```
-
-Фронтенд — ES-модули в `web/static/js/app/` и руками написанный `web/static/css/app.css`; шаблон подключает не исходники, а собранные минифицированные `app.min.js` / `app.min.css` (в `.gitignore`, артефакты сборки). После правки JS или CSS пересоберите их: `mise run assets`, а для постоянной пересборки при сохранении — `mise run assets-watch` (отдельный терминал). Сборка — esbuild (ставится через `mise install`, npm-бэкенд): 15 JS-модулей → один ESM-файл (~60 КБ), CSS 124 → 92 КБ.
-
-Сайт: **http://localhost:8080** — карта с панелью, каталог, «Сейчас», добавление места/события, профиль. Вход — по имени, одним шагом, сессия в cookie. Полезные страницы: `/health` (liveness), `/catalog`, `/now`, `/rules`, `/profile`.
-
-### 6. Проверка, что всё живо
+### Проверка, что всё живо
 
 ```bash
 curl -s localhost:8080/health                                 # {"success":true,...}
@@ -113,18 +66,24 @@ curl -s "localhost:8080/api/map-items" | head -c 200          # точки дл�
 curl -s "localhost:8080/fragments/live-count"                 # счётчик «на карте сейчас»
 ```
 
-Если карта пустая — не прогнан `seed`; если на карточках нет блока условий — не прогнан `conditions_assess`; если штормит погода — смотрите `WEATHER_MODE` (при недоступном Open-Meteo ставьте `mock`).
+Если карта пустая — не прогнан `seed`; если на карточках нет блока условий —
+не прогнан `conditions_assess`; если штормит погода — смотрите `WEATHER_MODE`
+(при недоступном Open-Meteo ставьте `mock`).
 
 ### Полезные команды разработчика
 
 ```bash
-go test ./...                              # тесты
-go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate   # пересобрать шаблоны из web/templates/*.templ
-mise run templ                             # то же через mise
-go vet ./...                               # vet
+mise run db-up            # только Postgres в Docker
+mise run migrate-up       # накатить миграции; migrate-down — откат таблиц
+mise run seed             # места
+mise run weather-load     # реальная погода (WEATHER_MODE=real|mock — в .env)
+mise run conditions-assess
+go test ./...             # тесты
+go vet ./...
+go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate   # пересобрать шаблоны
 ```
 
-Загруженные пользователями фото лежат в `web/static/uploads/` (путь задаётся `PHOTOS_STORAGE_DIR`) и раздаются сами — каталог добавлен в `.gitignore`, в репозиторий не коммитится.
+Перечень остальных тасок — `mise tasks`.
 
 ## Погода и оценка условий
 

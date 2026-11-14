@@ -1,6 +1,5 @@
 [tools]
 go = "1.27.3"
-golangci-lint = "2"
 "npm:esbuild" = "0.25.11"
 
 [env]
@@ -18,11 +17,12 @@ go mod download
 """
 
 [tasks.dev]
-description = "Запуск сервера с hot-reload (air / go run)"
-depends = ["assets"]
+description = "Собрать фронтенд, поднять Postgres, применить миграции, наполнить БД (seed + погода в mock), запустить сервер"
+depends = ["bootstrap", "assets", "db-up", "migrate-up", "data-load"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
+echo "Сервер: http://localhost:${PORT:-8080}"
 if command -v air >/dev/null 2>&1; then
   exec air -c .air.toml
 else
@@ -30,17 +30,52 @@ else
 fi
 """
 
+[tasks.db-up]
+description = "Поднять PostgreSQL (PostGIS) в Docker, если ещё не работает"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
+if [ -n "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
+  echo "Контейнер $CONTAINER уже работает"
+  exit 0
+fi
+docker rm -f "$CONTAINER" 2>/dev/null || true
+docker run -d --name "$CONTAINER" \
+  -e POSTGRES_DB="${POSTGRES_DB:-hermes}" \
+  -e POSTGRES_USER="${POSTGRES_USER:-postgres}" \
+  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}" \
+  -p "${POSTGRES_PORT:-5432}:5432" \
+  postgis/postgis:15-3.4
+for _ in $(seq 1 30); do
+  docker exec "$CONTAINER" pg_isready -U "${POSTGRES_USER:-postgres}" -q && { echo "Postgres готов"; exit 0; }
+  sleep 1
+done
+echo "Postgres не поднялся за 30 с"
+exit 1
+"""
+
+[tasks.data-load]
+description = "Сид-места + погода в mock-режиме (без сети) + оценка условий"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+go run ./cmd/server seed
+WEATHER_MODE=mock go run ./cmd/server weather_load
+go run ./cmd/server conditions_assess
+"""
+
 [tasks.assets]
 description = "Собрать и минифицировать JS-бандл и CSS (esbuild)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-esbuild web/static/js/app/app.js \\
-  --bundle --minify --format=esm \\
+esbuild web/static/js/app/app.js \
+  --bundle --minify --format=esm \
   --outfile=web/static/js/app/app.min.js
 echo "OK: web/static/js/app/app.min.js ($(du -h web/static/js/app/app.min.js | cut -f1))"
-esbuild web/static/css/app.css \\
-  --minify \\
+esbuild web/static/css/app.css \
+  --minify \
   --outfile=web/static/css/app.min.css
 echo "OK: web/static/css/app.min.css ($(du -h web/static/css/app.min.css | cut -f1))"
 """
@@ -50,14 +85,14 @@ description = "Пересобирать JS-бандл и CSS при измене
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-esbuild web/static/js/app/app.js \\
-  --bundle --minify --format=esm \\
-  --outfile=web/static/js/app/app.min.js \\
+esbuild web/static/js/app/app.js \
+  --bundle --minify --format=esm \
+  --outfile=web/static/js/app/app.min.js \
   --watch &
 js_pid=$!
-esbuild web/static/css/app.css \\
-  --minify \\
-  --outfile=web/static/css/app.min.css \\
+esbuild web/static/css/app.css \
+  --minify \
+  --outfile=web/static/css/app.min.css \
   --watch &
 css_pid=$!
 trap 'kill $js_pid $css_pid 2>/dev/null || true' EXIT INT TERM
@@ -111,43 +146,13 @@ DROP TABLE IF EXISTS users;
 SQL
 """
 
-[tasks.templ]
-description = "Сгенерировать Go-код из templ-шаблонов"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-if command -v templ >/dev/null 2>&1; then
-  templ generate
-else
-  go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate
-fi
-"""
-
 [tasks.seed]
 description = "Наполнить БД тестовыми местами вокруг Владивостока (43.1155, 131.8855)"
 run = "go run ./cmd/server seed"
 
-[tasks.user-create]
-description = "Создать пользователя локально: NAME=Имя [TIMEZONE=Europe/Moscow]"
-run = "go run ./cmd/server user_create -name ${NAME:?укажите NAME=...} -timezone ${TIMEZONE:-Asia/Vladivostok}"
-
-[tasks.pins-cleanup]
-description = "Удалить просроченные метки «Сейчас» (после grace-периода, по умолчанию 24 ч)"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-args=()
-if [ -n "${GRACE_HOURS:-}" ]; then args+=(-grace_hours "$GRACE_HOURS"); fi
-go run ./cmd/server pins_cleanup "${args[@]}"
-"""
-
 [tasks.weather-load]
 description = "Загрузить почасовую погоду Open-Meteo для seed-мест (WEATHER_MODE=real|mock)"
 run = "go run ./cmd/server weather_load"
-
-[tasks.weather-load-day]
-description = "Загрузить погоду на конкретный день Asia/Vladivostok: DATE=YYYY-MM-DD"
-run = "go run ./cmd/server weather_load -day ${DATE:?set DATE=YYYY-MM-DD}"
 
 [tasks.conditions-assess]
 description = "Оценить условия для мест (эвристики) за сегодня: ACTIVITY=walk,sup,hike,run, PLACE=<uuid>"
@@ -197,42 +202,6 @@ RELIEF_MINZOOM="${RELIEF_MINZOOM:-10}" RELIEF_MAXZOOM="${RELIEF_MAXZOOM:-13}" \
   ./scripts/map/build-relief.sh
 """
 
-[tasks.weather-demo]
-description = "Прогнать загрузку и оценку в явном demo-режиме (без сети)"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-export WEATHER_MODE=mock
-go run ./cmd/server weather_load "$@"
-go run ./cmd/server conditions_assess "$@"
-"""
-
-[tasks.design]
-description = "Открыть дизайн-прототип (статический сервер на :1666)"
-dir = "vlru-places"
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-port="${PORT:-1666}"
-url="http://127.0.0.1:${port}"
-python3 -m http.server "$port" --bind 127.0.0.1 &
-server=$!
-cleanup() { kill "$server" 2>/dev/null || true; }
-trap cleanup EXIT INT TERM
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -sf -o /dev/null "$url"; then
-    break
-  fi
-  sleep 0.2
-done
-open "$url"
-wait "$server"
-'''
-
-[tasks.lint]
-description = "Прогнать линтер"
-run = "golangci-lint run ./..."
-
 [tasks.map-download]
 description = "Собрать офлайн-карту Приморского края (PMTiles, z0-15) из OSM"
 run = "./scripts/map/build-map.sh"
@@ -253,10 +222,6 @@ du -h "$f"
 
 [tasks.map-serve]
 description = "Карта с двумя режимами (город/природа) на :8080, без Postgres"
-run = "go run ./cmd/mapserver -addr :8080"
-
-[tasks.map-serve-relief]
-description = "Устарело: оба режима теперь доступны в map-serve по умолчанию"
 run = "go run ./cmd/mapserver -addr :8080"
 
 [tasks.map-check]
