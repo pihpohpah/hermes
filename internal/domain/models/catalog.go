@@ -102,6 +102,35 @@ var eventCategoryTitles = map[EventCategoryCode]string{
 	"party":      "Андеграунд",
 	"lecture":    "Лекция",
 	"market":     "Маркет",
+	// Категории импорта event-agent (webscraper).
+	"theater":    "Театр",
+	"workshop":   "Мастер-класс",
+	"meetup":     "Митап",
+	"conference": "Конференция",
+	"standup":    "Стендап",
+	"quiz":       "Квиз",
+	"kids":       "Детям",
+	"film":       "Кино",
+	"other":      "Разное",
+}
+
+// EventStatus is the publication state of an event. The CHECK constraint in
+// the migration mirrors the values; extend both sides together.
+type EventStatus string
+
+const (
+	EventStatusScheduled EventStatus = "scheduled"
+	EventStatusCancelled EventStatus = "cancelled"
+)
+
+func NewEventStatus(raw string) (EventStatus, error) {
+	status := EventStatus(strings.TrimSpace(raw))
+	switch status {
+	case EventStatusScheduled, EventStatusCancelled:
+		return status, nil
+	default:
+		return "", Invalid(fmt.Sprintf("unexpected event status `%s`", raw))
+	}
 }
 
 // AccessMode is a way to reach a place.
@@ -189,6 +218,23 @@ type Event struct {
 	StartsAt    time.Time
 	EndsAt      time.Time
 	CreatedAt   time.Time
+	// ExternalID is the stable key of the importing service (event-agent run
+	// event id); it backs the idempotent upsert. Nil for editorial events.
+	ExternalID *string
+	// Location is the geocoded venue coordinate; nil when the venue text is
+	// missing or geocoding found nothing.
+	Location *Point
+	// Status is the publication state (cancelled events stay listed, so the
+	// catalog can say «отменено» instead of silently dropping the event).
+	Status EventStatus
+	// PriceFree mirrors places.price_free: nil means «unknown».
+	PriceFree  *bool
+	PriceLabel string
+	// EventURL is the canonical page of the event, http(s) only.
+	EventURL *string
+	// SourceURLs maps a source domain to the page URL where the event was
+	// found; filled by the event-agent import.
+	SourceURLs map[string]string
 }
 
 // EventFilter narrows the event list. UpcomingOnly (default true) excludes

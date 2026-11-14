@@ -52,6 +52,8 @@ type Handlers struct {
 	Item               *httproutes.Item
 	Logout             *httproutes.LogoutHandler
 	UpdateUser         *httproutes.UpdateCurrentUserHandler
+	TelegramLogin      *httproutes.TelegramLoginHandler
+	TelegramWidget     *httproutes.TelegramWidgetConfigHandler
 	MapPage            *httproutes.MapPageHandler
 	MapAssets          *httproutes.MapAssetsHandler
 	PMTiles            *httproutes.PMTilesHandler
@@ -82,6 +84,12 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	}
 	if h.Logout != nil {
 		mux.Handle("POST /users/logout", requireAuth(h.Logout))
+	}
+	if h.TelegramLogin != nil {
+		mux.Handle("POST /auth/telegram", h.TelegramLogin)
+	}
+	if h.TelegramWidget != nil {
+		mux.Handle("GET /auth/telegram/widget", h.TelegramWidget)
 	}
 
 	mux.Handle("GET /places", h.ListPlaces)

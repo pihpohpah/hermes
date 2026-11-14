@@ -54,7 +54,17 @@ INSERT INTO event_categories (code, title) VALUES
     ('sport', 'Спорт'),
     ('party', 'Андеграунд'),
     ('lecture', 'Лекция'),
-    ('market', 'Маркет')
+    ('market', 'Маркет'),
+    -- Категории импорта event-agent (webscraper).
+    ('theater', 'Театр'),
+    ('workshop', 'Мастер-класс'),
+    ('meetup', 'Митап'),
+    ('conference', 'Конференция'),
+    ('standup', 'Стендап'),
+    ('quiz', 'Квиз'),
+    ('kids', 'Детям'),
+    ('film', 'Кино'),
+    ('other', 'Разное')
 ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS places (
@@ -101,6 +111,12 @@ CREATE TABLE IF NOT EXISTS place_sources (
 
 -- Событие: то же, что место, плюс время, площадка и организатор.
 -- Место может быть не привязано (venue хранит свободный текст).
+--
+-- Поля импорта event-agent (webscraper): external_id — стабильный ключ
+-- внешнего прогона для идемпотентного upsert; location — геокодинг venue;
+-- status — состояние публикации (отмена события и далее перенос и т.п.);
+-- source_urls — объект «домен источника → url страницы, где найдено событие»;
+-- price_free/price_label — как в places (NULL = неизвестно).
 CREATE TABLE IF NOT EXISTS events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     slug text UNIQUE,
@@ -112,8 +128,15 @@ CREATE TABLE IF NOT EXISTS events (
     venue text NOT NULL DEFAULT '',
     organizer text NOT NULL DEFAULT '',
     age text NOT NULL DEFAULT '',
+    status text NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'cancelled')),
+    price_free boolean,
+    price_label text NOT NULL DEFAULT '',
+    event_url text CHECK (event_url IS NULL OR event_url ~ '^https?://'),
+    source_urls jsonb NOT NULL DEFAULT '{}'::jsonb,
+    external_id text,
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
+    location geography(Point, 4326),
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT events_time_window CHECK (ends_at > starts_at)
 );
@@ -428,6 +451,8 @@ CREATE INDEX IF NOT EXISTS idx_places_category ON places USING btree (category);
 CREATE INDEX IF NOT EXISTS idx_events_starts_at ON events USING btree (starts_at);
 CREATE INDEX IF NOT EXISTS idx_events_place_id ON events USING btree (place_id);
 CREATE INDEX IF NOT EXISTS idx_events_category ON events USING btree (category);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_external_id ON events (external_id)
+    WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_pins_location ON pins USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_pins_ends_at ON pins USING btree (ends_at);
 CREATE INDEX IF NOT EXISTS idx_pins_author_ends_at ON pins USING btree (author_id, ends_at);

@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/a-h/templ v0.3.1118
+	github.com/disintegration/imaging v1.6.2
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/getsentry/sentry-go/slog v0.50.0
 	github.com/go-playground/validator/v10 v10.30.6
@@ -14,7 +15,6 @@ require (
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.4.1
 	golang.org/x/image v0.30.0
-	github.com/disintegration/imaging v1.6.2
 )
 
 require (

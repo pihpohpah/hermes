@@ -8,23 +8,35 @@ import (
 
 // Event is the HTTP view of a catalog event.
 type Event struct {
-	ID          string `json:"id"`
-	Slug        string `json:"slug,omitempty"`
-	Title       string `json:"title"`
-	Category    string `json:"category"`
-	Short       string `json:"short"`
-	Description string `json:"description"`
-	PlaceID     string `json:"place_id,omitempty"`
-	PlaceName   string `json:"place_name,omitempty"`
-	Venue       string `json:"venue"`
-	Organizer   string `json:"organizer"`
-	Age         string `json:"age"`
-	StartsAt    string `json:"starts_at"`
-	EndsAt      string `json:"ends_at"`
-	CreatedAt   string `json:"created_at"`
+	ID          string            `json:"id"`
+	Slug        string            `json:"slug,omitempty"`
+	Title       string            `json:"title"`
+	Category    string            `json:"category"`
+	Short       string            `json:"short"`
+	Description string            `json:"description"`
+	PlaceID     string            `json:"place_id,omitempty"`
+	PlaceName   string            `json:"place_name,omitempty"`
+	Venue       string            `json:"venue"`
+	Organizer   string            `json:"organizer"`
+	Age         string            `json:"age"`
+	Status      string            `json:"status"`
+	PriceFree   *bool             `json:"price_free,omitempty"`
+	PriceLabel  string            `json:"price_label,omitempty"`
+	EventURL    string            `json:"event_url,omitempty"`
+	SourceURLs  map[string]string `json:"source_urls,omitempty"`
+	StartsAt    string            `json:"starts_at"`
+	EndsAt      string            `json:"ends_at"`
+	CreatedAt   string            `json:"created_at"`
+	Lat         *float64          `json:"lat,omitempty"`
+	Lon         *float64          `json:"lon,omitempty"`
 }
 
 func EventToHTTP(in models.Event) Event {
+	status := in.Status
+	if status == "" {
+		status = models.EventStatusScheduled
+	}
+
 	out := Event{
 		ID:          in.ID,
 		Title:       in.Title,
@@ -34,6 +46,10 @@ func EventToHTTP(in models.Event) Event {
 		Venue:       in.Venue,
 		Organizer:   in.Organizer,
 		Age:         in.Age,
+		Status:      string(status),
+		PriceFree:   in.PriceFree,
+		PriceLabel:  in.PriceLabel,
+		SourceURLs:  in.SourceURLs,
 		StartsAt:    in.StartsAt.UTC().Format(time.RFC3339),
 		EndsAt:      in.EndsAt.UTC().Format(time.RFC3339),
 		CreatedAt:   in.CreatedAt.UTC().Format(time.RFC3339),
@@ -46,6 +62,14 @@ func EventToHTTP(in models.Event) Event {
 	}
 	if in.PlaceName != nil {
 		out.PlaceName = *in.PlaceName
+	}
+	if in.EventURL != nil {
+		out.EventURL = *in.EventURL
+	}
+	if in.Location != nil {
+		lat, lon := in.Location.Lat, in.Location.Lon
+		out.Lat = &lat
+		out.Lon = &lon
 	}
 
 	return out

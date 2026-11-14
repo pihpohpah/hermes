@@ -61,16 +61,17 @@ func main() {
 	txManager := repository.NewTxManager(pool)
 	provider := newWeatherProvider(cfg, logger)
 	openMeteoConfig := openmeteo.Config{
-		WeatherBaseURL:    cfg.BaseURL,
-		MarineBaseURL:     cfg.MarineBaseURL,
-		AirQualityBaseURL: cfg.AirQualityBaseURL,
-		Timeout:           cfg.Timeout,
-		Attempts:          cfg.Attempts,
-		BaseBackoff:       cfg.RetryBackoff,
-		APIKey:            cfg.APIKey,
+		WeatherBaseURL:    cfg.OpenMeteoConfig.BaseURL,
+		MarineBaseURL:     cfg.OpenMeteoConfig.MarineBaseURL,
+		AirQualityBaseURL: cfg.OpenMeteoConfig.AirQualityBaseURL,
+		Timeout:           cfg.OpenMeteoConfig.Timeout,
+		Attempts:          cfg.OpenMeteoConfig.Attempts,
+		BaseBackoff:       cfg.OpenMeteoConfig.RetryBackoff,
+		APIKey:            cfg.OpenMeteoConfig.APIKey,
 	}
 
 	deps := commandDeps{
+		cfg:             cfg,
 		logger:          logger,
 		pool:            pool,
 		places:          placeRepo,
@@ -106,21 +107,21 @@ func newWeatherProvider(cfg config.Config, logger *slog.Logger) openmeteo.Hourly
 
 	logger.Info(
 		"weather provider runs in REAL mode",
-		slog.String("weather_base", cfg.BaseURL),
-		slog.String("marine_base", cfg.MarineBaseURL),
-		slog.String("air_quality_base", cfg.AirQualityBaseURL),
-		slog.Duration("timeout", cfg.Timeout),
-		slog.Int("attempts", cfg.Attempts),
+		slog.String("weather_base", cfg.OpenMeteoConfig.BaseURL),
+		slog.String("marine_base", cfg.OpenMeteoConfig.MarineBaseURL),
+		slog.String("air_quality_base", cfg.OpenMeteoConfig.AirQualityBaseURL),
+		slog.Duration("timeout", cfg.OpenMeteoConfig.Timeout),
+		slog.Int("attempts", cfg.OpenMeteoConfig.Attempts),
 	)
 
 	return openmeteo.NewClient(openmeteo.Config{
-		WeatherBaseURL:    cfg.BaseURL,
-		MarineBaseURL:     cfg.MarineBaseURL,
-		AirQualityBaseURL: cfg.AirQualityBaseURL,
-		Timeout:           cfg.Timeout,
-		Attempts:          cfg.Attempts,
-		BaseBackoff:       cfg.RetryBackoff,
-		APIKey:            cfg.APIKey,
+		WeatherBaseURL:    cfg.OpenMeteoConfig.BaseURL,
+		MarineBaseURL:     cfg.OpenMeteoConfig.MarineBaseURL,
+		AirQualityBaseURL: cfg.OpenMeteoConfig.AirQualityBaseURL,
+		Timeout:           cfg.OpenMeteoConfig.Timeout,
+		Attempts:          cfg.OpenMeteoConfig.Attempts,
+		BaseBackoff:       cfg.OpenMeteoConfig.RetryBackoff,
+		APIKey:            cfg.OpenMeteoConfig.APIKey,
 	})
 }
 

@@ -38,7 +38,15 @@ const eventColumns = `
 	e.age,
 	e.starts_at,
 	e.ends_at,
-	e.created_at
+	e.created_at,
+	ST_Y(e.location::geometry),
+	ST_X(e.location::geometry),
+	e.external_id,
+	e.status,
+	e.price_free,
+	e.price_label,
+	e.event_url,
+	e.source_urls
 `
 
 func (r *EventRepository) List(ctx context.Context, filter models.EventFilter) ([]models.Event, error) {
@@ -173,6 +181,13 @@ func scanEvent(row rowScanner) (models.Event, error) {
 		startsAt  time.Time
 		endsAt    time.Time
 		createdAt time.Time
+		lat       *float64
+		lon       *float64
+		external  *string
+		status    string
+		priceFree *bool
+		eventURL  *string
+		sources   map[string]string
 	)
 
 	if err := row.Scan(
@@ -190,6 +205,14 @@ func scanEvent(row rowScanner) (models.Event, error) {
 		&startsAt,
 		&endsAt,
 		&createdAt,
+		&lat,
+		&lon,
+		&external,
+		&status,
+		&priceFree,
+		&event.PriceLabel,
+		&eventURL,
+		&sources,
 	); err != nil {
 		return models.Event{}, fmt.Errorf("scan event row: %w", err)
 	}
@@ -199,8 +222,26 @@ func scanEvent(row rowScanner) (models.Event, error) {
 		return models.Event{}, fmt.Errorf("parse event category from db: %w", err)
 	}
 
+	parsedStatus, err := models.NewEventStatus(status)
+	if err != nil {
+		return models.Event{}, fmt.Errorf("parse event status from db: %w", err)
+	}
+
+	if lat != nil && lon != nil {
+		point, pointErr := models.NewPoint(*lat, *lon)
+		if pointErr != nil {
+			return models.Event{}, fmt.Errorf("parse event location from db: %w", pointErr)
+		}
+		event.Location = &point
+	}
+
 	event.Category = parsedCategory
+	event.Status = parsedStatus
 	event.PlaceName = placeName
+	event.ExternalID = external
+	event.PriceFree = priceFree
+	event.EventURL = eventURL
+	event.SourceURLs = sources
 	event.StartsAt = startsAt.UTC()
 	event.EndsAt = endsAt.UTC()
 	event.CreatedAt = createdAt.UTC()
