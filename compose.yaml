@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hermes
+      POSTGRES_PASSWORD: hermes
+      POSTGRES_DB: hermes
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermes -d hermes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - hermes
+
+  api:
+    build: .
+    image: hermes-server:latest
+    restart: unless-stopped
+    command: ["listen"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      URL: postgres://hermes:hermes@db:5432/hermes
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - hermes
+
+  console:
+    build: .
+    image: hermes-server:latest
+    profiles: ["console"]
+    entrypoint: ["sleep", "infinity"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      URL: postgres://hermes:hermes@db:5432/hermes
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - hermes
+
+volumes:
+  db_data:
+
+networks:
+  hermes:
+    driver: bridge
