@@ -1,0 +1,11 @@
+.git
+.env
+deploy.env
+.dockerignore
+plans
+docs
+vlru-places
+scripts
+mise.toml
+web/static/pmtiles
+web/static/uploads

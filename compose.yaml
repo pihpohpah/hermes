@@ -3,13 +3,13 @@ services:
     image: postgis/postgis:18-3.6-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: hermes
-      POSTGRES_PASSWORD: hermes
-      POSTGRES_DB: hermes
+      POSTGRES_USER: "${POSTGRES_USER:-hermes}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-hermes}"
+      POSTGRES_DB: "${POSTGRES_DB:-hermes}"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hermes -d hermes"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,15 +22,36 @@ services:
       - hermes
 
   api:
-    build: .
-    image: hermes-server:latest
+    image: "${HERMES_IMAGE:-ghcr.io/pihpohpah/hermes}:${HERMES_TAG:-latest}"
+    pull_policy: "${PULL_POLICY:-always}"
     restart: unless-stopped
     command: ["listen"]
     depends_on:
       db:
         condition: service_healthy
+    # Секреты и прикладные настройки (TELEGRAM_BOT_TOKEN, OPENMETEO_API_KEY,
+    # SENTRY_DSN, ...) — в .env на сервере (mode 0600), скрипт его не копирует.
+    env_file:
+      - .env
     environment:
-      URL: postgres://hermes:hermes@db:5432/hermes
+      TZ: "${TZ:-Asia/Vladivostok}"
+      APP_ENV: "${APP_ENV:-prod}"
+      PORT: "8080"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@db:5432/${POSTGRES_DB:-hermes}"
+    ports:
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:8080"
+    volumes:
+      # Загруженные пользователями фото переживают пересоздание контейнера.
+      - uploads:/app/web/static/uploads
+      # Офлайн-карты (PMTiles) собираются отдельно (mise run map-download /
+      # map-relief) и кладутся на сервер в ./web/static/pmtiles рядом с compose.yaml.
+      - ./web/static/pmtiles:/app/web/static/pmtiles:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -40,15 +61,21 @@ services:
       - hermes
 
   console:
-    build: .
-    image: hermes-server:latest
+    image: "${HERMES_IMAGE:-ghcr.io/pihpohpah/hermes}:${HERMES_TAG:-latest}"
+    pull_policy: "${PULL_POLICY:-always}"
+    restart: unless-stopped
     profiles: ["console"]
     entrypoint: ["sleep", "infinity"]
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      URL: postgres://hermes:hermes@db:5432/hermes
+      TZ: "${TZ:-Asia/Vladivostok}"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@db:5432/${POSTGRES_DB:-hermes}"
+    volumes:
+      - uploads:/app/web/static/uploads
     deploy:
       resources:
         limits:
@@ -59,6 +86,7 @@ services:
 
 volumes:
   db_data:
+  uploads:
 
 networks:
   hermes:
