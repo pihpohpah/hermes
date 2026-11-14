@@ -1,0 +1,385 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Добавление места, события или правки: трёхшаговый Alpine-мастер.
+// Шаг — в URL (?step=1..3, работает кнопка «Назад» браузера), черновик — в
+// localStorage. Отправка: POST /submissions (JSON), фото — POST /photos.
+
+templ AddPage(view AddView) {
+	@Layout(LayoutView{
+		Title:   addTitle(view.Type) + " — Места VL.ru",
+		Section: "",
+		User:    view.User,
+	}) {
+		<div class="page add">
+			<div class="container add__layout">
+				<div class="add__main">
+					<header class="page__head">
+						<h1 class="page__title">{ addTitle(view.Type) }</h1>
+						<p class="page__lead">
+							if view.Type == "fix" {
+								Расскажите, что изменилось, — редакция проверит и обновит карточку.
+							} else {
+								Расскажите о том, что знаете сами. Редакция проверит и опубликует — обычно за один-два дня.
+							}
+						</p>
+					</header>
+					<div
+						x-data="addMaster()"
+						x-init="init()"
+					>
+						@addStepper()
+						<form class="add__form" novalidate @submit.prevent="submit">
+							<h2 class="add__step-title" tabindex="-1" x-ref="stepTitle" x-text="steps[step - 1]"></h2>
+							@addStepWhat(view)
+							@addStepDetails(view)
+							@addStepSend(view)
+							<div class="add__nav">
+								<template x-if="step > 1">
+									<button type="button" class="btn btn--ghost btn--lg" @click="gotoStep(step - 1)">@icon("arrow-left", "") Назад</button>
+								</template>
+								<template x-if="step === 1">
+									<a class="btn btn--ghost btn--lg" href="/">Отмена</a>
+								</template>
+								<button type="submit" class="btn btn--primary btn--lg" :class="{ 'is-loading': sending }">
+									<template x-if="step < 3">Дальше @icon("arrow-right", "")</template>
+									<template x-if="step === 3">Отправить на проверку</template>
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+				<aside class="add__aside" aria-label="Подсказки">
+					<div class="tips">
+						<h2 class="tips__title">@icon("info", "") Как попасть в справочник</h2>
+						<ul class="tips__list" role="list">
+							<li>Пишите о том, где были сами: так описание будет точным.</li>
+							<li>Практичные детали важнее эпитетов: как добраться, когда лучше, что взять.</li>
+							<li>Не добавляйте частную территорию и места, куда закрыт доступ.</li>
+							<li>Реклама и платные размещения сюда не попадают.</li>
+						</ul>
+						<a href="/rules?section=moderation">Как мы проверяем места</a>
+					</div>
+				</aside>
+			</div>
+		</div>
+		@footer()
+	}
+}
+
+func addTitle(t string) string {
+	switch t {
+	case "event":
+		return "Добавить событие"
+	case "fix":
+		return "Предложить правку"
+	default:
+		return "Добавить место"
+	}
+}
+
+templ addStepper() {
+	<ol class="steps" aria-label="Шаги">
+		<template x-for="(label, i) in steps" :key="label">
+			<li class="steps__item" :class="{ 'is-done': i + 1 < step }" :aria-current="i + 1 === step ? 'step' : null">
+				<span class="steps__bar"></span><span x-text="(i + 1) + '. ' + label"></span>
+			</li>
+		</template>
+	</ol>
+}
+
+// addStepWhat — шаг 1: тип, раздел, категория / правка.
+templ addStepWhat(view AddView) {
+	<fieldset class="fieldset" x-show="step === 1" x-cloak>
+		<legend>Что хотите добавить</legend>
+		<div class="choice-group">
+			<label class="choice">
+				<input type="radio" name="type" value="place" x-model="draft.type"/>
+				<span class="choice__icon">@icon("map-pin", "")</span>
+				<span><span class="choice__title">Место</span><span class="choice__text">Постоянная точка: бухта, кофейня, смотровая</span></span>
+			</label>
+			<label class="choice">
+				<input type="radio" name="type" value="event" x-model="draft.type"/>
+				<span class="choice__icon">@icon("calendar", "")</span>
+				<span><span class="choice__title">Событие</span><span class="choice__text">С датой: концерт, поход, маркет</span></span>
+			</label>
+			<label class="choice">
+				<input type="radio" name="type" value="fix" x-model="draft.type"/>
+				<span class="choice__icon">@icon("pencil", "")</span>
+				<span><span class="choice__title">Правка</span><span class="choice__text">Неточность в существующей карточке</span></span>
+			</label>
+		</div>
+	</fieldset>
+	<div x-show="step === 1 && draft.type === 'fix'" x-cloak>
+		if view.FixItem != nil {
+			<div class="fix-target">
+				@media(*view.FixItem, "sm", 0, "1", nil, false)
+				<div>
+					<span class="detail__muted">Исправляем</span>
+					<strong>{ view.FixItem.Title }</strong>
+					<span class="detail__muted">
+						{ presenter.CategoryInfo(view.FixItem.Scenario, view.FixItem.Category, view.FixItem.Type).Label } · { view.FixItem.District }
+					</span>
+				</div>
+			</div>
+		} else {
+			<div class="alert alert--neutral">
+				@icon("info", "")
+				<span>Откройте карточку места и нажмите «Предложить правку» — тогда мы поймём, что именно исправить. Или опишите ниже, о каком месте речь.</span>
+			</div>
+		}
+		<fieldset class="fieldset">
+			<legend>Что не так</legend>
+			<div class="chip-row chip-row--wrap">
+				for _, reason := range fixReasons() {
+					<label class="chip chip--lg">
+						<input type="checkbox" x-model="draft.fixReasons" value={ reason }/>
+						{ reason }
+					</label>
+				}
+			</div>
+			<p class="field__error" x-show="errors.fixReasons" x-text="errors.fixReasons" role="alert"></p>
+		</fieldset>
+	</div>
+	<div x-show="step === 1 && draft.type !== 'fix'" x-cloak>
+		<fieldset class="fieldset">
+			<legend>Раздел</legend>
+			<div class="segmented segmented--lg" role="radiogroup">
+				for _, scenario := range presenter.Scenarios {
+					<label class="segmented__item">
+						<input type="radio" name="scenario" value={ scenario.ID } x-model="draft.scenario"/>
+						@icon(scenario.Icon, "")
+{ scenario.Label }
+					</label>
+				}
+			</div>
+		</fieldset>
+		<fieldset class="fieldset">
+			<legend>Категория</legend>
+			<div class="chip-row chip-row--wrap">
+				for _, scenario := range presenter.Scenarios {
+					for _, category := range presenter.Categories[scenario.ID] {
+						<label class="chip chip--lg" x-show={ "draft.scenario === '" + scenario.ID + "'" }>
+							<input type="radio" name="category" x-model="draft.category" value={ category.ID }/>
+							@icon(category.Icon, "")
+{ category.Label }
+						</label>
+					}
+				}
+				for id, category := range presenter.EventCategories {
+					if id != "party" {
+						<label class="chip chip--lg" x-show="draft.type === 'event'">
+							<input type="radio" name="category" x-model="draft.category" value={ category.ID }/>
+							@icon(category.Icon, "")
+{ category.Label }
+						</label>
+					}
+				}
+			</div>
+			<p class="field__error" x-show="errors.category" x-text="errors.category" role="alert"></p>
+		</fieldset>
+	</div>
+}
+
+func fixReasons() []string {
+	return []string{
+		"Закрылось навсегда",
+		"Неверный адрес или точка",
+		"Изменились часы",
+		"Изменилась цена",
+		"Ошибка в описании",
+		"Плохие фото",
+		"Другое",
+	}
+}
+
+// addStepDetails — шаг 2: название, адрес, описание, фото.
+templ addStepDetails(view AddView) {
+	<div x-show="step === 2" x-cloak>
+		<div x-show="draft.type === 'fix'">
+			<div class="field" x-show={ strconv.FormatBool(view.FixItem == nil) }>
+				<label class="field__label" for="f-title">Какое место или событие</label>
+				<input class="input" id="f-title" x-model="draft.title" maxlength="80"/>
+				<p class="field__error" x-show="errors.title" x-text="errors.title" role="alert"></p>
+			</div>
+			<div class="field">
+				<label class="field__label" for="f-description">Как правильно</label>
+				<textarea class="textarea" id="f-description" x-model="draft.description" maxlength="1000" placeholder="Например: с ноября работает до 18:00, вход теперь со двора"></textarea>
+				<p class="field__error" x-show="errors.description" x-text="errors.description" role="alert"></p>
+				<span class="field__counter" x-text="(draft.description || '').length + ' / 1000'"></span>
+			</div>
+			<div class="field">
+				<label class="field__label" for="f-link">Источник <span class="optional">— необязательно</span></label>
+				<input class="input" id="f-link" x-model="draft.link" type="url" inputmode="url" placeholder="Ссылка на сайт, соцсеть или новость"/>
+			</div>
+		</div>
+		<div x-show="draft.type !== 'fix'">
+			<div class="field">
+				<label class="field__label" for="f-title">Название</label>
+				<input class="input" id="f-title" x-model="draft.title" maxlength="80" placeholder="Например, бухта Шамора"/>
+				<p class="field__error" x-show="errors.title" x-text="errors.title" role="alert"></p>
+			</div>
+			<div class="form-row" x-show="draft.type === 'event'">
+				<div class="field">
+					<label class="field__label" for="f-date">Дата</label>
+					<input class="input" id="f-date" x-model="draft.date" type="date"/>
+					<p class="field__error" x-show="errors.date" x-text="errors.date" role="alert"></p>
+				</div>
+				<div class="field">
+					<label class="field__label" for="f-time">Начало</label>
+					<input class="input" id="f-time" x-model="draft.time" type="time"/>
+					<p class="field__error" x-show="errors.time" x-text="errors.time" role="alert"></p>
+				</div>
+			</div>
+			<div class="field">
+				<label class="field__label" for="f-address">Адрес или ориентир</label>
+				<div class="input-with-action">
+					<input class="input" id="f-address" x-model="draft.address" maxlength="120" placeholder="Улица и дом или понятный ориентир"/>
+					<button
+						type="button"
+						class="btn btn--outline"
+						data-action="toggle-picker"
+						@click="togglePicker"
+						:aria-expanded="pickerVisible"
+						aria-controls="add-map"
+					>
+						@icon("map-pin", "")<span x-text="draft.coords ? 'Точка выбрана' : 'На карте'"></span>
+					</button>
+				</div>
+				<p class="field__error" x-show="errors.address" x-text="errors.address" role="alert"></p>
+				<div class="add-map" id="add-map" x-show="pickerVisible" x-cloak>
+					<div class="add-map__canvas" data-picker-map></div>
+					<div class="map-picker">
+						<div class="map-picker__pin">
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="#fff" stroke-width="1.5" d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg>
+							<span class="map-picker__shadow"></span>
+						</div>
+					</div>
+					<p class="add-map__hint">@icon("info", "icon--sm") Двигайте карту, чтобы метка встала на место</p>
+				</div>
+			</div>
+			<div class="field">
+				<label class="field__label" for="f-description">Описание</label>
+				<textarea class="textarea" id="f-description" x-model="draft.description" maxlength="1000" placeholder="Чем интересно, когда лучше идти, что важно знать заранее"></textarea>
+				<p class="field__error" x-show="errors.description" x-text="errors.description" role="alert"></p>
+				<span class="field__counter" x-text="(draft.description || '').length + ' / 1000'"></span>
+			</div>
+			<div class="form-row">
+				<div class="field" x-show="draft.type === 'place'">
+					<label class="field__label" for="f-hours">Часы работы <span class="optional">— необязательно</span></label>
+					<input class="input" id="f-hours" x-model="draft.hours" placeholder="Круглосуточно"/>
+				</div>
+				<div class="field">
+					<label class="field__label" for="f-price">Стоимость <span class="optional">— необязательно</span></label>
+					<input class="input" id="f-price" x-model="draft.price" placeholder="Бесплатно или от 500 ₽"/>
+				</div>
+			</div>
+			<div class="field">
+				<label class="field__label" for="f-link">Сайт или соцсеть <span class="optional">— необязательно</span></label>
+				<input class="input" id="f-link" x-model="draft.link" type="url" inputmode="url" placeholder="https://"/>
+			</div>
+		</div>
+		@addPhotosField()
+	</div>
+}
+
+templ addPhotosField() {
+	<div class="field">
+		<span class="field__label" id="photos-label">Фото <span class="optional">— до 5, необязательно</span></span>
+		<div class="upload" role="group" aria-labelledby="photos-label">
+			<template x-for="(photo, index) in draft.photos" :key="photo.key">
+				<div class="upload__item" :class="{ 'upload__item--loading': photo.uploading }">
+					<img :src="photo.url" :alt="'Фото ' + (index + 1)"/>
+					<span class="upload__spinner" x-show="photo.uploading" aria-label="Загрузка"></span>
+					<button type="button" class="icon-btn icon-btn--sm icon-btn--floating icon-btn--round" @click="removePhoto(index)" :aria-label="'Удалить фото ' + (index + 1)" x-show="!photo.uploading">@icon("x", "")</button>
+				</div>
+			</template>
+			<label class="upload__drop" x-show="draft.photos.length < 5" :class="{ 'is-disabled': photosBusy }">
+				@icon("image-plus", "icon--lg") Добавить
+				<input type="file" accept="image/*" multiple @change="addPhotos($event)" :disabled="photosBusy"/>
+			</label>
+		</div>
+		<p class="field__hint">Свои снимки или с разрешения автора. JPG, PNG или WebP до 10 МБ — загрузятся сразу, пока вы пишете дальше.</p>
+	</div>
+}
+
+// addStepSend — шаг 3: сводка и отправка.
+templ addStepSend(view AddView) {
+	<div x-show="step === 3" x-cloak>
+		<div class="summary-card">
+			<div class="summary-card__head">
+				<h3>Проверьте перед отправкой</h3>
+				<button type="button" class="link-btn" @click="gotoStep(1)">Изменить</button>
+			</div>
+			<dl class="summary-card__list">
+				<div><dt>Что</dt><dd x-text="typeLabel()"></dd></div>
+				<div x-show="draft.type !== 'fix'"><dt>Раздел</dt><dd x-text="scenarioLabel()"></dd></div>
+				<div x-show="draft.type !== 'fix'"><dt>Категория</dt><dd x-text="categoryLabel()"></dd></div>
+				<div x-show="draft.type === 'fix'"><dt>Что не так</dt><dd x-text="draft.fixReasons.join(', ') || '—'"></dd></div>
+				<div><dt>Название</dt><dd x-text="draft.title || '—'"></dd></div>
+				<div x-show="draft.type !== 'fix'"><dt>Где</dt><dd x-text="draft.address || '—'"></dd></div>
+				<div x-show="draft.date"><dt>Когда</dt><dd x-text="whenLabel()"></dd></div>
+				<div><dt>Фото</dt><dd x-text="draft.photos.length ? draft.photos.length + ' шт.' : 'Нет'"></dd></div>
+			</dl>
+			<p class="summary-card__text" x-show="draft.description" x-text="draft.description"></p>
+		</div>
+		if view.User != nil {
+			<div class="alert alert--success">
+				@icon("circle-check", "")
+				<span>Вы вошли как <strong>{ view.User.DisplayName }</strong>. Статус проверки появится в профиле, в разделе «Мои предложения».</span>
+			</div>
+		} else {
+			<div class="alert alert--warning">
+				@icon("info", "")
+				<span>Чтобы отправить предложение, <button type="button" class="link-btn" data-action="login">войдите</button> — это займёт полминуты.</span>
+			</div>
+		}
+		<label class="check">
+			<input type="checkbox" x-model="draft.consent"/>
+			<span class="check__text">Информация достоверна, а фото можно публиковать<small>Редакция может сократить текст и поправить детали</small></span>
+		</label>
+		<p class="field__error" x-show="errors.consent" x-text="errors.consent" role="alert"></p>
+	</div>
+}
+
+// AddSuccessPage — подтверждение отправки предложения.
+templ AddSuccessPage(view AddSuccessView) {
+	@Layout(LayoutView{
+		Title:   "Отправлено — Места VL.ru",
+		Section: "",
+		User:    view.User,
+	}) {
+		<div class="page container">
+			<div class="state-page">
+				<span class="state-page__icon">@icon("circle-check", "icon--xl")</span>
+				<h1 class="state-page__title">
+					if view.Type == "fix" {
+						Спасибо за правку
+					} else {
+						Спасибо, отправили на проверку
+					}
+				</h1>
+				<p class="state-page__text">
+					Редакция посмотрит в течение одного-двух рабочих дней.
+					if view.User != nil {
+						Статус появится в профиле, в разделе «Мои предложения».
+					}
+				</p>
+				<div class="state-page__actions">
+					<a class="btn btn--primary btn--lg" href="/">@icon("map", "") Вернуться на карту</a>
+					if view.User != nil {
+						<a class="btn btn--outline btn--lg" href="/profile?tab=submissions">Мои предложения</a>
+					} else {
+						<a class="btn btn--outline btn--lg" href="/add">Добавить ещё</a>
+					}
+				</div>
+			</div>
+		</div>
+		@footer()
+	}
+}

@@ -65,11 +65,14 @@ type Config struct {
 	PhotosConfig
 }
 
-// PhotosConfig covers the photo upload endpoint. Storage and moderation are
-// stubs for now; only the upload size limit is enforced.
+// PhotosConfig covers the photo upload endpoint: the size cap and the local
+// storage directory. Files are served by the static handler of the web dir,
+// so by default storage lives in <web>/uploads and maps to /uploads URLs.
 type PhotosConfig struct {
 	// MaxUploadMB caps one multipart upload in megabytes.
 	MaxUploadMB int64 `koanf:"PHOTOS_MAX_UPLOAD_MB" validate:"gte=1,lte=50"`
+	// StorageDir is the photo storage root. Empty means <WebDir>/uploads.
+	StorageDir string `koanf:"PHOTOS_STORAGE_DIR"`
 }
 
 // PinsConfig is the moderation policy of the radar «Сейчас»: per-user

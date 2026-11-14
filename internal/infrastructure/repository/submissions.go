@@ -98,7 +98,7 @@ func (r *SubmissionRepository) Create(ctx context.Context, in models.CreateSubmi
 		in.Price,
 		in.Link,
 		in.FixID,
-		in.FixReasons,
+		append([]string{}, in.FixReasons...),
 		in.Contact,
 		photosValue(in.Photos),
 	))

@@ -1,0 +1,288 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Общие компоненты: иконки, медиа, карточки, чипы. Разметка зеркалит ui/cards.js
+// макета — классы берутся из app.css (дизайн-система макета).
+
+templ icon(name, class string) {
+	<svg class={ "icon " + class } aria-hidden="true">
+		<use href={ "/icons.svg#i-" + name }></use>
+	</svg>
+}
+
+templ avatar(name, size string) {
+	<span class={ "avatar avatar--" + size } style={ avatarStyle(name) } aria-hidden="true">{ initials(name) }</span>
+}
+
+// media — фото объекта или заглушка с иконкой категории.
+templ media(item presenter.CatalogItem, size string, index int, ratio string, badges templ.Component, eager bool) {
+	{{ photo := photoAt(item, index) }}
+	if photo == nil {
+		<div class="media media--placeholder" data-scenario={ itemScenario(item) } style={ mediaRatioStyle(ratio) }>
+			@icon(presenter.CategoryInfo(item.Scenario, item.Category, item.Type).Icon, "")
+			if badges != nil {
+				<div class="media__badges">@badges</div>
+			}
+		</div>
+	} else {
+		<div class="media" style={ mediaRatioStyle(ratio) }>
+			<img
+				src={ mediaSrc(photo, size) }
+				alt={ mediaAlt(photo, item) }
+				width={ mediaDim(photo.Width, 640) }
+				height={ mediaDim(photo.Height, 480) }
+				loading={ mediaLoading(eager) }
+				decoding="async"
+			/>
+			if badges != nil {
+				<div class="media__badges">@badges</div>
+			}
+		</div>
+	}
+}
+
+templ dateTile(iso string) {
+	{{ day, month := dateTileParts(iso) }}
+	<span class="date-tile">
+		<span class="date-tile__day">{ day }</span>
+		<span class="date-tile__month">{ month }</span>
+	</span>
+}
+
+// cardBadges — плитка даты для события.
+templ cardBadges(item presenter.CatalogItem) {
+	if item.Type == "event" {
+		@dateTile(item.StartsAt)
+	}
+}
+
+templ placeCard(item presenter.CatalogItem, layout string, eager bool) {
+	<article class={ "place-card" + cardRowClass(layout) }>
+		<div class="place-card__media">
+			@media(item, "sm", 0, "", cardBadges(item), eager)
+			<div class="place-card__action">
+				@routeToggleButton(item, "icon-btn icon-btn--floating icon-btn--sm icon-btn--round")
+			</div>
+		</div>
+		<div class="place-card__body">
+			<div class="place-card__meta">
+				@itemMeta(item, "place-card")
+			</div>
+			<h3 class="place-card__title">
+				<a class="place-card__link" href={ itemURL(item) }>{ item.Title }</a>
+			</h3>
+			<p class="place-card__text">{ item.Short }</p>
+			<div class="place-card__facts">@itemFacts(item, false)</div>
+		</div>
+	</article>
+}
+
+// routeToggleButton — кнопка «В маршрут», состояние держит клиентский routeStore.
+templ routeToggleButton(item presenter.CatalogItem, class string) {
+	<button
+		type="button"
+		class={ class }
+		data-action="route-toggle"
+		data-id={ item.ID }
+		data-title={ item.Title }
+		aria-pressed="false"
+		x-bind:aria-pressed={ "$store.route.has('" + item.ID + "')" }
+		aria-label={ "Добавить в маршрут: " + item.Title }
+		title="Добавить в маршрут"
+	>
+		<template x-if={ "!$store.route.has('" + item.ID + "')" }>@icon("route", "icon--sm")</template>
+		<template x-if={ "$store.route.has('" + item.ID + "')" }>@icon("check", "icon--sm")</template>
+	</button>
+}
+
+// resultRow — строка результата в панели карты.
+templ resultRow(item presenter.CatalogItem, current bool) {
+	<li class="result-row" data-id={ item.ID } aria-current={ ariaCurrent(current) }>
+		<button
+			type="button"
+			class="result-row__open"
+			data-action="select"
+			data-id={ item.ID }
+			aria-label={ item.Title + ", " + presenter.CategoryInfo(item.Scenario, item.Category, item.Type).Label }
+		></button>
+		@media(item, "sm", 0, "", nil, false)
+		<div class="result-row__body">
+			<span class="result-row__title">{ item.Title }</span>
+			<span class="result-row__meta">@itemMeta(item, "result-row")</span>
+			<span class="result-row__facts">@itemFacts(item, true)</span>
+		</div>
+		<div class="result-row__aside">
+			@routeToggleButton(item, "icon-btn icon-btn--sm")
+		</div>
+	</li>
+}
+
+// itemMeta — «категория · район / дата».
+templ itemMeta(item presenter.CatalogItem, className string) {
+	{{ category := presenter.CategoryInfo(item.Scenario, item.Category, item.Type) }}
+	<span class={ className + "__category" } data-scenario={ itemScenario(item) }>{ category.Label }</span>
+	<span class="sep" aria-hidden="true"></span>
+	<span>{ metaSecond(item) }</span>
+}
+
+// itemFacts — короткие факты: цена, сложность, расстояние / время и вход события.
+templ itemFacts(item presenter.CatalogItem, compact bool) {
+	if item.Type == "event" {
+		<span>@icon("clock", "")
+{ eventWhenTime(item.StartsAt) }</span>
+		<span>@icon("ticket", "")
+{ priceLabel(item) }</span>
+	} else {
+		if item.PriceFree != nil || item.PriceLabel != "" {
+			<span>@icon("wallet", "")
+{ priceLabel(item) }</span>
+		}
+		if item.Difficulty != nil && item.Scenario == "nature" {
+			<span>@icon("mountain", "")
+{ presenter.DifficultyLabels[difficultyCodeOf(item)] }</span>
+		}
+		if !compact || item.Scenario != "city" {
+			<span>@icon("navigation", "")
+{ formatDistance(item.DistanceKm) } от центра</span>
+		}
+	}
+}
+
+templ pinTimeBadge(pin presenter.Pin) {
+	{{ state, label, _ := pinTiming(pin.StartsAt, pin.EndsAt) }}
+	<span class="badge badge--timed">
+		if state == "live" {
+			<span class="live-dot" aria-hidden="true"></span>
+		} else {
+			@icon("clock", "")
+		}
+		{ " " + label }
+	</span>
+}
+
+templ pinMeter(pin presenter.Pin) {
+	if pin.Need == nil {
+		<div class="meter">
+			<div class="meter__label">
+				<span>Идут <strong>{ strconv.Itoa(pin.GoingTotal) }</strong></span>
+				<span>Без ограничений</span>
+			</div>
+		</div>
+	} else {
+		{{ left := pinNeedLeft(pin) }}
+		<div class="meter">
+			<div class="meter__label">
+				<span>Идут <strong>{ strconv.Itoa(pin.GoingTotal) }</strong></span>
+				<span>
+					if left > 0 {
+						нужно ещё { countLabel(left, [3]string{"человек", "человека", "человек"}) }
+					} else {
+						Набрали
+					}
+				</span>
+			</div>
+			<div
+				class="meter__track"
+				role="progressbar"
+				aria-label="Набор участников"
+				aria-valuemin="0"
+				aria-valuemax={ strconv.Itoa(pinMeterTotal(pin)) }
+				aria-valuenow={ strconv.Itoa(pin.GoingTotal) }
+			>
+				<div class="meter__fill" style={ "width: " + strconv.Itoa(pinMeterPercent(pin)) + "%" }></div>
+			</div>
+		</div>
+	}
+}
+
+templ pinCard(pin presenter.Pin, current bool) {
+	{{ kind := presenter.PinKindInfo(pin.Kind) }}
+	<li class={ "pin-card" + pinMineClass(pin) } data-id={ pin.ID } aria-current={ ariaCurrent(current) }>
+		<div class="pin-card__head">
+			@avatar(pin.Author.Name, "sm")
+			<span class="pin-card__author">
+				<strong>
+					if pin.Mine {
+						Вы
+					} else {
+						{ pin.Author.Name }
+					}
+				</strong>
+				<span>{ kind.Label }</span>
+			</span>
+			<span class="pin-card__time">@pinTimeBadge(pin)</span>
+		</div>
+		<div>
+			<button type="button" class="pin-card__open" data-action="select" data-id={ pin.ID }>
+				<span class="pin-card__title">{ pin.Title }</span>
+			</button>
+			if pin.Note != "" {
+				<p class="pin-card__note">{ pin.Note }</p>
+			}
+		</div>
+		<span class="pin-card__place">@icon("map-pin", "")
+{ pin.PlaceLabel }</span>
+		<div class="pin-card__foot">
+			@pinMeter(pin)
+			if pin.Mine {
+				<span class="badge badge--inverse">Ваша метка</span>
+			} else {
+				<button
+					type="button"
+					class="btn btn--sm btn--accent-soft"
+					data-action="pin-going"
+					data-id={ pin.ID }
+					aria-pressed={ strconv.FormatBool(pin.Joined) }
+				>
+					@icon(mapBoolIcon(pin.Joined, "plus"), "icon--sm")
+					if pin.Joined {
+						Вы идёте
+					} else {
+						Я приду
+					}
+				</button>
+			}
+		</div>
+	</li>
+}
+
+// collectionCard — подборка справочника; ссылки строит вызывающий код.
+templ collectionCard(card CollectionCard, pageURL, fragmentURL string) {
+	<a
+		class="collection-card"
+		href={ templ.SafeURL(pageURL) }
+		hx-get={ fragmentURL }
+		hx-target="#catalog-results"
+		hx-push-url={ pageURL }
+		aria-pressed={ strconv.FormatBool(card.Pressed) }
+	>
+		if card.Cover != nil {
+			@media(*card.Cover, "sm", 0, "1", nil, false)
+		} else {
+			<span class="media media--placeholder"></span>
+		}
+		<span>
+			<span class="collection-card__title">{ card.Title }</span>
+			<span class="collection-card__count">{ countLabel(card.Count, [3]string{"объект", "объекта", "объектов"}) }</span>
+		</span>
+	</a>
+}
+
+// filterChip — съёмный чип активного фильтра.
+templ filterChip(label, pageURL, fragmentURL string) {
+	<a
+		class="chip chip--removable"
+		href={ templ.SafeURL(pageURL) }
+		hx-get={ fragmentURL }
+		hx-target="#map-panel-inner"
+		hx-push-url={ pageURL }
+		aria-label={ "Убрать фильтр: " + label }
+	>
+		{ label }@icon("x", "")
+	</a>
+}

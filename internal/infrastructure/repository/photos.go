@@ -44,14 +44,22 @@ const photoColumns = `
 `
 
 func (r *PhotoRepository) Create(ctx context.Context, in models.CreatePhotoInput) (models.StoredPhoto, error) {
-	id, err := models.NewUUIDv7(time.Now())
-	if err != nil {
-		return models.StoredPhoto{}, err
+	id := in.ID
+	if id == "" {
+		var err error
+		if id, err = models.NewUUIDv7(time.Now()); err != nil {
+			return models.StoredPhoto{}, err
+		}
+	}
+
+	status := in.Status
+	if status == "" {
+		status = models.PhotoStatusModeration
 	}
 
 	const query = `
-		INSERT INTO photos (id, owner_id, original_name, content_type, size_bytes, sha256)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
+		INSERT INTO photos (id, owner_id, status, storage_path, original_name, content_type, size_bytes, width, height, sha256)
+		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING ` + photoColumns
 
 	photo, err := scanPhoto(r.pool.QueryRow(
@@ -59,9 +67,13 @@ func (r *PhotoRepository) Create(ctx context.Context, in models.CreatePhotoInput
 		query,
 		id,
 		in.OwnerID,
+		status,
+		in.StoragePath,
 		in.OriginalName,
 		in.ContentType,
 		in.SizeBytes,
+		in.Width,
+		in.Height,
 		in.SHA256,
 	))
 	if err != nil {

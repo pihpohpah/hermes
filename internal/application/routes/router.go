@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof" // trigger init
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -44,9 +46,12 @@ type Handlers struct {
 	RequireAuth        func(http.Handler) http.Handler
 	LoadAuth           func(http.Handler) http.Handler
 	AllowedOrigins     []string
-	PlacesListFragment *httproutes.PlacesListFragmentHandler
-	PlaceCardFragment  *httproutes.PlaceCardFragmentHandler
-	IndexPage          *httproutes.IndexPageHandler
+	Pages              *httproutes.Pages
+	Fragments          *httproutes.Fragments
+	MapItems           *httproutes.MapItems
+	Item               *httproutes.Item
+	Logout             *httproutes.LogoutHandler
+	UpdateUser         *httproutes.UpdateCurrentUserHandler
 	MapPage            *httproutes.MapPageHandler
 	MapAssets          *httproutes.MapAssetsHandler
 	PMTiles            *httproutes.PMTilesHandler
@@ -72,6 +77,12 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	}
 
 	mux.Handle("GET /users/me", requireAuth(h.GetCurrentUser))
+	if h.UpdateUser != nil {
+		mux.Handle("PATCH /users/me", requireAuth(h.UpdateUser))
+	}
+	if h.Logout != nil {
+		mux.Handle("POST /users/logout", requireAuth(h.Logout))
+	}
 
 	mux.Handle("GET /places", h.ListPlaces)
 	mux.Handle("POST /places", h.CreatePlace)
@@ -119,8 +130,32 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 		mux.Handle("POST /reports", requireAuth(h.CreateReport))
 	}
 
-	mux.Handle("GET /fragments/places-list", h.PlacesListFragment)
-	mux.Handle("GET /fragments/place-card/{id}", h.PlaceCardFragment)
+	// Серверно-рендеренные страницы продукта и htmx-фрагменты.
+	if h.Pages != nil {
+		mux.Handle("GET /{$}", loadAuth(http.HandlerFunc(h.Pages.MapPage)))
+		mux.Handle("GET /now", loadAuth(http.HandlerFunc(h.Pages.NowPage)))
+		mux.Handle("GET /catalog", loadAuth(http.HandlerFunc(h.Pages.CatalogPage)))
+		mux.Handle("GET /add", loadAuth(http.HandlerFunc(h.Pages.AddPage)))
+		mux.Handle("GET /add/success", loadAuth(http.HandlerFunc(h.Pages.AddSuccessPage)))
+		mux.Handle("GET /profile", loadAuth(http.HandlerFunc(h.Pages.ProfilePage)))
+		mux.Handle("GET /rules", loadAuth(http.HandlerFunc(h.Pages.RulesPage)))
+		mux.Handle("GET /place/{id}", loadAuth(http.HandlerFunc(h.Pages.PlacePage)))
+		mux.Handle("GET /event/{id}", loadAuth(http.HandlerFunc(h.Pages.EventPage)))
+	}
+	if h.Fragments != nil {
+		mux.Handle("GET /fragments/map-panel", loadAuth(http.HandlerFunc(h.Fragments.MapPanel)))
+		mux.Handle("GET /fragments/catalog-results", loadAuth(http.HandlerFunc(h.Fragments.CatalogResults)))
+		mux.Handle("GET /fragments/pins", loadAuth(http.HandlerFunc(h.Fragments.Pins)))
+		mux.Handle("GET /fragments/pin/{id}", loadAuth(http.HandlerFunc(h.Fragments.Pin)))
+		mux.Handle("GET /fragments/profile-tab", loadAuth(http.HandlerFunc(h.Fragments.ProfileTab)))
+		mux.Handle("GET /fragments/live-count", http.HandlerFunc(h.Fragments.LiveCount))
+	}
+	if h.MapItems != nil {
+		mux.Handle("GET /api/map-items", loadAuth(h.MapItems))
+	}
+	if h.Item != nil {
+		mux.Handle("GET /api/items/{id}", loadAuth(h.Item))
+	}
 
 	mux.Handle("GET /api/pmtiles/region.pmtiles", h.PMTiles)
 	mux.Handle("HEAD /api/pmtiles/region.pmtiles", h.PMTiles)
@@ -143,11 +178,22 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 		mux.Handle("HEAD /api/map/relief.pmtiles", h.Relief)
 	}
 
-	if h.IndexPage != nil {
-		mux.Handle("GET /{$}", h.IndexPage)
-	}
 	if h.WebDir != "" {
-		mux.Handle("GET /", http.FileServer(http.Dir(h.WebDir)))
+		files := http.FileServer(http.Dir(h.WebDir))
+		mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Существующие файлы отдаём как есть; остальное — страница 404 продукта.
+			if info, err := os.Stat(filepath.Join(h.WebDir, filepath.Clean(r.URL.Path))); err != nil || info.IsDir() {
+				if h.Pages != nil {
+					h.Pages.NotFoundPage(w, r)
+
+					return
+				}
+				http.NotFound(w, r)
+
+				return
+			}
+			files.ServeHTTP(w, r)
+		}))
 	}
 
 	return withRecover(logger, withCORS(h.AllowedOrigins, withRequestLog(logger, mux)))

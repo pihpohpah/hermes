@@ -1,0 +1,188 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Справочник: поиск и подборки в оболочке страницы, результаты — htmx-фрагмент
+// (/fragments/catalog-results). Сортировка и фильтры — URL, «Показать ещё» —
+// клиентский Alpine-слайс поверх серверной выдачи.
+
+templ CatalogPage(view CatalogView) {
+	@Layout(LayoutView{
+		Title:    "Справочник — Места VL.ru",
+		Section:  "catalog",
+		User:     view.User,
+		Scenario: view.Query.Scenario,
+		ScenarioHref: func(id string) string {
+			return "/catalog?s=" + id
+		},
+	}) {
+		<div class="page catalog">
+			<div class="container">
+				<header class="catalog__head">
+					<div class="catalog__title-row">
+						<div>
+							<h1 class="page__title">Справочник</h1>
+							<p class="page__lead">Места и события Владивостока и Приморья — от музеев и подвальных концертов до маяков и водопадов.</p>
+						</div>
+						<a class="btn btn--outline catalog__map-link" href="/">@icon("map", "") На карте</a>
+					</div>
+					<form class="catalog__search" role="search" data-role="catalog-search">
+						<div class="input-group">
+							@icon("search", "")
+							<input class="input input--surface catalog__search-input" type="search" name="q" value={ view.Query.Q } placeholder="Например: маяк, джаз, Русский, бесплатно" aria-label="Поиск по справочнику" autocomplete="off"/>
+							if view.Query.Q != "" {
+								<a class="icon-btn icon-btn--sm input-group__action" data-action="clear-search" aria-label="Очистить поиск" href={ templ.SafeURL(view.Query.with(func(n *CatalogQueryView) { n.Q = "" }).pageURL()) }>@icon("x", "")</a>
+							}
+						</div>
+					</form>
+				</header>
+				<div id="catalog-results">
+					@CatalogResults(view)
+				</div>
+			</div>
+		</div>
+		@footer()
+	}
+}
+
+// CatalogResults — обновляемая часть справочника (тулбар, подборки, сетка).
+templ CatalogResults(view CatalogView) {
+	{{
+		q := view.Query
+		chips := catalogActiveChips(q)
+		active := hasFilterCount(q.Filters)
+	}}
+	<section class="catalog__collections" aria-labelledby="collections-title">
+		<h2 class="visually-hidden" id="collections-title">Подборки</h2>
+		<div class="catalog__collections-row">
+			for _, card := range view.Collections {
+				{{ colQ := q.with(func(n *CatalogQueryView) {
+					if n.Collection == card.ID {
+						n.Collection = ""
+					} else {
+						n.Collection = card.ID
+					}
+				}) }}
+				@collectionCard(card, colQ.pageURL(), colQ.fragmentURL())
+			}
+		</div>
+	</section>
+	<div class="catalog__toolbar">
+		<div class="catalog__toolbar-main">
+			<div class="chip-row" role="group" aria-label="Категории">
+				<a class="chip" href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.Category = "" }).pageURL()) } hx-get={ q.with(func(n *CatalogQueryView) { n.Category = "" }).fragmentURL() } hx-target="#catalog-results" hx-push-url={ q.with(func(n *CatalogQueryView) { n.Category = "" }).pageURL() } aria-pressed={ strconv.FormatBool(q.Category == "") }>Все категории</a>
+				for _, category := range presenter.Categories[q.Scenario] {
+					<a class="chip" href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.Category = category.ID }).pageURL()) } hx-get={ q.with(func(n *CatalogQueryView) { n.Category = category.ID }).fragmentURL() } hx-target="#catalog-results" hx-push-url={ q.with(func(n *CatalogQueryView) { n.Category = category.ID }).pageURL() } aria-pressed={ strconv.FormatBool(q.Category == category.ID) }>
+						@icon(category.Icon, "")
+{ category.Label }
+					</a>
+				}
+			</div>
+		</div>
+		<div class="catalog__toolbar-side">
+			<span class="catalog__count" aria-hidden="true">{ countLabel(len(view.Items), [3]string{"результат", "результата", "результатов"}) }</span>
+			<button type="button" class="btn btn--sm btn--outline filter-btn" data-action="filters" data-scenario={ q.Scenario }>
+				@icon("sliders-horizontal", "icon--sm") Фильтры
+				if active > 0 {
+					<span class="filter-btn__count">{ strconv.Itoa(active) }</span>
+				}
+			</button>
+			<label class="visually-hidden" for="catalog-sort">Сортировка</label>
+			<select class="select select--sm" id="catalog-sort" data-role="catalog-sort">
+				for _, sort := range presenter.Sorts {
+					<option value={ sort.Value } selected?={ q.Sort == sort.Value }>{ sort.Label }</option>
+				}
+			</select>
+			<div class="segmented catalog__view" role="group" aria-label="Вид">
+				<a class="segmented__item" href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.View = "grid" }).pageURL()) } hx-get={ q.with(func(n *CatalogQueryView) { n.View = "grid" }).fragmentURL() } hx-target="#catalog-results" hx-push-url={ q.with(func(n *CatalogQueryView) { n.View = "grid" }).pageURL() } aria-pressed={ strconv.FormatBool(q.View != "list") } aria-label="Сеткой" title="Сеткой">@icon("layout-grid", "")</a>
+				<a class="segmented__item" href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.View = "list" }).pageURL()) } hx-get={ q.with(func(n *CatalogQueryView) { n.View = "list" }).fragmentURL() } hx-target="#catalog-results" hx-push-url={ q.with(func(n *CatalogQueryView) { n.View = "list" }).pageURL() } aria-pressed={ strconv.FormatBool(q.View == "list") } aria-label="Списком" title="Списком">@icon("list", "")</a>
+			</div>
+		</div>
+	</div>
+	<p class="visually-hidden" aria-live="polite">Найдено: { countLabel(len(view.Items), [3]string{"результат", "результата", "результатов"}) }</p>
+	if q.Collection != "" || len(chips) > 0 {
+		<div class="chip-row catalog__active">
+			if q.Collection != "" {
+				{{ colQ := q.with(func(n *CatalogQueryView) { n.Collection = "" }) }}
+				<a class="chip chip--removable" href={ templ.SafeURL(colQ.pageURL()) } hx-get={ colQ.fragmentURL() } hx-target="#catalog-results" hx-push-url={ colQ.pageURL() } aria-label="Убрать подборку">
+					{ collectionTitle(view, q.Collection) }@icon("x", "")
+				</a>
+			}
+			for _, chip := range chips {
+				<a class="chip chip--removable" href={ templ.SafeURL(chip.Page) } hx-get={ chip.Fragment } hx-target="#catalog-results" hx-push-url={ chip.Page } aria-label={ "Убрать фильтр: " + chip.Label }>
+					{ chip.Label }@icon("x", "")
+				</a>
+			}
+		</div>
+	}
+	@catalogGrid(view)
+}
+
+func collectionTitle(view CatalogView, id string) string {
+	for _, card := range view.Collections {
+		if card.ID == id {
+			return card.Title
+		}
+	}
+
+	return id
+}
+
+templ catalogGrid(view CatalogView) {
+	{{
+		q := view.Query
+		layout := "grid"
+		if q.View == "list" {
+			layout = "row"
+		}
+		total := len(view.Items)
+	}}
+	if total == 0 {
+		<div class="empty catalog__empty">
+			<span class="empty__icon">@icon("search", "icon--lg")</span>
+			<h2 class="empty__title">Ничего не нашлось</h2>
+			<p class="empty__text">
+				if q.Q != "" {
+					По запросу «{ q.Q }» пусто.
+				}
+				Попробуйте другое слово или уберите часть условий. Если знаете место, которого здесь нет, расскажите о нём.
+			</p>
+			<div class="empty__actions">
+				if q.Q != "" || q.Category != "" || q.Collection != "" || q.Type != "all" {
+					<a class="btn btn--primary" href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.Q = ""; n.Category = ""; n.Collection = ""; n.Type = "all" }).pageURL()) } hx-get={ q.with(func(n *CatalogQueryView) { n.Q = ""; n.Category = ""; n.Collection = ""; n.Type = "all" }).fragmentURL() } hx-target="#catalog-results" hx-push-url={ q.with(func(n *CatalogQueryView) { n.Q = ""; n.Category = ""; n.Collection = ""; n.Type = "all" }).pageURL() }>Сбросить условия</a>
+				}
+				<a class="btn btn--outline" href="/add">Предложить место</a>
+			</div>
+		</div>
+	} else {
+		<div x-data={ "{ shown: " + strconv.Itoa(pageSize) + " }" }>
+			<ul class={ catalogGridClass(q.View) } role="list">
+				for i, item := range view.Items {
+					<li x-data={ "{ i: " + strconv.Itoa(i) + " }" } x-show={ "$parent.shown > i" }>
+						@placeCard(item, layout, i < 4)
+					</li>
+				}
+			</ul>
+			if total > pageSize {
+				<div class="catalog__more" x-show={ "shown < " + strconv.Itoa(total) }>
+					<button type="button" class="btn btn--outline btn--lg" @click={ "shown += " + strconv.Itoa(pageSize) }>
+						Показать ещё { strconv.Itoa(min(pageSize, total-pageSize)) }
+					</button>
+					<span x-text={ "'Показано ' + Math.min(shown, " + strconv.Itoa(total) + ") + ' из " + strconv.Itoa(total) + "'" }>Показано { strconv.Itoa(min(pageSize, total)) } из { strconv.Itoa(total) }</span>
+				</div>
+			}
+		</div>
+	}
+}
+
+func catalogGridClass(view string) string {
+	if view == "list" {
+		return "catalog__grid catalog__grid--list"
+	}
+
+	return "catalog__grid"
+}

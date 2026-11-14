@@ -1,2 +1,9 @@
 .env
 web/static/pmtiles/
+
+# Загруженные пользователями фото — генерируются в рантайме
+web/static/uploads/
+
+# Сборка фронтенда (mise run assets)
+web/static/js/app/app.min.js
+web/static/css/app.min.css

@@ -1,6 +1,7 @@
 [tools]
 go = "1.27.3"
 golangci-lint = "2"
+"npm:esbuild" = "0.25.11"
 
 [env]
 _.file = ".env"
@@ -18,6 +19,7 @@ go mod download
 
 [tasks.dev]
 description = "Запуск сервера с hot-reload (air / go run)"
+depends = ["assets"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -26,6 +28,40 @@ if command -v air >/dev/null 2>&1; then
 else
   exec go run ./cmd/server listen
 fi
+"""
+
+[tasks.assets]
+description = "Собрать и минифицировать JS-бандл и CSS (esbuild)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+esbuild web/static/js/app/app.js \\
+  --bundle --minify --format=esm \\
+  --outfile=web/static/js/app/app.min.js
+echo "OK: web/static/js/app/app.min.js ($(du -h web/static/js/app/app.min.js | cut -f1))"
+esbuild web/static/css/app.css \\
+  --minify \\
+  --outfile=web/static/css/app.min.css
+echo "OK: web/static/css/app.min.css ($(du -h web/static/css/app.min.css | cut -f1))"
+"""
+
+[tasks.assets-watch]
+description = "Пересобирать JS-бандл и CSS при изменении исходников (esbuild --watch)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+esbuild web/static/js/app/app.js \\
+  --bundle --minify --format=esm \\
+  --outfile=web/static/js/app/app.min.js \\
+  --watch &
+js_pid=$!
+esbuild web/static/css/app.css \\
+  --minify \\
+  --outfile=web/static/css/app.min.css \\
+  --watch &
+css_pid=$!
+trap 'kill $js_pid $css_pid 2>/dev/null || true' EXIT INT TERM
+wait
 """
 
 [tasks.migrate-up]

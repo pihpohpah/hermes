@@ -101,3 +101,14 @@ func (r *SessionRepository) Touch(ctx context.Context, id string, now time.Time)
 
 	return nil
 }
+
+// Revoke закрывает сессию: middleware начинает считать её отсутствующей.
+func (r *SessionRepository) Revoke(ctx context.Context, id string, now time.Time) error {
+	const query = `UPDATE user_sessions SET revoked_at = $2 WHERE id = $1::uuid AND revoked_at IS NULL`
+
+	if _, err := queryWith(ctx, r.pool).Exec(ctx, query, id, now); err != nil {
+		return fmt.Errorf("revoke user session: %w", err)
+	}
+
+	return nil
+}

@@ -70,3 +70,32 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (models.User, e
 
 	return user, nil
 }
+
+// UpdateDisplayName меняет отображаемое имя профиля.
+func (r *UserRepository) UpdateDisplayName(ctx context.Context, id, displayName string) (models.User, error) {
+	const query = `
+		UPDATE users
+		SET display_name = $2, updated_at = now()
+		WHERE id = $1::uuid
+		RETURNING id::text, display_name, timezone, created_at, updated_at
+	`
+
+	var updated models.User
+
+	err := queryWith(ctx, r.pool).QueryRow(ctx, query, id, displayName).Scan(
+		&updated.ID,
+		&updated.DisplayName,
+		&updated.Timezone,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.User{}, models.ErrNotFound
+		}
+
+		return models.User{}, fmt.Errorf("update user display name: %w", err)
+	}
+
+	return updated, nil
+}

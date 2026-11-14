@@ -79,11 +79,14 @@ func SubmissionsToHTTP(in []models.Submission) []Submission {
 	return out
 }
 
-// PhotoUpload acknowledges an uploaded photo registered in the moderation
-// queue. No URL is issued until storage lands and the photo becomes active.
+// PhotoUpload acknowledges a processed upload: the file is on disk, the row
+// is registered, and the URL fields point at the stored JPEG variants.
 type PhotoUpload struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
 	URL    string `json:"url,omitempty"`
+	URLSm  string `json:"url_sm,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
 	Note   string `json:"note"`
 }

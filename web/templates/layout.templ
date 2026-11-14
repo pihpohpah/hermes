@@ -1,0 +1,267 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Layout — каркас всех страниц: шапка, подвал, область тостов, скрипты.
+// Состояние экранов живёт в URL, поэтому вся навигация — обычные ссылки;
+// htmx догружает только фрагменты панелей и списков.
+
+templ Layout(v LayoutView) {
+	<!doctype html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+			<title>{ v.Title }</title>
+			<meta name="description" content="Места, события и быстрые метки Владивостока и Приморья на одной карте: город, природа и море."/>
+			<meta name="theme-color" content="#ffffff"/>
+			<link rel="icon" href="/brand/vlru-seagull.svg" type="image/svg+xml"/>
+			<link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin/>
+			if v.WithMap {
+				<link rel="stylesheet" href="/map/vendor/maplibre-gl.css"/>
+			}
+			<link rel="stylesheet" href="/css/app.min.css"/>
+			<style>[x-cloak]{display:none!important}</style>
+			<script src="/js/vendor/htmx.min.js" defer></script>
+			<script type="module" src="/js/app/app.min.js"></script>
+			<script src="/js/vendor/alpine.min.js" defer></script>
+			if v.WithMap {
+				<script src="/map/vendor/maplibre-gl.js" defer></script>
+				<script src="/js/app/map.js" defer></script>
+			}
+		</head>
+		<body>
+			<a class="skip-link" href="#main">Перейти к содержимому</a>
+			<div class="app">
+				@header(v)
+				<main class="main" id="main" tabindex="-1">
+					{ children... }
+				</main>
+			</div>
+			<div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+			<noscript>
+				<div class="boot-note">Для работы карты включите JavaScript.</div>
+			</noscript>
+		</body>
+	</html>
+}
+
+templ header(v LayoutView) {
+	<header class="header" id="header" x-data="{ menuOpen: false }">
+		<div class="header__inner">
+			<div class="header__main">
+				<a class="brand" href="/" aria-label="VL.ru Места — на главную">
+					<img class="brand__logo" src="/brand/vlru-logo.svg" alt="" width="58" height="30"/>
+					<span class="brand__divider" aria-hidden="true"></span>
+					<span class="brand__name">Места</span>
+				</a>
+				<nav class="nav" aria-label="Разделы">
+					@navLink("/", "Карта", "map", v)
+					@navLink("/catalog", "Справочник", "catalog", v)
+					<a class="nav__link" href="/now" aria-current?={ v.Section == "now" }>
+						Сейчас
+						<span hx-get="/fragments/live-count" hx-trigger="load, every 60s" hx-swap="innerHTML">
+							@LiveCount(v.LivePins)
+						</span>
+					</a>
+				</nav>
+			</div>
+			if v.Scenario != "" {
+				<div class="scenario-switcher" data-scenarios data-scenario={ v.Scenario } role="group" aria-label="Сценарий">
+					for _, scenario := range presenter.Scenarios {
+						<a
+							class="scenario-switcher__item"
+							href={ templ.SafeURL(v.scenarioHref(scenario.ID)) }
+							aria-label={ scenario.Label }
+							aria-pressed={ strconv.FormatBool(scenario.ID == v.Scenario) }
+							title={ scenario.Description }
+						>
+							@icon(scenario.Icon, "")<span>{ scenario.Label }</span>
+						</a>
+					}
+				</div>
+			}
+			<div class="header__actions">
+				<a class="btn btn--primary header__add" href="/add" aria-label="Добавить место или событие">
+					@icon("plus", "")<span class="header__add-text">Добавить</span>
+				</a>
+				@userBlock(v.User)
+				<button
+					type="button"
+					class="icon-btn header__burger"
+					data-action="mobile-menu"
+					@click="menuOpen = !menuOpen"
+					:aria-expanded="menuOpen"
+					aria-controls="mobile-menu"
+					aria-label="Меню"
+				>
+					<template x-if="!menuOpen">@icon("menu", "")</template>
+					<template x-if="menuOpen">@icon("x", "")</template>
+				</button>
+			</div>
+		</div>
+		@mobileMenu(v)
+	</header>
+}
+
+templ navLink(href, label, section string, v LayoutView) {
+	<a class="nav__link" href={ href } aria-current?={ v.Section == section }>{ label }</a>
+}
+
+templ userBlock(user *presenter.User) {
+	if user == nil {
+		<button type="button" class="btn btn--ghost header__login" data-action="login" aria-label="Войти">
+			@icon("log-in", "")<span class="header__login-text">Войти</span>
+		</button>
+	} else {
+		<div class="menu-anchor" x-data="{ open: false }" @keydown.escape.window="open = false">
+			<button
+				type="button"
+				class="header__user"
+				id="user-menu-button"
+				aria-haspopup="menu"
+				:aria-expanded="open"
+				aria-controls="user-menu"
+				aria-label={ "Меню профиля: " + user.DisplayName }
+				@click="open = !open"
+			>
+				@avatar(user.DisplayName, "sm")<span class="header__user-name">{ user.DisplayName }</span>@icon("chevron-down", "icon--sm")
+			</button>
+			<div
+				class="menu"
+				id="user-menu"
+				role="menu"
+				x-show="open"
+				x-transition
+				@click.outside="open = false"
+				@click="open = false"
+			>
+				<div class="menu__header">
+					@avatar(user.DisplayName, "lg")
+					<div><strong>{ user.DisplayName }</strong><span>Гостевой профиль</span></div>
+				</div>
+				<a class="menu__item" role="menuitem" href="/profile">@icon("user", "") Профиль</a>
+				<a class="menu__item" role="menuitem" href="/profile">@icon("radio", "") Мои метки</a>
+				<a class="menu__item" role="menuitem" href="/profile?tab=submissions">@icon("flag", "") Мои предложения</a>
+				<div class="menu__separator" role="separator"></div>
+				<button type="button" class="menu__item" role="menuitem" data-action="logout">@icon("log-out", "") Выйти</button>
+			</div>
+		</div>
+	}
+}
+
+templ mobileMenu(v LayoutView) {
+	<template x-if="menuOpen">
+		<div>
+			<div class="mobile-menu-backdrop" id="mobile-menu-backdrop" @click="menuOpen = false"></div>
+			<nav class="mobile-menu" id="mobile-menu" aria-label="Разделы" x-transition @click="menuOpen = false">
+				<div class="mobile-menu__nav">
+					@mobileNavLink("/", "Карта", "map", "Все места на одной карте", v)
+					@mobileNavLink("/catalog", "Справочник", "catalog", "Поиск, подборки и события", v)
+					@mobileNavLink("/now", "Сейчас", "now", "Быстрые метки от жителей", v)
+					<a class="mobile-menu__link" href="/add">
+						<span class="mobile-menu__icon">@icon("circle-plus", "")</span>
+						<span><strong>Добавить</strong><small>Место, событие или правку</small></span>
+						@icon("chevron-right", "icon--sm")
+					</a>
+				</div>
+				<div class="mobile-menu__footer">
+					if v.User != nil {
+						<a class="btn btn--outline btn--block" href="/profile">@avatar(v.User.DisplayName, "xs") Профиль</a>
+					} else {
+						<button type="button" class="btn btn--inverse btn--block" data-action="login">@icon("log-in", "") Войти или зарегистрироваться</button>
+					}
+					<div class="mobile-menu__links">
+						@vlruLinks()
+					</div>
+				</div>
+			</nav>
+		</div>
+	</template>
+}
+
+templ mobileNavLink(href, label, section, description string, v LayoutView) {
+	<a class="mobile-menu__link" href={ href } aria-current?={ v.Section == section }>
+		<span class="mobile-menu__icon">@icon(mobileNavIcon(section), "")</span>
+		<span><strong>{ label }</strong><small>{ description }</small></span>
+		@icon("chevron-right", "icon--sm")
+	</a>
+}
+
+func mobileNavIcon(section string) string {
+	switch section {
+	case "catalog":
+		return "layout-grid"
+	case "now":
+		return "radio"
+	default:
+		return "map"
+	}
+}
+
+templ vlruLinks() {
+	<a href="https://www.vl.ru/" target="_blank" rel="noopener">VL.ru</a>
+	<a href="https://www.vl.ru/afisha" target="_blank" rel="noopener">Афиша</a>
+	<a href="https://www.vl.ru/weather" target="_blank" rel="noopener">Погода</a>
+	<a href="https://www.farpost.ru/" target="_blank" rel="noopener">Фарпост</a>
+}
+
+templ footer() {
+	<footer class="footer">
+		<div class="container">
+			<div class="footer__top">
+				<div class="footer__about">
+					<a class="brand" href="/" aria-label="VL.ru Места — на главную">
+						<img class="brand__logo" src="/brand/vlru-logo.svg" alt="" width="58" height="30"/>
+						<span class="brand__divider" aria-hidden="true"></span>
+						<span class="brand__name">Места</span>
+					</a>
+					<p>Город, природа и море Владивостока и Приморья на одной карте. Места добавляют жители, редакция проверяет.</p>
+				</div>
+				<div>
+					<h2 class="footer__title">Места</h2>
+					<ul class="footer__list">
+						<li><a href="/">Карта</a></li>
+						<li><a href="/catalog">Справочник</a></li>
+						<li><a href="/now">Сейчас</a></li>
+						<li><a href="/add">Добавить место</a></li>
+					</ul>
+				</div>
+				<div>
+					<h2 class="footer__title">Помощь</h2>
+					<ul class="footer__list">
+						<li><a href="/rules">Правила меток</a></li>
+						<li><a href="/rules?section=moderation">Как мы проверяем места</a></li>
+						<li><a href="/add?type=fix">Сообщить об ошибке</a></li>
+					</ul>
+				</div>
+				<div>
+					<h2 class="footer__title">VL.ru</h2>
+					<ul class="footer__list">
+						<li><a href="https://www.vl.ru/" target="_blank" rel="noopener">VL.ru</a></li>
+						<li><a href="https://www.vl.ru/afisha" target="_blank" rel="noopener">Афиша</a></li>
+						<li><a href="https://www.vl.ru/weather" target="_blank" rel="noopener">Погода</a></li>
+						<li><a href="https://www.farpost.ru/" target="_blank" rel="noopener">Фарпост</a></li>
+					</ul>
+				</div>
+			</div>
+			<div class="footer__bottom">
+				<span>© 2003–2026 ООО «Фарпост». Портал VL.ru</span>
+				<span>Описания и метки проверяются редакцией. Фото — Wikimedia Commons, авторы указаны на страницах мест.</span>
+			</div>
+		</div>
+	</footer>
+}
+
+// LiveCount — чип с числом активных меток (фрагмент для шапки и карты).
+templ LiveCount(count int) {
+	if count > 0 {
+		<span class="nav__live">
+			<span class="live-dot" aria-hidden="true"></span><span aria-hidden="true">{ strconv.Itoa(count) }</span><span class="visually-hidden">, активных меток: { strconv.Itoa(count) }</span>
+		</span>
+	}
+}
