@@ -87,28 +87,9 @@ DB_NAME="${POSTGRES_DB:-hermes}"
 DB_USER="${POSTGRES_USER:-postgres}"
 CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
 docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
-DROP TABLE IF EXISTS collection_items;
-DROP TABLE IF EXISTS collections;
-DROP TABLE IF EXISTS pin_reports;
-DROP TABLE IF EXISTS pin_goings;
-DROP TABLE IF EXISTS pins;
-DROP TABLE IF EXISTS pin_kinds;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS event_categories;
-DROP TABLE IF EXISTS reports;
-DROP TABLE IF EXISTS conditions_cache;
-DROP TABLE IF EXISTS weather_source_status;
-DROP TABLE IF EXISTS weather_observations;
-DROP TABLE IF EXISTS trips;
-DROP TABLE IF EXISTS place_sources;
-DROP TABLE IF EXISTS places;
-DROP TABLE IF EXISTS place_categories;
-DROP TABLE IF EXISTS place_layers;
-DROP TABLE IF EXISTS idempotency_keys;
-DROP TABLE IF EXISTS user_sessions;
-DROP TABLE IF EXISTS user_identities;
-DROP TABLE IF EXISTS users;
-SQL
+\\c postgres
+DROP DATABASE hermes;
+CREATE DATABASE hermes
 """
 
 [tasks.templ]
