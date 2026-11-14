@@ -59,7 +59,7 @@ func Layout(v LayoutView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<link rel=\"stylesheet\" href=\"/css/app.css\"><style>[x-cloak]{display:none!important}</style><script src=\"/js/vendor/htmx.min.js\" defer></script><script src=\"/js/app/app.js\" defer></script><script src=\"/js/vendor/alpine.min.js\" defer></script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<link rel=\"stylesheet\" href=\"/css/app.min.css\"><style>[x-cloak]{display:none!important}</style><script src=\"/js/vendor/htmx.min.js\" defer></script><script type=\"module\" src=\"/js/app/app.min.js\"></script><script src=\"/js/vendor/alpine.min.js\" defer></script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -24,10 +24,10 @@ templ Layout(v LayoutView) {
 			if v.WithMap {
 				<link rel="stylesheet" href="/map/vendor/maplibre-gl.css"/>
 			}
-			<link rel="stylesheet" href="/css/app.css"/>
+			<link rel="stylesheet" href="/css/app.min.css"/>
 			<style>[x-cloak]{display:none!important}</style>
 			<script src="/js/vendor/htmx.min.js" defer></script>
-			<script src="/js/app/app.js" defer></script>
+			<script type="module" src="/js/app/app.min.js"></script>
 			<script src="/js/vendor/alpine.min.js" defer></script>
 			if v.WithMap {
 				<script src="/map/vendor/maplibre-gl.js" defer></script>

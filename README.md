@@ -95,10 +95,13 @@ go run ./cmd/server pins_cleanup            # снять просроченны�
 ### 5. Запустить сервер
 
 ```bash
-mise run dev                          # air с hot-reload, если установлен; иначе go run
+mise run dev                          # соберёт JS-бандл, дальше air с hot-reload, иначе go run
 # или явно:
+mise run assets                       # собрать и минифицировать JS (esbuild → app.min.js)
 go run ./cmd/server listen            # аргумент listen можно опустить — он дефолтный
 ```
+
+Фронтенд — ES-модули в `web/static/js/app/` и руками написанный `web/static/css/app.css`; шаблон подключает не исходники, а собранные минифицированные `app.min.js` / `app.min.css` (в `.gitignore`, артефакты сборки). После правки JS или CSS пересоберите их: `mise run assets`, а для постоянной пересборки при сохранении — `mise run assets-watch` (отдельный терминал). Сборка — esbuild (ставится через `mise install`, npm-бэкенд): 15 JS-модулей → один ESM-файл (~60 КБ), CSS 124 → 92 КБ.
 
 Сайт: **http://localhost:8080** — карта с панелью, каталог, «Сейчас», добавление места/события, профиль. Вход — по имени, одним шагом, сессия в cookie. Полезные страницы: `/health` (liveness), `/catalog`, `/now`, `/rules`, `/profile`.
 
