@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,16 +37,28 @@ func (h *PMTilesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Stat(h.filePath); err != nil {
+	info, err := os.Stat(h.filePath)
+	if err != nil {
 		h.logger.Error("pmtiles archive unavailable", slog.String("path", h.filePath), slog.Any("error", err))
 		h.responseWriter.Error(w, http.StatusServiceUnavailable, errors.New("map archive is not built yet"))
 
 		return
 	}
 
+	w.Header().Set("ETag", archiveETag(info))
 	w.Header().Set("Content-Type", "application/vnd.pmtiles")
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 
 	http.ServeFile(w, r, h.filePath)
+}
+
+// archiveETag — версия архива для клиента.
+//
+// http.ServeFile сам ETag не ставит, а без него клиент не отличит куски старого
+// архива от нового: офлайн-кеш кусков и скачанная копия ключуются по ETag, а
+// pmtiles.js по его смене перечитывает заголовок. Пересборка архива меняет
+// размер или время изменения файла.
+func archiveETag(info os.FileInfo) string {
+	return fmt.Sprintf(`"%x-%x"`, info.Size(), info.ModTime().UnixNano())
 }

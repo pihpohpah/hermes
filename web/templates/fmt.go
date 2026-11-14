@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Форматирование чисел, дат и расстояний по-русски — порт core/format.js макета.
@@ -99,7 +100,8 @@ func formatEventWhen(iso string) string {
 	}
 	date := ts.In(vlTime)
 	weekday := weekdaysShort[int(date.Weekday())]
-	capitalized := strings.ToUpper(weekday[:1]) + weekday[1:]
+	first, rest := splitFirstRune(weekday)
+	capitalized := strings.ToUpper(first) + rest
 
 	return fmt.Sprintf("%s, %s · %02d:%02d", capitalized, formatDay(iso), date.Hour(), date.Minute())
 }
@@ -173,6 +175,13 @@ func formatAgo(iso string) string {
 	return formatDay(iso)
 }
 
+// splitFirstRune делит строку по первой руне: срез по байту рвёт кириллицу.
+func splitFirstRune(s string) (string, string) {
+	_, size := utf8.DecodeRuneInString(s)
+
+	return s[:size], s[size:]
+}
+
 func initials(name string) string {
 	parts := strings.Fields(name)
 	out := ""
@@ -180,9 +189,8 @@ func initials(name string) string {
 		if i >= 2 {
 			break
 		}
-		if part != "" {
-			out += strings.ToUpper(part[:1])
-		}
+		first, _ := splitFirstRune(part)
+		out += strings.ToUpper(first)
 	}
 
 	return out

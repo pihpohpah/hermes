@@ -130,18 +130,37 @@
   --color-timed-soft: var(--violet-50);
   --color-timed-text: var(--violet-600);
 
-  /* Карта (используются и в CSS, и в стиле MapLibre через src/js/map/style.js) */
+  /* Карта. Токены читаются и CSS, и стилем MapLibre: web/map/style.json
+     ссылается на них как var(--map-*), подставляет js/app/map-style.js. */
   --map-land: #f4f3ef;
+  --map-nature-land: var(--map-land);
   --map-water: #cfe3f1;
+  --map-waterway: #a9cbe4;
   --map-park: #e1eed6;
   --map-wood: #d8e8cc;
+  --map-grass: #e4edda;
+  --map-sand: #f0e8d2;
   --map-residential: #efede8;
+  --map-industrial: #e8e5e1;
+  --map-cemetery: #dfe6da;
+  --map-hospital: #f3e4e4;
+  --map-school: #f1ebdb;
+  --map-runway: #dcd9d4;
   --map-building: #e7e4df;
+  --map-building-outline: #dbd7d0;
+  --map-boundary: var(--gray-500);
   --map-road: #ffffff;
   --map-road-casing: #e3e0e8;
   --map-road-major: #ffffff;
   --map-motorway: #ffe3d1;
+  --map-rail: var(--gray-400);
+  --map-track: #b9a98f;
+  --map-path: #a9764f;
+  --map-hiking-route: #b4531f;
   --map-label: #55515e;
+  --map-label-halo: #ffffff;
+  --map-place-label: var(--gray-900);
+  --map-peak-label: #6b6459;
   --map-water-label: #4a7aa3;
   --map-route: var(--orange-600);
 
@@ -5154,6 +5173,75 @@ a:hover {
 
 .profile__panel {
   padding-top: var(--space-6);
+}
+
+/* Офлайн-карта: скачивание архивов карты на устройство */
+
+.offline-map {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+}
+
+.offline-map__icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--color-nature-soft);
+  color: var(--color-nature-text);
+}
+
+.offline-map__body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.offline-map__title {
+  font-size: var(--text-lg);
+}
+
+.offline-map__text,
+.offline-map__note {
+  color: var(--color-text-secondary);
+}
+
+.offline-map__note {
+  font-size: var(--text-sm);
+}
+
+.offline-map__meter {
+  margin-top: var(--space-2);
+  max-width: 28rem;
+}
+
+.offline-map__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 47.99rem) {
+  .offline-map {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+  }
+
+  .offline-map__actions {
+    grid-column: 1 / -1;
+  }
+
+  .offline-map__actions .btn {
+    flex: 1;
+  }
 }
 
 .profile__grid {

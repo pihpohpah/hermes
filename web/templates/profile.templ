@@ -54,6 +54,7 @@ templ profileUser(view ProfileView) {
 				<button type="button" class="btn btn--ghost" data-action="logout">@icon("log-out", "") Выйти</button>
 			</div>
 		</header>
+		@offlineMap()
 		<div class="tabs" role="group" aria-label="Разделы профиля">
 			for _, tab := range profileTabs() {
 				<a
@@ -73,6 +74,36 @@ templ profileUser(view ProfileView) {
 			@ProfileTab(view)
 		</div>
 	</div>
+}
+
+// offlineMap — скачивание карты на устройство (js/app/offline-map.js).
+// Копия живёт в IndexedDB браузера и к аккаунту не привязана.
+templ offlineMap() {
+	<section class="offline-map" x-data="offlineMap" aria-labelledby="offline-map-title">
+		<span class="offline-map__icon">@icon("map", "")</span>
+		<div class="offline-map__body">
+			<h2 class="offline-map__title" id="offline-map-title">Офлайн-карта</h2>
+			<p class="offline-map__text" x-text="summary">Скачайте карту Приморья, чтобы она работала без интернета.</p>
+			<p class="offline-map__note" x-show="cacheNote" x-cloak>
+				<span x-text="cacheNote"></span>
+				<button type="button" class="link-btn" @click="clearCache" :disabled="downloading">Очистить</button>
+			</p>
+			<div class="meter offline-map__meter" x-show="downloading" x-cloak>
+				<div class="meter__label"><span>Скачиваем карту</span><strong x-text="progressLabel"></strong></div>
+				<div class="meter__track" role="progressbar" aria-label="Скачивание карты" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent">
+					<div class="meter__fill" :style="{ width: percent + '%' }"></div>
+				</div>
+			</div>
+		</div>
+		<div class="offline-map__actions">
+			<button type="button" class="btn btn--primary" x-show="!downloading" @click="download" :disabled="loading || unavailable">
+				@icon("download", "")
+				<span x-text="hasCopy ? (outdated ? 'Обновить' : 'Скачать заново') : 'Скачать карту'">Скачать карту</span>
+			</button>
+			<button type="button" class="btn btn--outline" x-show="downloading" x-cloak @click="cancel">@icon("x", "") Отменить</button>
+			<button type="button" class="btn btn--ghost" x-show="hasCopy && !downloading" x-cloak @click="remove">@icon("trash-2", "") Удалить</button>
+		</div>
+	</section>
 }
 
 type profileTabDef struct {

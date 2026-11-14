@@ -52,8 +52,8 @@ type Handlers struct {
 	Item               *httproutes.Item
 	Logout             *httproutes.LogoutHandler
 	UpdateUser         *httproutes.UpdateCurrentUserHandler
-	MapPage            *httproutes.MapPageHandler
 	MapAssets          *httproutes.MapAssetsHandler
+	MapStyle           *httproutes.MapStyleHandler
 	PMTiles            *httproutes.PMTilesHandler
 	Relief             *httproutes.PMTilesHandler
 	WebDir             string
@@ -157,18 +157,15 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 		mux.Handle("GET /api/items/{id}", loadAuth(h.Item))
 	}
 
-	mux.Handle("GET /api/pmtiles/region.pmtiles", h.PMTiles)
-	mux.Handle("HEAD /api/pmtiles/region.pmtiles", h.PMTiles)
-
-	// Офлайн-карта: страница /map и её локальные ассеты (MapLibre, PMTiles, глифы).
-	if h.MapPage != nil {
-		mux.Handle("GET /map/{$}", h.MapPage)
-	}
+	// Ассеты карты (MapLibre, PMTiles, глифы) и стиль с поправкой на собранные архивы.
 	if h.MapAssets != nil {
 		mux.Handle("GET /map/", h.MapAssets)
 	}
+	if h.MapStyle != nil {
+		mux.Handle("GET /map/style.json", h.MapStyle)
+	}
 
-	// Архив карты по адресу из задания. Отдаётся байтовыми диапазонами.
+	// Архив карты. Отдаётся байтовыми диапазонами.
 	mux.Handle("GET /api/map/region.pmtiles", h.PMTiles)
 	mux.Handle("HEAD /api/map/region.pmtiles", h.PMTiles)
 

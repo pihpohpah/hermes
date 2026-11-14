@@ -5,6 +5,7 @@ import { panelSwap, refreshMapItems, refreshPins, selectItem, selectPin } from '
 import { nowCreateComponent } from './pins.js';
 import { paintRouteOnMap } from './route.js';
 import { layoutSlots, updatePadding } from './layout.js';
+import { createMiniMap, createPlacesMap } from './map.js';
 
 /** Нижняя шторка панели на мобильном: peek → half → full (порт ui/sheet.js). */
 function bindSheet(panel) {
@@ -91,6 +92,7 @@ export function initStage() {
   const canvas = stage.querySelector('#map');
   const error = stage.querySelector('[data-error]');
   const mode = stage.dataset.stageMode || 'items';
+  const scenario = stage.dataset.scenario || (mode === 'pins' ? 'now' : 'city');
 
   const showError = (reason) => {
     error.hidden = false;
@@ -115,7 +117,7 @@ export function initStage() {
 
   const mount = () => {
     try {
-      const controller = window.createPlacesMap(canvas, { onError: showError });
+      const controller = createPlacesMap(canvas, { onError: showError, scenario });
       window.placesMap = controller;
       const readyCheck = setInterval(() => {
         if (controller.isReady()) {
@@ -224,23 +226,10 @@ export function initMiniMaps() {
     const lat = Number(node.dataset.lat);
     const lon = Number(node.dataset.lon);
     if (!lat || !lon) return;
-    try {
-      const scenario = node.dataset.scenario || 'city';
-      const map = new window.maplibregl.Map({
-        container: node,
-        style: '/map/style.json',
-        center: [lon, lat],
-        zoom: scenario === 'city' ? 14 : 10.5,
-        interactive: false,
-        attributionControl: { compact: true },
-      });
-      const el = document.createElement('div');
-      el.className = 'marker marker--default';
-      el.setAttribute('aria-hidden', 'true');
-      new window.maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([lon, lat]).addTo(map);
-    } catch (error) {
+    const scenario = node.dataset.scenario || 'city';
+    createMiniMap(node, { center: [lon, lat], zoom: scenario === 'city' ? 14 : 10.5, scenario }).catch((error) => {
       console.warn('Мини-карта недоступна', error);
       node.hidden = true;
-    }
+    });
   });
 }

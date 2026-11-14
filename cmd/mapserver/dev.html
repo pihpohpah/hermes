@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Стиль карты — отладка</title>
+  <link rel="icon" href="/map/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/map/vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; grid-template-rows: auto 1fr; font-family: var(--font-sans); }
+    .dev-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); }
+    .dev-bar output { margin-left: auto; color: var(--color-text-secondary); font-size: var(--text-sm); }
+    #map { position: relative; }
+  </style>
+  <script src="/map/vendor/maplibre-gl.js"></script>
+  <script src="/map/vendor/pmtiles.js"></script>
+</head>
+<body>
+  <!-- Отладка стиля без Postgres (mise run map-serve): тот же модуль карты,
+       стиль и токены, что в приложении. CSS — исходник app.css, без сборки. -->
+  <div class="dev-bar">
+    <strong>Стиль карты</strong>
+    <div class="scenario-switcher" role="group" aria-label="Сценарий">
+      <button type="button" class="scenario-switcher__item" data-scenario="city" aria-pressed="true">Город</button>
+      <button type="button" class="scenario-switcher__item" data-scenario="nature" aria-pressed="false">Природа</button>
+      <button type="button" class="scenario-switcher__item" data-scenario="sea" aria-pressed="false">Море</button>
+    </div>
+    <output id="status">Загрузка…</output>
+  </div>
+  <div id="map"></div>
+
+  <script type="module">
+    import { createPlacesMap } from '/js/app/map.js';
+
+    const status = document.getElementById('status');
+    const scenario = new URLSearchParams(location.search).get('s') || 'city';
+    const map = createPlacesMap(document.getElementById('map'), {
+      scenario,
+      onError: (reason) => { status.textContent = `Ошибка: ${reason}`; },
+    });
+    window.placesMap = map;
+
+    const showState = () => {
+      const zoom = map.getZoom().toFixed(1);
+      status.textContent = `режим слоёв: ${map.getStyleMode()} · z${zoom}`;
+    };
+    document.addEventListener('places:ready', showState);
+    setInterval(() => map.isReady() && showState(), 500);
+
+    const buttons = document.querySelectorAll('[data-scenario]');
+    const press = (key) => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scenario === key)));
+    press(scenario);
+    buttons.forEach((button) => button.addEventListener('click', () => {
+      press(button.dataset.scenario);
+      map.setScenario(button.dataset.scenario);
+      history.replaceState(null, '', `?s=${button.dataset.scenario}`);
+    }));
+  </script>
+</body>
+</html>

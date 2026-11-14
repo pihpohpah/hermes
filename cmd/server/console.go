@@ -23,6 +23,7 @@ import (
 var ErrUnknownCommand = errors.New("unknown command")
 
 const (
+	migrateCommand          = "migrate"
 	seedCommand             = "seed"
 	elevationsEnrichCommand = "elevations_enrich"
 	coverageProbeCommand    = "coverage_probe"
@@ -67,6 +68,8 @@ func runCommand(ctx context.Context, commandName string, args []string, deps com
 
 	var cmd Command
 	switch commandName {
+	case migrateCommand:
+		cmd = commands.NewMigrateCommand(deps.logger, deps.pool, opts.migrationsDir)
 	case seedCommand:
 		cmd = commands.NewSeedCommand(deps.logger, deps.places)
 	case elevationsEnrichCommand:
@@ -136,6 +139,7 @@ type commandOptions struct {
 	userName      string
 	userTimezone  string
 	pinPurgeGrace time.Duration
+	migrationsDir string
 }
 
 func parseCommandOptions(commandName string, args []string) (commandOptions, error) {
@@ -152,6 +156,7 @@ func parseCommandOptions(commandName string, args []string) (commandOptions, err
 	fs.BoolVar(&opts.overwrite, "overwrite", false, "recompute values that already exist (elevations)")
 	fs.StringVar(&opts.userName, "name", "", "display name of the new user (user_create)")
 	fs.StringVar(&opts.userTimezone, "timezone", "", "IANA timezone of the new user, defaults to Asia/Vladivostok (user_create)")
+	fs.StringVar(&opts.migrationsDir, "dir", "migrations", "directory with *.sql migrations (migrate)")
 	fs.Float64Var(&graceHours, "grace_hours", 24, "hours after ends_at before a pin is purged (pins_cleanup)")
 
 	if err := fs.Parse(args); err != nil {

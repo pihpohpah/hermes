@@ -17,46 +17,65 @@ go mod download
 """
 
 [tasks.dev]
-description = "Собрать фронтенд, поднять Postgres, применить миграции, наполнить БД (seed + погода в mock), запустить сервер"
-depends = ["bootstrap", "assets", "db-up", "migrate-up", "data-load"]
+description = "Поднять всю систему: Postgres, миграции, данные, фронтенд, архивы карты — и запустить сервер"
+depends = ["data-load", "assets", "map-ensure"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 echo "Сервер: http://localhost:${PORT:-8080}"
-if command -v air >/dev/null 2>&1; then
-  exec air -c .air.toml
-else
-  exec go run ./cmd/server listen
-fi
+exec go run ./cmd/server listen
 """
 
 [tasks.db-up]
-description = "Поднять PostgreSQL (PostGIS) в Docker, если ещё не работает"
+description = "Поднять PostgreSQL (PostGIS) в Docker; уже работающую базу на POSTGRES_PORT переиспользовать"
+depends = ["bootstrap"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
-if [ -n "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
-  echo "Контейнер $CONTAINER уже работает"
+PORT="${POSTGRES_PORT:-5432}"
+port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; }
+
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  if [ -n "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
+    echo "Контейнер $CONTAINER уже работает"
+    exit 0
+  fi
+  if [ -n "$(docker ps -aq --filter "name=^${CONTAINER}$")" ]; then
+    echo "Запускаем остановленный контейнер $CONTAINER (данные сохраняются)"
+    docker start "$CONTAINER" >/dev/null
+  elif port_open; then
+    echo "Порт $PORT уже занят другой базой — используем её (DATABASE_URL из .env)"
+    exit 0
+  else
+    # Образы postgis/postgis собираются только под amd64: на Apple Silicon
+    # Docker запускает их через эмуляцию, платформа указана явно.
+    docker run -d --name "$CONTAINER" --platform linux/amd64 \
+      -e POSTGRES_DB="${POSTGRES_DB:-hermes}" \
+      -e POSTGRES_USER="${POSTGRES_USER:-postgres}" \
+      -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}" \
+      -p "$PORT:5432" \
+      postgis/postgis:18-3.6 >/dev/null
+  fi
+  for _ in $(seq 1 60); do
+    docker exec "$CONTAINER" pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-hermes}" -q && { echo "Postgres готов"; exit 0; }
+    sleep 1
+  done
+  echo "Postgres не поднялся за 60 с: docker logs $CONTAINER"
+  exit 1
+fi
+
+if port_open; then
+  echo "Docker недоступен, но на порту $PORT есть база — используем её (DATABASE_URL из .env)"
   exit 0
 fi
-docker rm -f "$CONTAINER" 2>/dev/null || true
-docker run -d --name "$CONTAINER" \
-  -e POSTGRES_DB="${POSTGRES_DB:-hermes}" \
-  -e POSTGRES_USER="${POSTGRES_USER:-postgres}" \
-  -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}" \
-  -p "${POSTGRES_PORT:-5432}:5432" \
-  postgis/postgis:15-3.4
-for _ in $(seq 1 30); do
-  docker exec "$CONTAINER" pg_isready -U "${POSTGRES_USER:-postgres}" -q && { echo "Postgres готов"; exit 0; }
-  sleep 1
-done
-echo "Postgres не поднялся за 30 с"
+echo "Нет ни Docker, ни базы на порту $PORT: запустите Docker Desktop или укажите свою PostGIS в DATABASE_URL"
 exit 1
 """
 
 [tasks.data-load]
 description = "Сид-места + погода в mock-режиме (без сети) + оценка условий"
+depends = ["migrate-up"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -100,18 +119,9 @@ wait
 """
 
 [tasks.migrate-up]
-description = "Применить идемпотентные SQL-миграции в PostgreSQL"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-DB_NAME="${POSTGRES_DB:-hermes}"
-DB_USER="${POSTGRES_USER:-postgres}"
-CONTAINER="${POSTGRES_CONTAINER:-postgres-1}"
-for f in migrations/*.sql; do
-  echo "== $f"
-  docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$f"
-done
-"""
+description = "Применить идемпотентные SQL-миграции к базе из DATABASE_URL"
+depends = ["db-up"]
+run = "go run ./cmd/server migrate"
 
 [tasks.migrate-down]
 description = "Откатить SQL-миграции в PostgreSQL"
@@ -188,6 +198,27 @@ if [ -n "${PLACE:-}" ]; then args+=(-place "$PLACE"); fi
 go run ./cmd/server coverage_probe "${args[@]}"
 """
 
+[tasks.map-ensure]
+description = "Собрать архивы карты (PMTiles), если их ещё нет: векторный — map-download, рельеф — map-relief"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+region="${PMTILES_PATH:-./web/static/pmtiles/primorsky-krai-z15.pmtiles}"
+relief="${RELIEF_PATH:-./web/static/pmtiles/primorsky-relief.pmtiles}"
+if [ -f "$region" ]; then
+  echo "Архив карты на месте: $region"
+else
+  echo "Архива карты нет — собираем (нужен Docker, первый раз 5–10 мин)"
+  MAP_OUTPUT="$region" ./scripts/map/build-map.sh
+fi
+if [ -f "$relief" ]; then
+  echo "Архив рельефа на месте: $relief"
+else
+  echo "Архива рельефа нет — собираем для всего края (нужен Docker)"
+  RELIEF_OUTPUT="$relief" ./scripts/map/build-relief.sh
+fi
+"""
+
 [tasks.map-relief]
 description = "Собрать офлайн-рельеф (hillshade) Приморского края в PMTiles"
 run = "./scripts/map/build-relief.sh"
@@ -221,7 +252,7 @@ du -h "$f"
 """
 
 [tasks.map-serve]
-description = "Карта с двумя режимами (город/природа) на :8080, без Postgres"
+description = "Отладка стиля карты на :8080/map/ (Город/Природа/Море), без Postgres"
 run = "go run ./cmd/mapserver -addr :8080"
 
 [tasks.map-check]

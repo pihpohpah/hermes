@@ -1,8 +1,9 @@
 {
   "version": 8,
-  "name": "Приморский край · офлайн",
+  "name": "Места VL.ru · Приморский край",
   "metadata": {
-    "attribution": "© OpenStreetMap contributors, ODbL 1.0"
+    "attribution": "© OpenStreetMap contributors, ODbL 1.0",
+    "hermes:colors": "var(--map-*) — CSS-токены из web/static/css/app.css, подставляются клиентом (web/static/js/app/map-style.js)"
   },
   "glyphs": "/map/fonts/{fontstack}/{range}.pbf",
   "sources": {
@@ -15,52 +16,50 @@
       "type": "raster",
       "url": "pmtiles:///api/map/relief.pmtiles",
       "tileSize": 256,
-      "minzoom": 3,
-      "maxzoom": 13,
       "attribution": "© OpenStreetMap contributors · рельеф Copernicus DEM"
-    },
-    "relief-dem": {
-      "type": "raster-dem",
-      "url": "pmtiles:///api/map/dem.pmtiles",
-      "tileSize": 256,
-      "minzoom": 3,
-      "maxzoom": 12,
-      "encoding": "terrarium",
-      "attribution": "рельеф Copernicus DEM"
     }
   },
   "layers": [
     {
       "id": "background-city",
       "type": "background",
-      "hermes:mode": "city",
       "paint": {
-        "background-color": "#f3f0e7"
+        "background-color": "var(--map-land)"
+      },
+      "metadata": {
+        "hermes:mode": "city"
       }
     },
     {
       "id": "background-nature",
       "type": "background",
-      "hermes:mode": "nature",
       "layout": {
         "visibility": "none"
       },
       "paint": {
-        "background-color": "#d8e2e8"
+        "background-color": "var(--map-nature-land)"
+      },
+      "metadata": {
+        "hermes:mode": "nature"
       }
     },
     {
       "id": "relief-zones",
       "type": "raster",
       "source": "relief",
-      "hermes:mode": "nature",
       "layout": {
         "visibility": "none"
       },
       "paint": {
         "raster-opacity": 1,
         "raster-resampling": "nearest",
-        "raster-fade-duration": 0
+        "raster-fade-duration": 0,
+        "raster-brightness-min": 0.16,
+        "raster-saturation": -0.08,
+        "raster-contrast": -0.05
+      },
+      "metadata": {
+        "hermes:mode": "nature"
       }
     },
     {
@@ -74,10 +73,12 @@
         "wood"
       ],
       "paint": {
-        "fill-color": "#dce9d9",
+        "fill-color": "var(--map-wood)",
         "fill-opacity": 0.9
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landcover-grass",
@@ -90,10 +91,12 @@
         "grass"
       ],
       "paint": {
-        "fill-color": "#e4edda",
+        "fill-color": "var(--map-grass)",
         "fill-opacity": 0.7
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landcover-sand",
@@ -106,9 +109,11 @@
         "sand"
       ],
       "paint": {
-        "fill-color": "#f0e8d2"
+        "fill-color": "var(--map-sand)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "park",
@@ -117,10 +122,12 @@
       "source-layer": "park",
       "minzoom": 10,
       "paint": {
-        "fill-color": "#d8e8d3",
+        "fill-color": "var(--map-park)",
         "fill-opacity": 0.8
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landuse-residential",
@@ -135,9 +142,11 @@
         "neighbourhood"
       ],
       "paint": {
-        "fill-color": "#eceae2"
+        "fill-color": "var(--map-residential)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landuse-industrial",
@@ -152,9 +161,11 @@
         "dam"
       ],
       "paint": {
-        "fill-color": "#e8e4dc"
+        "fill-color": "var(--map-industrial)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landuse-cemetery",
@@ -167,9 +178,11 @@
         "cemetery"
       ],
       "paint": {
-        "fill-color": "#dfe6da"
+        "fill-color": "var(--map-cemetery)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landuse-hospital",
@@ -182,9 +195,11 @@
         "hospital"
       ],
       "paint": {
-        "fill-color": "#f0e2e2"
+        "fill-color": "var(--map-hospital)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "landuse-school",
@@ -197,9 +212,11 @@
         "school"
       ],
       "paint": {
-        "fill-color": "#efe9d8"
+        "fill-color": "var(--map-school)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "waterway",
@@ -208,7 +225,7 @@
       "source-layer": "waterway",
       "minzoom": 9,
       "paint": {
-        "line-color": "#a8ccd6",
+        "line-color": "var(--map-waterway)",
         "line-width": [
           "interpolate",
           [
@@ -223,7 +240,9 @@
           1.6
         ]
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "water",
@@ -231,9 +250,11 @@
       "source": "region",
       "source-layer": "water",
       "paint": {
-        "fill-color": "#dcecf0"
+        "fill-color": "var(--map-water)"
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "aeroway-runway",
@@ -247,7 +268,7 @@
       ],
       "minzoom": 11,
       "paint": {
-        "line-color": "#dcd8d0",
+        "line-color": "var(--map-runway)",
         "line-width": [
           "interpolate",
           [
@@ -262,7 +283,9 @@
           8
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "building",
@@ -271,10 +294,12 @@
       "source-layer": "building",
       "minzoom": 13,
       "paint": {
-        "fill-color": "#e2ddd3",
-        "fill-outline-color": "#d5cfc4"
+        "fill-color": "var(--map-building)",
+        "fill-outline-color": "var(--map-building-outline)"
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "boundary-region",
@@ -284,17 +309,19 @@
       "filter": [
         "<=",
         "admin_level",
-        6
+        4
       ],
       "paint": {
-        "line-color": "#b9b3a6",
+        "line-color": "var(--map-boundary)",
         "line-width": 1.2,
         "line-dasharray": [
           3,
           2
         ]
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "road-track",
@@ -312,7 +339,7 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": "#b9a98f",
+        "line-color": "var(--map-track)",
         "line-width": [
           "interpolate",
           [
@@ -331,7 +358,9 @@
           1.4
         ]
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "road-footpath",
@@ -372,8 +401,8 @@
             ],
             1
           ],
-          "#b4531f",
-          "#a9764f"
+          "var(--map-hiking-route)",
+          "var(--map-path)"
         ],
         "line-width": [
           "interpolate",
@@ -393,7 +422,164 @@
           1.6
         ]
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "road-service-casing",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        "class",
+        "service",
+        "minor"
+      ],
+      "minzoom": 13,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-road-casing)",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          1.8,
+          14,
+          5,
+          18,
+          14
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "city"
+      }
+    },
+    {
+      "id": "road-tertiary-casing",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        "class",
+        "tertiary",
+        "secondary"
+      ],
+      "minzoom": 9,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-road-casing)",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          9,
+          2.0,
+          14,
+          8,
+          18,
+          22
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "city"
+      }
+    },
+    {
+      "id": "road-primary-casing",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        "class",
+        "primary",
+        "trunk"
+      ],
+      "minzoom": 7,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-road-casing)",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          7,
+          2.0,
+          14,
+          10,
+          18,
+          26
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "city"
+      }
+    },
+    {
+      "id": "road-motorway-casing",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "==",
+        "class",
+        "motorway"
+      ],
+      "minzoom": 6,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-road-casing)",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          2.2,
+          14,
+          11,
+          18,
+          28
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-service",
@@ -412,11 +598,12 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": "#ffffff",
+        "line-color": "var(--map-road)",
         "line-width": [
           "interpolate",
           [
-            "linear"
+            "exponential",
+            1.5
           ],
           [
             "zoom"
@@ -424,10 +611,14 @@
           12,
           0.6,
           14,
-          3
+          3,
+          18,
+          12
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-tertiary",
@@ -446,11 +637,12 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": "#f7f4ec",
+        "line-color": "var(--map-road)",
         "line-width": [
           "interpolate",
           [
-            "linear"
+            "exponential",
+            1.5
           ],
           [
             "zoom"
@@ -458,10 +650,14 @@
           9,
           0.8,
           14,
-          6
+          6,
+          18,
+          20
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-primary",
@@ -480,11 +676,12 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": "#f6e6c8",
+        "line-color": "var(--map-road-major)",
         "line-width": [
           "interpolate",
           [
-            "linear"
+            "exponential",
+            1.5
           ],
           [
             "zoom"
@@ -492,10 +689,14 @@
           7,
           0.8,
           14,
-          8
+          8,
+          18,
+          24
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-motorway",
@@ -513,11 +714,12 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": "#f2b96b",
+        "line-color": "var(--map-motorway)",
         "line-width": [
           "interpolate",
           [
-            "linear"
+            "exponential",
+            1.5
           ],
           [
             "zoom"
@@ -525,10 +727,14 @@
           6,
           1,
           14,
-          9
+          9,
+          18,
+          26
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-rail",
@@ -542,7 +748,7 @@
       ],
       "minzoom": 10,
       "paint": {
-        "line-color": "#9a958b",
+        "line-color": "var(--map-rail)",
         "line-width": [
           "interpolate",
           [
@@ -557,7 +763,9 @@
           2
         ]
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "road-label",
@@ -585,11 +793,13 @@
         "text-max-angle": 30
       },
       "paint": {
-        "text-color": "#4d4a43",
-        "text-halo-color": "#f3f0e7",
+        "text-color": "var(--map-label)",
+        "text-halo-color": "var(--map-label-halo)",
         "text-halo-width": 1.4
       },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "city"
+      }
     },
     {
       "id": "water-label",
@@ -628,11 +838,13 @@
         "text-letter-spacing": 0.08
       },
       "paint": {
-        "text-color": "#5f8e9c",
-        "text-halo-color": "#dcecf0",
+        "text-color": "var(--map-water-label)",
+        "text-halo-color": "var(--map-water)",
         "text-halo-width": 1.2
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "peak-label",
@@ -662,51 +874,13 @@
         ]
       },
       "paint": {
-        "text-color": "#6b6459",
-        "text-halo-color": "#f3f0e7",
+        "text-color": "var(--map-peak-label)",
+        "text-halo-color": "var(--map-label-halo)",
         "text-halo-width": 1.2
       },
-      "hermes:mode": "both"
-    },
-    {
-      "id": "poi-label",
-      "type": "symbol",
-      "source": "region",
-      "source-layer": "poi",
-      "minzoom": 13,
-      "filter": [
-        "has",
-        "name"
-      ],
-      "layout": {
-        "text-field": [
-          "coalesce",
-          [
-            "get",
-            "name:latin"
-          ],
-          [
-            "get",
-            "name"
-          ]
-        ],
-        "text-font": [
-          "Noto Sans Regular"
-        ],
-        "text-size": 11,
-        "text-anchor": "top",
-        "text-offset": [
-          0,
-          0.4
-        ],
-        "text-optional": true
-      },
-      "paint": {
-        "text-color": "#4d4a43",
-        "text-halo-color": "#ffffff",
-        "text-halo-width": 1.3
-      },
-      "hermes:mode": "city"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "place-village",
@@ -740,11 +914,13 @@
         "text-size": 12
       },
       "paint": {
-        "text-color": "#3d3a33",
-        "text-halo-color": "#f3f0e7",
+        "text-color": "var(--map-label)",
+        "text-halo-color": "var(--map-label-halo)",
         "text-halo-width": 1.5
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     },
     {
       "id": "place-city",
@@ -790,11 +966,13 @@
         "text-letter-spacing": 0.06
       },
       "paint": {
-        "text-color": "#2b2822",
-        "text-halo-color": "#f3f0e7",
+        "text-color": "var(--map-place-label)",
+        "text-halo-color": "var(--map-label-halo)",
         "text-halo-width": 1.8
       },
-      "hermes:mode": "both"
+      "metadata": {
+        "hermes:mode": "both"
+      }
     }
   ]
 }

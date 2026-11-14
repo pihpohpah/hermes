@@ -5,6 +5,7 @@ import { storage } from './util.js';
 import { toast } from './ui.js';
 import { isLoggedIn, requireAuth } from './auth.js';
 import { CATEGORY_LABELS, SCENARIO_LABELS, TYPE_LABELS } from './taxonomy.js';
+import { createBaseMap } from './map.js';
 
 const ADD_DRAFT_KEY = 'vlru-places:add-draft';
 const DESCRIPTION_MIN = 30;
@@ -13,6 +14,9 @@ let photoSeq = 0;
 const photoKey = () => `p${Date.now().toString(36)}-${++photoSeq}`;
 
 export function registerAddMaster() {
+  // Карта выбора точки — вне реактивного состояния: прокси Alpine ломает MapLibre.
+  let pickerMap = null;
+
   Alpine.data('addMaster', () => ({
     step: 1,
     steps: ['Что', 'Подробности', 'Отправка'],
@@ -20,8 +24,6 @@ export function registerAddMaster() {
     errors: {},
     sending: false,
     pickerVisible: false,
-    pickerMap: null,
-    pickerMarker: null,
     init() {
       const params = new URLSearchParams(location.search);
       this.step = Math.min(3, Math.max(1, Number(params.get('step')) || 1));
@@ -183,46 +185,38 @@ export function registerAddMaster() {
         return;
       }
       this.$nextTick(() => {
-        const canvas = this.$el.querySelector('[data-picker-map]');
+        // $el в обработчике @click — сама кнопка, а не корень мастера.
+        const canvas = document.querySelector('#add-map [data-picker-map]');
         if (!canvas || !window.maplibregl) {
           this.pickerVisible = false;
           toast('Карта недоступна — укажите адрес текстом', { type: 'danger' });
           return;
         }
-        try {
-          const center = this.draft.coords || [131.8855, 43.1155];
-          this.pickerMap = new window.maplibregl.Map({
-            container: canvas,
-            style: '/map/style.json',
-            center,
-            zoom: 12,
-            dragRotate: false,
-            pitchWithRotate: false,
-            attributionControl: { compact: true },
-          });
-          this.pickerMap.on('click', (e) => this.setPickerCoords(e.lngLat.toArray()));
-          this.pickerMap.on('load', () => {
-            if (this.draft.coords) this.setPickerCoords(this.draft.coords);
-          });
-        } catch (error) {
-          console.warn('Карта выбора точки недоступна', error);
-          this.pickerVisible = false;
-          toast('Карта недоступна — укажите адрес текстом', { type: 'danger' });
-        }
+        const center = this.draft.coords || [131.8855, 43.1155];
+        createBaseMap(canvas, { scenario: this.draft.scenario, center, zoom: 12, dragRotate: false, pitchWithRotate: false }).then(
+          (map) => {
+            if (!this.pickerVisible) {
+              map.remove();
+              return;
+            }
+            // Точка — центр карты под меткой-оверлеем, как в макете.
+            pickerMap = map;
+            this.draft.coords = center;
+            map.on('moveend', () => {
+              this.draft.coords = map.getCenter().toArray();
+            });
+          },
+          (error) => {
+            console.warn('Карта выбора точки недоступна', error);
+            this.pickerVisible = false;
+            toast('Карта недоступна — укажите адрес текстом', { type: 'danger' });
+          },
+        );
       });
     },
-    setPickerCoords(coords) {
-      this.draft.coords = coords;
-      if (!this.pickerMarker && this.pickerMap) {
-        this.pickerMarker = new window.maplibregl.Marker().setLngLat(coords).addTo(this.pickerMap);
-      } else {
-        this.pickerMarker?.setLngLat(coords);
-      }
-    },
     destroyPicker() {
-      this.pickerMap?.remove();
-      this.pickerMap = null;
-      this.pickerMarker = null;
+      pickerMap?.remove();
+      pickerMap = null;
     },
     async send() {
       if (this.draft.photos.some((p) => p.uploading)) {

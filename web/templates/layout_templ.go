@@ -64,7 +64,7 @@ func Layout(v LayoutView) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if v.WithMap {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<script src=\"/map/vendor/maplibre-gl.js\" defer></script> <script src=\"/js/app/map.js\" defer></script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<script src=\"/map/vendor/maplibre-gl.js\" defer></script> <script src=\"/map/vendor/pmtiles.js\" defer></script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

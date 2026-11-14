@@ -18,7 +18,7 @@ templ NowPage(view NowView) {
 		LivePins: view.LivePins,
 		WithMap:  true,
 	}) {
-		@mapStage("pins", view.LivePins) {
+		@mapStage("pins", "now", view.LivePins) {
 			@NowPanelInner(view)
 		}
 	}

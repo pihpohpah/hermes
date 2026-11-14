@@ -44,7 +44,19 @@ export const formatDuration = (minutes) => {
   return `${hours} ч ${rest} мин`;
 };
 
-export const isMobileLayout = () => window.matchMedia('(max-width: 47.99rem)').matches;
+export const formatBytes = (bytes) => {
+  if (!bytes) return '0 Б';
+  const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1).replace('.', ',')} ${units[unit]}`;
+};
+
+export const isMobileLayout =() => window.matchMedia('(max-width: 47.99rem)').matches;
 
 export const storage = {
   get(key, fallback = null) {

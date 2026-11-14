@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"log"
@@ -19,81 +20,52 @@ import (
 const (
 	defaultAddr      = ":8080"
 	defaultMapDir    = "./web/map"
+	defaultWebDir    = "./web/static"
 	defaultArchive   = "./web/static/pmtiles/primorsky-krai-z15.pmtiles"
 	defaultRelief    = "./web/static/pmtiles/primorsky-relief.pmtiles"
-	defaultDem       = "./web/static/pmtiles/primorsky-dem.pmtiles"
 	shutdownTimeout  = 10 * time.Second
 	readHeaderTimout = 10 * time.Second
 	idleTimeout      = time.Minute
 )
 
-// Отдельный сервер карты: поднимает страницу /map и архив PMTiles, не требуя
-// Postgres и остальной бекенд. Нужен, чтобы фронт карты и бекенд разрабатывались
-// независимо.
+// devPage — отладочная страница стиля. Вшита в бинарник, чтобы основной
+// сервер, раздающий web/map, её не видел.
+//
+//go:embed dev.html
+var devPage []byte
+
+// Отдельный сервер карты: поднимает отладочную страницу /map/, стиль, архивы
+// PMTiles и статику приложения, не требуя Postgres и остального бекенда.
+// Страница рисует карту тем же модулем, что и продукт, поэтому стиль и токены
+// отлаживаются здесь и без расхождений попадают в приложение.
 func main() {
 	addr := flag.String("addr", envOr("MAP_ADDR", defaultAddr), "адрес прослушивания")
-	mapDir := flag.String("map-dir", envOr("MAP_DIR", defaultMapDir), "каталог со страницей карты")
+	mapDir := flag.String("map-dir", envOr("MAP_DIR", defaultMapDir), "каталог ассетов карты")
+	webDir := flag.String("web-dir", envOr("WEB_DIR", defaultWebDir), "каталог статики приложения")
 	archive := flag.String("archive", envOr("PMTILES_PATH", defaultArchive), "путь к PMTiles-архиву")
 	relief := flag.String("relief", envOr("RELIEF_PATH", defaultRelief), "путь к PMTiles-архиву рельефа")
-	dem := flag.String("dem", envOr("DEM_PATH", defaultDem), "путь к PMTiles-архиву DEM (terrarium)")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	mux := http.NewServeMux()
-	mapPage := httproutes.NewMapPageHandler(*mapDir)
-	mapAssets := httproutes.NewMapAssetsHandler(*mapDir)
-	mux.Handle("GET /map/{$}", mapPage)
-	mux.Handle("GET /map/", mapAssets)
+	mux.HandleFunc("GET /map/{$}", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(devPage)
+	})
+	mux.Handle("GET /map/", httproutes.NewMapAssetsHandler(*mapDir))
+	mux.Handle("GET /map/style.json", httproutes.NewMapStyleHandler(*mapDir, *relief))
 
 	pmtilesHandler := httproutes.NewPMTilesHandler(logger, *archive)
 	mux.Handle("GET /api/map/region.pmtiles", pmtilesHandler)
 	mux.Handle("HEAD /api/map/region.pmtiles", pmtilesHandler)
 
-	// Оба режима (город/природа) отдаются всегда: переключение происходит на
-	// клиенте. Архив рельефа подключается автоматически, если он собран;
-	// без него кнопка «Природа» на странице просто выключена.
-	reliefReady := false
-	reliefInfo, statErr := os.Stat(*relief)
-	if statErr == nil {
-		reliefReady = true
-		reliefHandler := httproutes.NewPMTilesHandler(logger, *relief)
-		mux.Handle("GET /api/map/relief.pmtiles", reliefHandler)
-		mux.Handle("HEAD /api/map/relief.pmtiles", reliefHandler)
-		logger.Info("relief mode enabled",
-			slog.String("archive", *relief),
-			slog.Int64("size_bytes", reliefInfo.Size()),
-		)
-	} else {
-		logger.Warn("relief archive not found, nature mode will be hidden",
-			slog.String("path", *relief),
-			slog.String("hint", "mise run map-relief (или map-relief-local)"),
-		)
-	}
+	reliefHandler := httproutes.NewPMTilesHandler(logger, *relief)
+	mux.Handle("GET /api/map/relief.pmtiles", reliefHandler)
+	mux.Handle("HEAD /api/map/relief.pmtiles", reliefHandler)
 
-	// DEM в terrarium-RGB: нужен MapLibre для объёма (terrain) и отмывки
-	// (hillshade из raster-dem). Без него природа рисуется плоско, но работает.
-	demReady := false
-	if demInfo, statErr := os.Stat(*dem); statErr == nil {
-		demReady = true
-		demHandler := httproutes.NewPMTilesHandler(logger, *dem)
-		mux.Handle("GET /api/map/dem.pmtiles", demHandler)
-		mux.Handle("HEAD /api/map/dem.pmtiles", demHandler)
-		logger.Info("dem terrain enabled",
-			slog.String("archive", *dem),
-			slog.Int64("size_bytes", demInfo.Size()),
-		)
-	} else {
-		logger.Warn("dem archive not found, nature mode will be flat (no terrain)",
-			slog.String("path", *dem),
-			slog.String("hint", "mise run map-relief (или map-relief-local)"),
-		)
-	}
-
-	// Стиль отдаём с поправкой на наличие архивов: без рельефа/DEM их
-	// источники и слои вырезаются, иначе MapLibre будет 404-ить.
-	styleHandler := httproutes.NewMapStyleHandler(*mapDir, reliefReady, demReady)
-	mux.Handle("GET /map/style.json", styleHandler)
+	// Статика приложения: модули карты, CSS с токенами --map-*, спрайт иконок.
+	mux.Handle("GET /", http.FileServer(http.Dir(*webDir)))
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/map/", http.StatusFound)
@@ -111,8 +83,12 @@ func main() {
 	}
 
 	if _, err := os.Stat(*archive); err != nil {
-		logger.Warn("pmtiles archive not found, map will show a setup hint",
-			slog.String("path", *archive), slog.Any("error", err))
+		logger.Warn("pmtiles archive not found, map will fail to load",
+			slog.String("path", *archive), slog.String("hint", "mise run map-download"))
+	}
+	if _, err := os.Stat(*relief); err != nil {
+		logger.Warn("relief archive not found, nature mode falls back to city layers",
+			slog.String("path", *relief), slog.String("hint", "mise run map-relief (или map-relief-local)"))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -122,7 +98,6 @@ func main() {
 			slog.String("addr", *addr),
 			slog.String("map", "http://"+strings.TrimPrefix(*addr, ":")+"/map/"),
 			slog.String("archive", *archive),
-			slog.Bool("relief", reliefReady),
 		)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("map server failed: %v", err)

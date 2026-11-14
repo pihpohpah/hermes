@@ -22,15 +22,15 @@ templ MapPage(view MapView) {
 		},
 		WithMap: true,
 	}) {
-		@mapStage("items", view.LivePins) {
+		@mapStage("items", view.Query.Scenario, view.LivePins) {
 			@MapPanelInner(view)
 		}
 	}
 }
 
 // mapStage — статический каркас сцены (стили и поведение из stage.js макета).
-templ mapStage(mode string, livePins int) {
-	<div class="map-stage" id="map-stage" data-stage-mode={ mode } aria-label="Карта">
+templ mapStage(mode, scenario string, livePins int) {
+	<div class="map-stage" id="map-stage" data-stage-mode={ mode } data-scenario={ scenario } aria-label="Карта">
 		<div class="map-top" data-top></div>
 		<button
 			type="button"
