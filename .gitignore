@@ -1,2 +1,5 @@
 .env
 web/static/pmtiles/
+
+# Загруженные пользователями фото — генерируются в рантайме
+web/static/uploads/

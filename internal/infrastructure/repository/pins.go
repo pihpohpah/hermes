@@ -44,7 +44,7 @@ const pinColumns = `
 	p.created_at,
 	(SELECT count(*) FROM pin_goings g WHERE g.pin_id = p.id) AS going,
 	EXISTS(SELECT 1 FROM pin_goings g WHERE g.pin_id = p.id AND g.user_id::text = $1) AS joined,
-	p.author_id::text = $1 AS mine
+	COALESCE(p.author_id::text = $1, false) AS mine
 `
 
 func (r *PinRepository) ListActive(ctx context.Context, filter models.PinFilter) ([]models.Pin, error) {
@@ -113,7 +113,7 @@ func (r *PinRepository) GetVisible(ctx context.Context, id string, viewer *strin
 		SELECT ` + pinColumns + `
 		FROM pins p
 		JOIN users u ON u.id = p.author_id
-		WHERE (p.id = $2::uuid OR p.id::text = $2)
+		WHERE p.id::text = $2
 			AND (p.ends_at > $3 OR p.author_id::text = $1)
 			AND (p.hidden = false OR p.author_id::text = $1)
 	`
@@ -137,7 +137,7 @@ func (r *PinRepository) GetAny(ctx context.Context, id string, viewer *string) (
 		SELECT ` + pinColumns + `
 		FROM pins p
 		JOIN users u ON u.id = p.author_id
-		WHERE p.id = $2::uuid OR p.id::text = $2
+		WHERE p.id::text = $2
 	`
 
 	pin, err := scanPin(r.pool.QueryRow(ctx, query, viewer, id))
@@ -156,9 +156,10 @@ func (r *PinRepository) Create(ctx context.Context, in models.CreatePinInput) (m
 	const query = `
 		INSERT INTO pins (author_id, kind, title, note, place_label, location, starts_at, ends_at, need)
 		VALUES ($1::uuid, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326)::geography, $8, $9, $10)
-		RETURNING ` + pinColumns
+		RETURNING id::text`
 
-	pin, err := scanPin(r.pool.QueryRow(
+	var createdID string
+	if err := r.pool.QueryRow(
 		ctx,
 		query,
 		in.AuthorID,
@@ -171,10 +172,15 @@ func (r *PinRepository) Create(ctx context.Context, in models.CreatePinInput) (m
 		in.StartsAt.UTC(),
 		in.EndsAt.UTC(),
 		in.Need,
-		in.AuthorID, // $1 viewer decoration
-	))
-	if err != nil {
+	).Scan(&createdID); err != nil {
 		return models.Pin{}, fmt.Errorf("insert pin: %w", err)
+	}
+
+	// Полный ряд с автором и декорациями читается отдельно: pinColumns
+	// содержит алиасы и JOIN, недоступные в RETURNING.
+	pin, err := r.GetAny(ctx, createdID, &in.AuthorID)
+	if err != nil {
+		return models.Pin{}, fmt.Errorf("load created pin: %w", err)
 	}
 
 	return pin, nil
@@ -183,7 +189,7 @@ func (r *PinRepository) Create(ctx context.Context, in models.CreatePinInput) (m
 // DeleteByAuthor removes a pin only when it belongs to the author; a missing
 // row or someone else's pin are indistinguishable to the caller (404).
 func (r *PinRepository) DeleteByAuthor(ctx context.Context, id, authorID string) error {
-	const query = `DELETE FROM pins WHERE (id = $1::uuid OR id::text = $1) AND author_id = $2::uuid`
+	const query = `DELETE FROM pins WHERE id::text = $1 AND author_id = $2::uuid`
 
 	tag, err := r.pool.Exec(ctx, query, id, authorID)
 	if err != nil {

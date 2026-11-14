@@ -1,0 +1,398 @@
+package templates
+
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+	"github.com/pihpohpah/hermes/internal/domain/models"
+)
+
+// Карточка места или события: галерея с лайтбоксом, практическая информация,
+// мини-карта, ICS для событий, похожие места. Интерактив (лайтбокс, мини-карта,
+// ICS, «поделиться») — делегированные data-action обработчики из app.js.
+
+templ DetailPage(view DetailView) {
+	{{
+		item := view.Item
+		scenario := presenter.ScenarioInfo(item.Scenario)
+		category := presenter.CategoryInfo(item.Scenario, item.Category, item.Type)
+		photosJSON, _ := json.Marshal(item.Photos)
+	}}
+	@Layout(LayoutView{
+		Title:    item.Title + " — Места VL.ru",
+		Section:  "catalog",
+		User:     view.User,
+		WithMap:  true,
+	}) {
+		<article class="page detail" aria-labelledby="detail-title" data-photos={ string(photosJSON) }>
+			<div class="container">
+				<nav class="breadcrumbs" aria-label="Вы здесь">
+					<ol>
+						<li><a href="/catalog">Справочник</a></li>
+						<li><a href={ templ.SafeURL("/catalog?s=" + item.Scenario) }>{ scenario.Label }</a></li>
+						<li>
+							if item.Type == "event" {
+								<a href={ templ.SafeURL("/catalog?s=" + item.Scenario + "&type=event") }>События</a>
+							} else {
+								<a href={ templ.SafeURL("/catalog?s=" + item.Scenario + "&cat=" + item.Category) }>{ category.Label }</a>
+							}
+						</li>
+					</ol>
+				</nav>
+				<header class="detail__head">
+					<div class="detail__heading">
+						<div class="detail__badges">
+							<span class={ "badge badge--" + previewBadgeClass(item) }>@icon(category.Icon, "")
+{ category.Label }</span>
+							if item.Type == "event" {
+								<span class="badge badge--timed">@icon("calendar", "")
+{ formatDay(item.StartsAt) }</span>
+							}
+						</div>
+						<h1 class="detail__title" id="detail-title">{ item.Title }</h1>
+						<p class="detail__subtitle">
+							if item.Subtitle != "" && item.Subtitle != item.District {
+								<span>{ item.Subtitle }</span>
+							}
+							<span>@icon("map-pin", "icon--sm")
+{ item.District }</span>
+							if item.Type == "place" {
+								<span>@icon("clock", "icon--sm")
+{ item.Hours }</span>
+							} else {
+								<span>@icon("clock", "icon--sm")
+{ formatEventWhen(item.StartsAt) }</span>
+							}
+						</p>
+					</div>
+					<div class="detail__actions">
+						<button
+							type="button"
+							class="icon-btn icon-btn--muted"
+							data-action="share"
+							data-share-title={ item.Title }
+							data-share-text={ item.Short }
+							data-share-url={ itemURL(item) }
+							aria-label="Поделиться"
+							title="Поделиться"
+						>@icon("share-2", "")</button>
+						@routeToggleButton(item, "btn btn--outline")
+						<a class="btn btn--primary" href={ templ.SafeURL("/?s=" + item.Scenario + "&place=" + item.ID) }>@icon("map", "") На карте</a>
+					</div>
+				</header>
+				@detailGallery(item)
+				<div class="detail__layout">
+					<div class="detail__main">
+						<p class="detail__lead">{ item.Short }</p>
+						<div class="prose">
+							for _, paragraph := range detailParagraphs(item.Description) {
+								<p>{ paragraph }</p>
+							}
+						</div>
+						if len(item.Facts) > 0 {
+							<section class="detail__section" aria-labelledby="facts-title">
+								<h2 class="detail__section-title" id="facts-title">Что важно знать</h2>
+								<ul class="checklist" role="list">
+									for _, fact := range item.Facts {
+										<li>@icon("check", "icon--sm")
+{ fact }</li>
+									}
+								</ul>
+							</section>
+						}
+						if item.HowToGet != "" {
+							<section class="detail__section" aria-labelledby="route-title">
+								<h2 class="detail__section-title" id="route-title">Как добраться</h2>
+								<p>{ item.HowToGet }</p>
+								<div class="chip-row chip-row--wrap" style="margin-top: var(--space-3)">
+									for _, mode := range item.Access {
+										if info, ok := presenter.AccessModes[mode]; ok {
+											<span class="badge">@icon(info.Icon, "")
+{ info.Label }</span>
+										}
+									}
+								</div>
+							</section>
+						}
+						if item.PlaceID != "" {
+							<section class="detail__section" aria-labelledby="venue-title">
+								<h2 class="detail__section-title" id="venue-title">Где проходит</h2>
+								<a class="event-row" href={ "/place/" + item.PlaceID }>
+									<span><strong>{ item.PlaceName }</strong><span>{ item.Venue }</span></span>
+									@icon("chevron-right", "")
+								</a>
+							</section>
+						}
+						if len(view.EventsHere) > 0 {
+							<section class="detail__section" aria-labelledby="events-title">
+								<h2 class="detail__section-title" id="events-title">Скоро здесь</h2>
+								<ul class="event-list" role="list">
+									for _, event := range view.EventsHere {
+										<li>
+											<a class="event-row" href={ "/event/" + event.ID }>
+												@dateTile(event.StartsAt)
+												<span><strong>{ event.Title }</strong><span>{ formatEventWhen(event.StartsAt) } · { priceLabel(event) }</span></span>
+												@icon("chevron-right", "")
+											</a>
+										</li>
+									}
+								</ul>
+							</section>
+						}
+						@safetyNote(item)
+						if item.LatestScore != nil {
+							@scoreBlock(*item.LatestScore)
+						}
+						<footer class="detail__meta">
+							if len(item.Photos) > 0 {
+								<p>
+									Фото:
+									for i, photo := range item.Photos {
+										if i > 0 {
+											, 
+										}
+										if photo.Source != "" {
+											<a href={ photo.Source } target="_blank" rel="noopener">{ photo.Author }</a>
+										} else {
+											{ photo.Author }
+										}
+										if photo.License != "" {
+											({ photo.License })
+										}
+									}
+									. Wikimedia Commons.
+								</p>
+							}
+							<p>Нашли неточность? <a href={ "/add?fix=" + item.ID }>Предложите правку</a> — редакция проверит.</p>
+						</footer>
+					</div>
+					<aside class="detail__aside" aria-label="Практическая информация">
+						<div class="info-card">
+							if item.Type == "event" {
+								<div class="info-card__date">
+									@dateTile(item.StartsAt)
+									<div>
+										<strong>{ formatEventWhen(item.StartsAt) }</strong>
+										<span>{ priceLabel(item) }{ previewAge(item) }</span>
+									</div>
+								</div>
+							}
+							@infoRows(item)
+							<div
+								class="info-card__map"
+								data-mini-map
+								data-lat={ detailCoord(item.Lat) }
+								data-lon={ detailCoord(item.Lon) }
+								data-scenario={ itemScenario(item) }
+							></div>
+							<div class="info-card__actions">
+								if item.Type == "event" {
+									<button
+										type="button"
+										class="btn btn--outline btn--block"
+										data-action="ics"
+										data-ics-id={ item.ID }
+										data-ics-title={ item.Title }
+										data-ics-starts={ item.StartsAt }
+										data-ics-ends={ item.EndsAt }
+										data-ics-venue={ item.Venue }
+										data-ics-address={ item.Address }
+										data-ics-short={ item.Short }
+									>@icon("calendar-plus", "") В календарь</button>
+								}
+								<a class="btn btn--ghost btn--block" href={ "/add?fix=" + item.ID }>@icon("pencil", "") Предложить правку</a>
+							</div>
+						</div>
+					</aside>
+				</div>
+				if len(view.Similar) > 0 {
+					<section class="section" aria-labelledby="similar-title">
+						<div class="section__head">
+							<h2 class="section__title" id="similar-title">Похожие { similarWord(item.Scenario) }</h2>
+							<a class="btn btn--ghost" href={ templ.SafeURL("/catalog?s=" + item.Scenario) }>Все @icon("arrow-right", "icon--sm")</a>
+						</div>
+						<ul class="catalog__grid catalog__grid--similar" role="list">
+							for _, other := range view.Similar {
+								<li>@placeCard(other, "grid", false)</li>
+							}
+						</ul>
+					</section>
+				}
+			</div>
+			<div class="detail__mobile-bar">
+				<button
+					type="button"
+					class="icon-btn icon-btn--muted"
+					data-action="share"
+					data-share-title={ item.Title }
+					data-share-text={ item.Short }
+					data-share-url={ itemURL(item) }
+					aria-label="Поделиться"
+				>@icon("share-2", "")</button>
+				@routeToggleButton(item, "btn btn--outline")
+				<a class="btn btn--primary" href={ templ.SafeURL("/?s=" + item.Scenario + "&place=" + item.ID) }>@icon("map", "") Карта</a>
+			</div>
+		</article>
+		@footer()
+	}
+}
+
+func detailCoord(value float64) string {
+	return strings.TrimRight(strings.TrimRight(jsonFloat(value), "0"), ".")
+}
+
+func jsonFloat(value float64) string {
+	bytes, _ := json.Marshal(value)
+
+	return string(bytes)
+}
+
+func detailParagraphs(description string) []string {
+	parts := strings.Split(description, "\n\n")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	return out
+}
+
+func similarWord(scenario string) string {
+	switch scenario {
+	case "nature":
+		return "на природе"
+	case "sea":
+		return "у моря"
+	default:
+		return "в городе"
+	}
+}
+
+templ detailGallery(item presenter.CatalogItem) {
+	if len(item.Photos) == 0 {
+		<div class="detail__gallery detail__gallery--empty">@media(item, "sm", 0, "4 / 1", nil, false)</div>
+	} else {
+		<div class="detail__gallery" data-count={ itoa(len(item.Photos)) }>
+			for i := 0; i < len(item.Photos); i++ {
+				<button
+					type="button"
+					class="detail__photo"
+					data-action="photo"
+					data-index={ itoa(i) }
+					aria-label={ "Открыть фото " + itoa(i+1) + " из " + itoa(len(item.Photos)) + ": " + item.Photos[i].Alt }
+				>
+					@media(item, mapBoolSm(i), i, "", nil, i == 0)
+				</button>
+			}
+			if len(item.Photos) > 1 {
+				<span class="detail__photo-count" aria-hidden="true">@icon("camera", "icon--sm")
+{ itoa(len(item.Photos)) }</span>
+			}
+		</div>
+	}
+}
+
+func mapBoolSm(index int) string {
+	if index == 0 {
+		return "lg"
+	}
+
+	return "sm"
+}
+
+templ infoRows(item presenter.CatalogItem) {
+	<dl class="facts">
+		if item.Type == "event" {
+			@infoRow("calendar", "Когда", formatEventWhen(item.StartsAt)+infoRowEnd(item))
+			@infoRow("map-pin", "Где", item.Venue)
+			@infoRow("ticket", "Вход", priceLabel(item))
+			@infoRow("users", "Возраст", item.Age)
+			@infoRow("megaphone", "Организатор", item.Organizer)
+		} else {
+			@infoRow("map-pin", "Адрес", item.Address)
+			@infoRow("clock", "Время", item.Hours)
+			@infoRow("wallet", "Стоимость", priceLabel(item))
+			@infoRow("hourglass", "Сколько заложить", item.Duration)
+			@infoRow("sun", "Сезон", item.Season)
+			if item.Difficulty != nil {
+				@infoRow("mountain", "Сложность", presenter.DifficultyLabels[difficultyCodeOf(item)])
+			}
+			if item.Beach != "" && item.Beach != "none" {
+				@infoRow("waves", "Берег", presenter.BeachLabels[item.Beach])
+			}
+			if item.SwimSeason != "" {
+				@infoRow("droplets", "Купание", item.SwimSeason)
+			}
+		}
+		@infoRow("navigation", "От центра", formatDistance(item.DistanceKm)+" по прямой")
+	</dl>
+}
+
+func infoRowEnd(item presenter.CatalogItem) string {
+	if ts, ok := parseISODate(item.EndsAt); ok {
+		return "–" + formatTimeHM(ts.In(vlTime))
+	}
+
+	return ""
+}
+
+templ infoRow(iconName, label, value string) {
+	if value != "" {
+		<div class="fact">@icon(iconName, "")<div><dt>{ label }</dt><dd>{ value }</dd></div></div>
+	}
+}
+
+templ safetyNote(item presenter.CatalogItem) {
+	if item.Type != "event" && item.Scenario != "city" {
+		<div class="alert alert--warning">
+			@icon("triangle-alert", "")
+			<div>
+				<strong class="alert__title">Перед поездкой</strong>
+				if item.Scenario == "sea" {
+					Погода на море меняется быстро. Перед выходом проверьте прогноз ветра и волны, а на воду берите жилет.
+				} else {
+					В сопках бывают клещи с апреля по июль, а связь пропадает. Предупредите близких о маршруте и возьмите воду.
+				}
+				<a href="https://www.vl.ru/weather" target="_blank" rel="noopener">Погода на VL.ru</a>
+			</div>
+		</div>
+	}
+}
+
+// scoreBlock — блок оценки условий (go / caution / no_go).
+templ scoreBlock(score presenter.ConditionAssessmentDTO) {
+	<section class="detail__section" aria-labelledby="score-title">
+		<h2 class="detail__section-title" id="score-title">Сейчас на месте</h2>
+		<div class={ "score score--" + verdictClass(score.Verdict) }>
+			<strong>{ verdictLabel(score.Verdict) }</strong>
+			if score.Summary != "" {
+				<p>{ score.Summary }</p>
+			}
+		</div>
+	</section>
+}
+
+func verdictClass(verdict models.Verdict) string {
+	switch verdict {
+	case "go":
+		return "is-go"
+	case "caution":
+		return "is-caution"
+	default:
+		return "is-no-go"
+	}
+}
+
+func verdictLabel(verdict models.Verdict) string {
+	switch verdict {
+	case "go":
+		return "Можно выходить"
+	case "caution":
+		return "Осторожно"
+	default:
+		return "Не рекомендуется"
+	}
+}

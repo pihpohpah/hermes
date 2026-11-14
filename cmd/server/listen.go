@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,10 +20,31 @@ import (
 	"github.com/pihpohpah/hermes/internal/domain/models"
 	"github.com/pihpohpah/hermes/internal/infrastructure/config"
 	"github.com/pihpohpah/hermes/internal/infrastructure/openmeteo"
+	"github.com/pihpohpah/hermes/internal/infrastructure/photostore"
 	"github.com/pihpohpah/hermes/internal/infrastructure/repository"
 )
 
 const idleTimeout = time.Minute
+
+// photoStoreFromConfig resolves the photo storage root and the public URL
+// prefix. By default photos go to <WebDir>/uploads and are served at
+// /uploads/... by the static handler. An explicit PHOTOS_STORAGE_DIR wins;
+// when it points outside the web dir the prefix comes back empty and the
+// caller logs a warning.
+func photoStoreFromConfig(cfg config.Config) (*photostore.Store, string) {
+	dir := cfg.PhotosConfig.StorageDir
+	if dir == "" {
+		dir = filepath.Join(cfg.WebDir, "uploads")
+	}
+
+	prefix := ""
+	if rel, err := filepath.Rel(cfg.WebDir, dir); err == nil && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && filepath.IsLocal(rel) {
+		prefix = "/" + filepath.ToSlash(rel)
+	}
+
+	return &photostore.Store{Dir: dir, Prefix: prefix}, prefix
+}
 
 // pinRulesFromConfig maps the PINS_* deployment settings onto the radar
 // moderation policy. The night window is evaluated in Asia/Vladivostok.
@@ -94,6 +117,10 @@ func runListen(
 
 	photoRepo := repository.NewPhotoRepository(pool)
 	createPhotoUC := usecase.NewCreatePhotoUseCase(photoRepo)
+	photoStore, photoPrefix := photoStoreFromConfig(cfg)
+	if photoPrefix == "" {
+		logger.Warn("photos storage dir is outside the web dir, uploads will not be served; set PHOTOS_STORAGE_DIR inside WebDir")
+	}
 
 	createUserUC := usecase.NewCreateUserUseCase(userRepo, sessionRepo, idempotencyRepo, txManager, cfg.TTL)
 	authMiddleware := httproutes.NewAuthMiddleware(logger, sessionRepo, sessionRepo, userRepo)
@@ -108,6 +135,20 @@ func runListen(
 	)
 	getSubmissionUC := usecase.NewGetSubmissionUseCase(submissionRepo)
 	listSubmissionsUC := usecase.NewListSubmissionsUseCase(submissionRepo)
+
+	loader := httproutes.CatalogLoader(listPlacesUC, listEventsUC, getCollectionUC, placeRepo)
+	pages := httproutes.NewPages(
+		logger,
+		loader,
+		getPlaceUC,
+		getEventUC,
+		listSimilarUC,
+		listEventsUC,
+		listPinsUC,
+		getPinUC,
+		listCollectionsUC,
+		listSubmissionsUC,
+	)
 
 	router := routes.NewHTTPRouter(logger, routes.Handlers{
 		Health:             httproutes.NewHealthCheckHandler(logger, pool),
@@ -138,13 +179,16 @@ func runListen(
 		CreateSubmission:   httproutes.NewCreateSubmissionHandler(logger, createSubmissionUC),
 		GetSubmission:      httproutes.NewGetSubmissionHandler(logger, getSubmissionUC),
 		ListSubmissions:    httproutes.NewListSubmissionsHandler(logger, listSubmissionsUC),
-		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, createPhotoUC, cfg.MaxUploadMB<<20),
+		PhotoUpload:        httproutes.NewPhotoUploadHandler(logger, createPhotoUC, photoStore, cfg.PhotosConfig.MaxUploadMB<<20),
 		RequireAuth:        authMiddleware.Require,
 		LoadAuth:           authMiddleware.Load,
 		AllowedOrigins:     cfg.AllowedOriginList(),
-		PlacesListFragment: httproutes.NewPlacesListFragmentHandler(logger, listPlacesUC),
-		PlaceCardFragment:  httproutes.NewPlaceCardFragmentHandler(logger, getPlaceUC),
-		IndexPage:          httproutes.NewIndexPageHandler(logger),
+		Pages:              pages,
+		Fragments:          httproutes.NewFragments(logger, pages),
+		MapItems:           httproutes.NewMapItems(logger, pages),
+		Item:               httproutes.NewItem(logger, pages),
+		Logout:             httproutes.NewLogoutHandler(logger, sessionRepo, cfg.IsProd()),
+		UpdateUser:         httproutes.NewUpdateCurrentUserHandler(logger, userRepo),
 		MapPage:            httproutes.NewMapPageHandler(cfg.MapDir),
 		MapAssets:          httproutes.NewMapAssetsHandler(cfg.MapDir),
 		PMTiles:            httproutes.NewPMTilesHandler(logger, cfg.PMTilesPath),

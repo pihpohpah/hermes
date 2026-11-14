@@ -163,6 +163,16 @@ type Photo struct {
 	Source     string `json:"source,omitempty"`
 }
 
+// SrcSmOrSrc returns the small variant when present, falling back to the
+// full source.
+func (p Photo) SrcSmOrSrc() string {
+	if p.SrcSm != "" {
+		return p.SrcSm
+	}
+
+	return p.Src
+}
+
 // Event is a dated happening, optionally attached to a place.
 type Event struct {
 	ID          string

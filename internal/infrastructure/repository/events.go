@@ -116,7 +116,7 @@ func (r *EventRepository) GetByID(ctx context.Context, id string) (models.Event,
 		SELECT ` + eventColumns + `
 		FROM events e
 		LEFT JOIN places p ON p.id = e.place_id
-		WHERE e.id = $1::uuid OR e.slug = $1
+		WHERE e.id::text = $1 OR e.slug = $1
 	`
 
 	event, err := scanEvent(r.pool.QueryRow(ctx, query, id))

@@ -1,0 +1,92 @@
+package templates
+
+import "github.com/pihpohpah/hermes/internal/application/presenter"
+
+// Правила меток и модерации, страница 404.
+
+templ RulesPage(view RulesView) {
+	@Layout(LayoutView{
+		Title:   "Правила — Места VL.ru",
+		Section: "",
+		User:    view.User,
+	}) {
+		<div
+			class="page container container--narrow"
+			x-data
+			x-init={ rulesInit(view.Section) }
+		>
+			<header class="page__head">
+				<h1 class="page__title">Правила</h1>
+				<p class="page__lead">Как работают быстрые метки и как редакция проверяет места, которые присылают жители.</p>
+			</header>
+			<section class="section" style="margin-top: 0">
+				<h2 class="section__title" style="margin-bottom: var(--space-5)">Быстрые метки</h2>
+				@rulesBody()
+			</section>
+			<section class="section" id="moderation">
+				<h2 class="section__title" style="margin-bottom: var(--space-3)">Как мы проверяем места</h2>
+				<div class="prose">
+					<p>Каждое предложение читает редактор: проверяет адрес по карте, часы работы и цену по открытым источникам, при необходимости связывается с автором.</p>
+					<p>Обычно проверка занимает один-два рабочих дня. Статус видно в профиле, в разделе «Мои предложения».</p>
+					<p>Не публикуем места, куда запрещён доступ, частную территорию без согласия владельца и опасные маршруты без предупреждений.</p>
+				</div>
+			</section>
+		</div>
+		@footer()
+	}
+}
+
+func rulesInit(section string) string {
+	if section == "moderation" {
+		return "setTimeout(() => document.getElementById('moderation')?.scrollIntoView(), 50)"
+	}
+
+	return ""
+}
+
+templ rulesBody() {
+	<ul class="rules-list" role="list">
+		for _, rule := range rulesList() {
+			<li class="rules-list__item">
+				<span class="rules-list__icon">@icon(rule.icon, "")</span>
+				<div><strong>{ rule.title }</strong><p>{ rule.text }</p></div>
+			</li>
+		}
+	</ul>
+}
+
+type ruleDef struct {
+	icon, title, text string
+}
+
+func rulesList() []ruleDef {
+	return []ruleDef{
+		{icon: "clock", title: "Метка живёт недолго", text: "Она исчезает, когда встреча закончилась. Максимум — три часа после начала."},
+		{icon: "users", title: "Для всех, кто рядом", text: "Зовите на игру, прогулку, джем или просите помощи. Метку видят все пользователи."},
+		{icon: "ban", title: "Без рекламы и продаж", text: "Метки с рекламой, продажей и сбором денег снимаются без предупреждения."},
+		{icon: "shield-check", title: "Без личных данных", text: "Не пишите телефон, адрес квартиры и фамилии. Договоритесь на месте."},
+		{icon: "flag", title: "Жалобы проверяем быстро", text: "Если метка нарушает правила, нажмите «Пожаловаться» — модератор посмотрит её в течение часа."},
+	}
+}
+
+// NotFoundPage — 404 для несуществующих путей.
+templ NotFoundPage(user *presenter.User) {
+	@Layout(LayoutView{
+		Title:   "Страница не найдена — Места VL.ru",
+		Section: "",
+		User:    user,
+	}) {
+		<div class="page container">
+			<div class="state-page">
+				<span class="state-page__code" aria-hidden="true">404</span>
+				<h1 class="state-page__title">Такой страницы нет</h1>
+				<p class="state-page__text">Возможно, ссылка устарела или в ней опечатка. Начните с карты или справочника.</p>
+				<div class="state-page__actions">
+					<a class="btn btn--primary btn--lg" href="/">@icon("map", "") Открыть карту</a>
+					<a class="btn btn--outline btn--lg" href="/catalog">Справочник</a>
+				</div>
+			</div>
+		</div>
+		@footer()
+	}
+}

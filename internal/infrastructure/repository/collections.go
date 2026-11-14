@@ -82,7 +82,7 @@ func (r *CollectionRepository) GetWithItems(ctx context.Context, id string) (mod
 	const query = `
 		SELECT id::text, slug, title, scenario, cover
 		FROM collections
-		WHERE id = $1::uuid OR slug = $1
+		WHERE id::text = $1 OR slug = $1
 	`
 
 	var (

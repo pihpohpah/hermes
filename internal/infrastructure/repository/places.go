@@ -129,7 +129,7 @@ func (r *PlaceRepository) GetByID(ctx context.Context, id string) (models.Place,
 		SELECT %s
 		FROM places p
 		%s
-		WHERE p.id = $3::uuid OR p.slug = $3
+		WHERE p.id::text = $3 OR p.slug = $3
 	`, fmt.Sprintf(placeColumns, "NULL::double precision AS distance_m"), latestAssessmentJoin)
 
 	place, err := scanPlace(
@@ -159,7 +159,7 @@ func (r *PlaceRepository) ListSimilar(ctx context.Context, id string, limit int)
 		WITH origin AS (
 			SELECT id, location, layer_code, category, type
 			FROM places
-			WHERE id = $3::uuid OR slug = $3
+			WHERE id::text = $3 OR slug = $3
 		)
 		SELECT ` + placeColumns + `
 		FROM places p
@@ -292,10 +292,10 @@ func (r *PlaceRepository) GetManyByIDs(ctx context.Context, ids []string) ([]mod
 		SELECT %s
 		FROM places p
 		%s
-		WHERE p.id::text = ANY($1::text[])
+		WHERE p.id::text = ANY($3::text[])
 	`, fmt.Sprintf(placeColumns, "NULL::double precision AS distance_m"), latestAssessmentJoin)
 
-	rows, err := r.pool.Query(ctx, query, ids)
+	rows, err := r.pool.Query(ctx, query, string(models.ActivityWalk), scoring.AlgorithmVersion, ids)
 	if err != nil {
 		return nil, fmt.Errorf("query places by ids: %w", err)
 	}
@@ -358,7 +358,7 @@ func (r *PlaceRepository) Create(ctx context.Context, in models.CreatePlaceInput
 			elevation = COALESCE(places.elevation, EXCLUDED.elevation),
 			elevation_source = COALESCE(places.elevation_source, EXCLUDED.elevation_source),
 			difficulty = EXCLUDED.difficulty
-		RETURNING ` + placeColumns
+		RETURNING id`
 
 	accessModes := make([]string, 0, len(in.Access))
 	for _, mode := range in.Access {
@@ -385,8 +385,8 @@ func (r *PlaceRepository) Create(ctx context.Context, in models.CreatePlaceInput
 		in.Season,
 		accessModes,
 		in.HowToGet,
-		in.Facts,
-		in.Tags,
+		append([]string{}, in.Facts...),
+		append([]string{}, in.Tags...),
 		photosValue(in.Photos),
 		beachValue(in.Beach),
 		in.SwimSeason,
@@ -396,11 +396,16 @@ func (r *PlaceRepository) Create(ctx context.Context, in models.CreatePlaceInput
 		in.OSMID,
 	}
 
-	row := r.pool.QueryRow(ctx, fmt.Sprintf(query, "NULL::double precision AS distance_m"), args...)
-
-	place, err := scanPlace(row)
-	if err != nil {
+	// placeColumns нельзя вернуть из RETURNING напрямую: в нём алиасы и JOIN
+	// с оценкой условий. Поэтому вставляем и тут же читаем запись целиком.
+	var createdID string
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&createdID); err != nil {
 		return models.Place{}, fmt.Errorf("insert place: %w", err)
+	}
+
+	place, err := r.GetByID(ctx, createdID)
+	if err != nil {
+		return models.Place{}, fmt.Errorf("load created place: %w", err)
 	}
 
 	return place, nil

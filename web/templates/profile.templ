@@ -1,0 +1,246 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Профиль: метки, отметки «Я приду» и предложения со статусом проверки.
+// Вкладки переключаются htmx-фрагментом /fragments/profile-tab.
+
+templ ProfilePage(view ProfileView) {
+	@Layout(LayoutView{
+		Title:   "Профиль — Места VL.ru",
+		Section: "",
+		User:    view.User,
+	}) {
+		if view.User == nil {
+			@profileGuest()
+		} else {
+			@profileUser(view)
+		}
+		@footer()
+	}
+}
+
+templ profileGuest() {
+	<div class="page container">
+		<div class="state-page">
+			<span class="state-page__icon state-page__icon--neutral">@icon("user", "icon--xl")</span>
+			<h1 class="state-page__title">Профиль появится после входа</h1>
+			<p class="state-page__text">Войдите, указав имя, — здесь будут ваши метки, отметки «Я приду» и статусы предложений.</p>
+			<div class="state-page__actions">
+				<button type="button" class="btn btn--primary btn--lg" data-action="login">@icon("log-in", "") Войти</button>
+				<a class="btn btn--outline btn--lg" href="/">На карту</a>
+			</div>
+		</div>
+	</div>
+}
+
+templ profileUser(view ProfileView) {
+	{{
+		counts := profileTabCounts(view)
+	}}
+	<div class="page container profile">
+		<header class="profile__head">
+			@avatar(view.User.DisplayName, "xl")
+			<div class="profile__who">
+				<h1 class="profile__name">{ view.User.DisplayName }</h1>
+				<p>Гостевой профиль · на VL.ru с { formatDay(view.User.CreatedAt) }</p>
+			</div>
+			<div class="profile__actions">
+				<button type="button" class="btn btn--outline" data-action="rename">@icon("pencil", "") Изменить имя</button>
+				<button type="button" class="btn btn--ghost" data-action="logout">@icon("log-out", "") Выйти</button>
+			</div>
+		</header>
+		<div class="tabs" role="group" aria-label="Разделы профиля">
+			for _, tab := range profileTabs() {
+				<a
+					class="tab"
+					href={ templ.SafeURL(profileTabURL(tab.ID)) }
+					hx-get={ "/fragments/profile-tab?tab=" + tab.ID }
+					hx-target="#profile-tab"
+					hx-push-url={ profileTabURL(tab.ID) }
+					aria-pressed={ strconv.FormatBool(view.Tab == tab.ID) }
+				>
+					@icon(tab.Icon, "")
+{ tab.Label }<span class="tab__count">{ strconv.Itoa(counts[tab.ID]) }</span>
+				</a>
+			}
+		</div>
+		<div class="profile__panel" role="region" id="profile-tab">
+			@ProfileTab(view)
+		</div>
+	</div>
+}
+
+type profileTabDef struct {
+	ID    string
+	Label string
+	Icon  string
+}
+
+func profileTabs() []profileTabDef {
+	return []profileTabDef{
+		{ID: "pins", Label: "Мои метки", Icon: "radio"},
+		{ID: "going", Label: "Я иду", Icon: "users"},
+		{ID: "submissions", Label: "Предложения", Icon: "flag"},
+	}
+}
+
+func profileTabURL(id string) string {
+	if id == "pins" {
+		return "/profile"
+	}
+
+	return "/profile?tab=" + id
+}
+
+func profileTabCounts(view ProfileView) map[string]int {
+	counts := map[string]int{"pins": 0, "going": 0, "submissions": len(view.Submissions)}
+	for _, pin := range view.Pins {
+		if pin.Mine {
+			counts["pins"]++
+		} else if pin.Joined {
+			counts["going"]++
+		}
+	}
+
+	return counts
+}
+
+// ProfileTab — содержимое вкладки (htmx-фрагмент).
+templ ProfileTab(view ProfileView) {
+	if view.Tab == "going" {
+		@profileGoing(view)
+	} else if view.Tab == "submissions" {
+		@profileSubmissions(view)
+	} else {
+		@profilePins(view)
+	}
+}
+
+templ profilePins(view ProfileView) {
+	{{
+		mine := make([]presenter.Pin, 0, len(view.Pins))
+		for _, pin := range view.Pins {
+			if pin.Mine {
+				mine = append(mine, pin)
+			}
+		}
+	}}
+	if len(mine) == 0 {
+		<div class="empty">
+			<span class="empty__icon">@icon("radio", "icon--lg")</span>
+			<h2 class="empty__title">Меток пока нет</h2>
+			<p class="empty__text">Позовите соседей на футбол, прогулку или джем — метка появится на карте «Сейчас».</p>
+			<div class="empty__actions"><a class="btn btn--accent" href="/now">@icon("plus", "") Поставить метку</a></div>
+		</div>
+	} else {
+		<ul class="profile__grid" role="list">
+			for _, pin := range mine {
+				@pinCard(pin, false)
+			}
+		</ul>
+	}
+}
+
+templ profileGoing(view ProfileView) {
+	{{
+		going := make([]presenter.Pin, 0, len(view.Pins))
+		for _, pin := range view.Pins {
+			if pin.Joined && !pin.Mine {
+				going = append(going, pin)
+			}
+		}
+	}}
+	if len(going) == 0 {
+		<div class="empty">
+			<span class="empty__icon">@icon("users", "icon--lg")</span>
+			<h2 class="empty__title">Вы пока никуда не идёте</h2>
+			<p class="empty__text">Загляните в «Сейчас» — там метки соседей, к которым можно присоединиться.</p>
+			<div class="empty__actions"><a class="btn btn--outline" href="/now">Открыть «Сейчас»</a></div>
+		</div>
+	} else {
+		<ul class="profile__grid" role="list">
+			for _, pin := range going {
+				@pinCard(pin, false)
+			}
+		</ul>
+	}
+}
+
+templ profileSubmissions(view ProfileView) {
+	if len(view.Submissions) == 0 {
+		<div class="empty">
+			<span class="empty__icon">@icon("flag", "icon--lg")</span>
+			<h2 class="empty__title">Предложений пока нет</h2>
+			<p class="empty__text">Знаете место, которого нет в справочнике? Расскажите — редакция проверит и добавит.</p>
+			<div class="empty__actions"><a class="btn btn--primary" href="/add">@icon("plus", "") Добавить место</a></div>
+		</div>
+	} else {
+		<ul class="profile__rows" role="list">
+			for _, submission := range view.Submissions {
+				@submissionRow(submission)
+			}
+		</ul>
+	}
+}
+
+templ submissionRow(submission presenter.Submission) {
+	{{
+		status := submissionStatusMeta(submission.Status)
+		typeIcon := "map-pin"
+		if submission.Type == "event" {
+			typeIcon = "calendar"
+		} else if submission.Type == "fix" {
+			typeIcon = "pencil"
+		}
+		title := submission.Title
+		if submission.Type == "fix" && title == "" {
+			title = "Правка"
+		}
+	}}
+	<li class="profile-row">
+		if len(submission.Photos) > 0 {
+			<img class="profile-row__thumb" src={ submission.Photos[0].SrcSmOrSrc() } alt="Фото к предложению" loading="lazy"/>
+		} else {
+			@icon(typeIcon, "")
+		}
+		<span>
+			<strong>{ title }</strong>
+			<span>{ submissionTypeLabel(submission.Type) } · { formatAgo(submission.CreatedAt) }</span>
+		</span>
+		<span class={ "badge badge--" + status.badge }>@icon(status.icon, "")
+{ status.label }</span>
+	</li>
+}
+
+func submissionTypeLabel(t string) string {
+	switch t {
+	case "event":
+		return "Событие"
+	case "fix":
+		return "Правка"
+	default:
+		return "Место"
+	}
+}
+
+type statusMeta struct {
+	label  string
+	badge  string
+	icon   string
+}
+
+func submissionStatusMeta(status string) statusMeta {
+	switch status {
+	case "published":
+		return statusMeta{label: "Опубликовано", badge: "success", icon: "circle-check"}
+	case "rejected":
+		return statusMeta{label: "Отклонено", badge: "danger", icon: "circle-x"}
+	default:
+		return statusMeta{label: "На проверке", badge: "warning", icon: "hourglass"}
+	}
+}

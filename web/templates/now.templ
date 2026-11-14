@@ -1,0 +1,331 @@
+package templates
+
+import (
+	"strconv"
+
+	"github.com/pihpohpah/hermes/internal/application/presenter"
+)
+
+// Экран «Сейчас»: быстрые метки жителей. Панель целиком серверная
+// (/fragments/pins и /fragments/pin/{id}), создание метки — Alpine-форма
+// внутри тела панели (двухшаговая, с выбором точки на карте).
+
+templ NowPage(view NowView) {
+	@Layout(LayoutView{
+		Title:    "Сейчас — Места VL.ru",
+		Section:  "now",
+		User:     view.User,
+		LivePins: view.LivePins,
+		WithMap:  true,
+	}) {
+		@mapStage("pins", view.LivePins) {
+			@NowPanelInner(view)
+		}
+	}
+}
+
+// NowPanelInner — внутренности панели «Сейчас»; заменяется htmx целиком.
+templ NowPanelInner(view NowView) {
+	<div class="map-panel__head" data-head>
+		<div class="map-panel__title-row">
+			<div>
+				<h1 class="map-panel__title now-title"><span class="live-dot" aria-hidden="true"></span>Сейчас</h1>
+				<p class="map-panel__subtitle" data-now-count>
+					if len(view.Pins) > 0 {
+						{ countLabel(len(view.Pins), [3]string{"метка", "метки", "меток"}) } от жителей
+					} else {
+						Метки от жителей
+					}
+				</p>
+			</div>
+			<button type="button" class="btn btn--accent" data-action="create">@icon("plus", "") Метка</button>
+		</div>
+		<div data-slot-home="kinds">
+			<div class="chip-row" role="group" aria-label="Тип метки" data-top-slot="kinds">
+				@pinKindChips(view)
+			</div>
+		</div>
+	</div>
+	<div class="map-panel__body" id="map-panel-content" data-body>
+		<div x-data="nowCreate" x-init="init($el)" class="now-body">
+			<div x-show="step === 'list'" x-cloak>
+				if view.Selected != nil {
+					@pinPreviewContent(*view.Selected, view.User, view.Kind)
+				} else {
+					@pinsListContent(view)
+				}
+			</div>
+			@createPinStepPlace()
+			@createPinStepDetails()
+		</div>
+	</div>
+	if view.Selected == nil {
+		<div class="map-panel__foot" data-foot>
+			<span>Метка исчезает, когда встреча закончилась</span>
+			<a class="link-btn" href="/rules">Правила</a>
+		</div>
+	}
+}
+
+// pinKindChips — фильтр по типу метки.
+templ pinKindChips(view NowView) {
+	<a
+		class="chip"
+		href="/now"
+		hx-get="/fragments/pins"
+		hx-target="#map-panel-inner"
+		hx-push-url="/now"
+		aria-pressed={ strconv.FormatBool(view.Kind == "") }
+	>Все</a>
+	for _, kind := range presenter.PinKinds {
+		<a
+			class="chip"
+			href={ templ.SafeURL(nowURL(kind.ID, "", "")) }
+			hx-get={ pinsFragmentURL(kind.ID, "") }
+			hx-target="#map-panel-inner"
+			hx-push-url={ nowURL(kind.ID, "", "") }
+			aria-pressed={ strconv.FormatBool(view.Kind == kind.ID) }
+		>
+			@icon(kind.Icon, "")
+{ kind.Label }
+			<span class="chip__count" data-kind-count={ kind.ID }></span>
+		</a>
+	}
+}
+
+// pinsListContent — список меток или пустое состояние.
+templ pinsListContent(view NowView) {
+	{{
+		visible := make([]presenter.Pin, 0, len(view.Pins))
+		for _, pin := range view.Pins {
+			if view.Kind == "" || pin.Kind == view.Kind {
+				visible = append(visible, pin)
+			}
+		}
+	}}
+	<ul class="map-panel__list map-panel__list--cards" role="list" id="pins-list">
+		<li class="now-intro-li">
+			<div class="now-intro" x-data="{ hidden: false }" x-show="!hidden" x-init="hidden = sessionStorage.getItem('vlru-places:now-intro-hidden') === '1'">
+				@icon("megaphone", "")
+				<p>
+					Позовите людей на футбол, прогулку или джем. Метку видят все, и она исчезает, когда встреча закончилась.
+					<a class="link-btn" href="/rules">Правила меток</a>
+				</p>
+				<button
+					type="button"
+					class="icon-btn icon-btn--sm"
+					data-action="hide-intro"
+					aria-label="Скрыть подсказку"
+					@click="hidden = true; sessionStorage.setItem('vlru-places:now-intro-hidden', '1')"
+				>@icon("x", "")</button>
+			</div>
+		</li>
+		if len(visible) == 0 {
+			<div class="empty">
+				<span class="empty__icon">@icon("radio", "icon--lg")</span>
+				<h2 class="empty__title">
+					if view.Kind != "" {
+						Таких меток пока нет
+					} else {
+						Пока тихо
+					}
+				</h2>
+				<p class="empty__text">Поставьте метку первым — соседи увидят её на карте.</p>
+				<div class="empty__actions">
+					<button type="button" class="btn btn--accent" data-action="create">@icon("plus", "") Поставить метку</button>
+				</div>
+			</div>
+		} else {
+			for _, pin := range visible {
+				@pinCard(pin, pin.ID == view.Pin)
+			}
+		}
+	</ul>
+}
+
+// pinPreviewContent — карточка выбранной метки (тело панели).
+templ pinPreviewContent(pin presenter.Pin, user *presenter.User, kind string) {
+	{{
+		kindInfo := presenter.PinKindInfo(pin.Kind)
+		back := nowURL(kind, "", "")
+		duration := pinDuration(pin)
+	}}
+	<article class="preview" aria-labelledby="pin-title">
+		<div class="preview__bar">
+			<a class="btn btn--sm btn--ghost" href={ templ.SafeURL(back) } hx-get={ pinsFragmentURL(kind, "") } hx-target="#map-panel-inner" hx-push-url={ back }>
+				@icon("arrow-left", "icon--sm") Все метки
+			</a>
+			<button
+				type="button"
+				class="icon-btn icon-btn--sm"
+				data-action="share"
+				data-share-title={ pin.Title }
+				data-share-text={ pin.Note }
+				data-share-url={ "/now?pin=" + pin.ID }
+				aria-label="Поделиться"
+				title="Поделиться"
+			>@icon("share-2", "")</button>
+		</div>
+		<div class="preview__meta">
+			<span class="badge badge--timed">@icon(kindInfo.Icon, "")
+{ kindInfo.Label }</span>
+			@pinTimeBadge(pin)
+		</div>
+		<div>
+			<h2 class="preview__title" id="pin-title">{ pin.Title }</h2>
+			if pin.Note != "" {
+				<p class="preview__text" style="margin-top: var(--space-2)">{ pin.Note }</p>
+			}
+		</div>
+		<div class="pin-author">
+			@avatar(pin.Author.Name, "sm")
+			<span>
+				<strong>
+					if pin.Mine {
+						Ваша метка
+					} else {
+						{ pin.Author.Name }
+					}
+				</strong>
+				· { formatAgo(pin.CreatedAt) }
+			</span>
+		</div>
+		<dl class="facts preview__facts">
+			<div class="fact">@icon("map-pin", "")<div><dt>Где</dt><dd>{ pin.PlaceLabel }</dd></div></div>
+			<div class="fact">@icon("clock", "")<div><dt>Сколько продлится</dt><dd>{ duration }</dd></div></div>
+			<div class="fact">@icon("navigation", "")<div><dt>От центра</dt><dd>{ formatDistance(presenter.DistanceFromCenterKm(pin.Lat, pin.Lon)) }</dd></div></div>
+		</dl>
+		@pinMeter(pin)
+		if pin.Mine {
+			<button type="button" class="btn btn--outline btn--block" data-action="delete-pin" data-id={ pin.ID }>
+				@icon("trash-2", "") Снять метку
+			</button>
+		} else {
+			<button
+				type="button"
+				class="btn btn--accent btn--lg btn--block"
+				data-action="pin-going"
+				data-id={ pin.ID }
+				aria-pressed={ strconv.FormatBool(pin.Joined) }
+			>
+				@icon(mapBoolIcon(pin.Joined, "plus"), "")
+				if pin.Joined {
+					Вы идёте — отменить
+				} else {
+					Я приду
+				}
+			</button>
+		}
+		<div class="alert alert--neutral">
+			@icon("shield-check", "")<span>Встречайтесь в людных местах и не делитесь личными данными в описании.</span>
+		</div>
+		if !pin.Mine {
+			<button type="button" class="btn btn--sm btn--danger" data-action="report" data-id={ pin.ID }>
+				@icon("flag", "icon--sm") Пожаловаться
+			</button>
+		}
+	</article>
+}
+
+func pinDuration(pin presenter.Pin) string {
+	start, ok1 := parseISODate(pin.StartsAt)
+	end, ok2 := parseISODate(pin.EndsAt)
+	if !ok1 || !ok2 {
+		return ""
+	}
+
+	return formatDuration(end.Sub(start).Minutes())
+}
+
+// createPinStepPlace — шаг 1 создания метки: точка на карте.
+templ createPinStepPlace() {
+	<form class="preview create-pin" x-show="step === 'place'" x-cloak @submit.prevent="submitPlace">
+		<div class="preview__bar">
+			<button type="button" class="btn btn--sm btn--ghost" data-action="cancel-create" @click="cancel">
+				@icon("x", "icon--sm") Отмена
+			</button>
+			<span class="create-pin__step">Шаг 1 из 2</span>
+		</div>
+		<div>
+			<h2 class="preview__title">Где собираемся?</h2>
+			<p class="preview__text" style="margin-top: var(--space-2)">Подвиньте карту, чтобы метка указывала на место встречи.</p>
+		</div>
+		<div class="field">
+			<label class="field__label" for="pin-place">Как найти <span class="optional">— необязательно</span></label>
+			<input class="input" id="pin-place" x-model="draft.placeLabel" maxlength="60" placeholder="Например, поле у стадиона «Динамо»"/>
+			<p class="field__hint">Ориентир, который поймут все: вход, площадка, памятник</p>
+		</div>
+		<button type="submit" class="btn btn--accent btn--lg btn--block">Дальше @icon("arrow-right", "")</button>
+	</form>
+}
+
+// createPinStepDetails — шаг 2: тип, заголовок, время, состав.
+templ createPinStepDetails() {
+	<form class="preview create-pin" x-show="step === 'details'" x-cloak @submit.prevent="submitDetails">
+		<div class="preview__bar">
+			<button type="button" class="btn btn--sm btn--ghost" @click="step = 'place'">
+				@icon("arrow-left", "icon--sm") Место
+			</button>
+			<span class="create-pin__step">Шаг 2 из 2</span>
+		</div>
+		<h2 class="preview__title">Что происходит?</h2>
+		<fieldset class="fieldset">
+			<legend>Тип</legend>
+			<div class="chip-row chip-row--wrap">
+				for _, k := range presenter.PinKinds {
+					<label class="chip chip--lg">
+						<input type="radio" name="kind" value={ k.ID } x-model="draft.kind"/>
+						@icon(k.Icon, "")
+{ k.Label }
+					</label>
+				}
+			</div>
+			<p class="field__error" x-show="errors.kind" x-text="errors.kind" role="alert"></p>
+		</fieldset>
+		<div class="field">
+			<label class="field__label" for="pin-title">Заголовок</label>
+			<input class="input" id="pin-title" x-model="draft.title" maxlength="80" placeholder="Футбол 5 на 5, нужно ещё двое" aria-describedby="pin-title-error pin-title-count"/>
+			<p class="field__error" id="pin-title-error" x-show="errors.title" x-text="errors.title" role="alert"></p>
+			<span class="field__counter" x-text="(draft.title || '').length + ' / 80'"></span>
+		</div>
+		<fieldset class="fieldset">
+			<legend>Когда начинаем</legend>
+			<div class="chip-row chip-row--wrap">
+				<label class="chip"><input type="radio" value="0" x-model="draft.startsInMin"/>Сейчас</label>
+				<label class="chip"><input type="radio" value="15" x-model="draft.startsInMin"/>Через 15 мин</label>
+				<label class="chip"><input type="radio" value="30" x-model="draft.startsInMin"/>Через 30 мин</label>
+				<label class="chip"><input type="radio" value="60" x-model="draft.startsInMin"/>Через час</label>
+				<label class="chip"><input type="radio" value="120" x-model="draft.startsInMin"/>Через 2 часа</label>
+			</div>
+		</fieldset>
+		<fieldset class="fieldset">
+			<legend>Сколько продлится</legend>
+			<div class="segmented" role="radiogroup">
+				<label class="segmented__item"><input type="radio" value="60" x-model="draft.durationMin"/>1 час</label>
+				<label class="segmented__item"><input type="radio" value="120" x-model="draft.durationMin"/>2 часа</label>
+				<label class="segmented__item"><input type="radio" value="180" x-model="draft.durationMin"/>3 часа</label>
+			</div>
+		</fieldset>
+		<div class="field">
+			<span class="field__label" id="pin-need-label">Сколько ещё человек нужно</span>
+			<div class="create-pin__need">
+				<div class="counter" role="group" aria-labelledby="pin-need-label">
+					<button type="button" class="icon-btn icon-btn--sm" @click="draft.need = Math.max(0, draft.need - 1)" aria-label="Меньше">@icon("minus", "")</button>
+					<output class="counter__value" aria-live="polite" x-text="draft.need"></output>
+					<button type="button" class="icon-btn icon-btn--sm" @click="draft.need = Math.min(30, draft.need + 1)" aria-label="Больше">@icon("plus", "")</button>
+				</div>
+				<span class="field__hint" x-show="draft.need === 0">Не важно, приходите все</span>
+			</div>
+		</div>
+		<div class="field">
+			<label class="field__label" for="pin-note">Подробности <span class="optional">— необязательно</span></label>
+			<textarea class="textarea" id="pin-note" x-model="draft.note" maxlength="140" rows="3" placeholder="Что взять с собой, как узнать вас на месте"></textarea>
+		</div>
+		<div class="create-pin__place">
+			@icon("map-pin", "")<span x-text="draft.placeLabel || 'Точка на карте'"></span>
+			<button type="button" class="link-btn" @click="step = 'place'">Изменить</button>
+		</div>
+		<button type="submit" class="btn btn--accent btn--lg btn--block">Опубликовать метку</button>
+		<p class="field__hint">Метку увидят все. Не пишите телефон и адрес квартиры — договоритесь на месте.</p>
+	</form>
+}
