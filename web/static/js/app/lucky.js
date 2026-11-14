@@ -225,7 +225,7 @@ async function roll(root, state) {
 
   const stage = root.querySelector('[data-lucky-stage]');
   stage.setAttribute('aria-busy', 'true');
-  const request = api(`/lucky?${params.toString()}`).catch((error) => {
+  const request = api(`/api/lucky?${params.toString()}`).catch((error) => {
     console.warn('Не удалось бросить кубик', error);
     toast('Не получилось. Проверьте соединение и попробуйте ещё раз', { type: 'danger' });
     return undefined;
@@ -233,7 +233,7 @@ async function roll(root, state) {
 
   // Перебор кадрами из того же пула, что и бросок: пока сервер думает,
   // пользователь видит «мельтешение» вариантов.
-  const pool = await api(`/map-items?s=${encodeURIComponent(state.scenario)}`)
+  const pool = await api(`/api/map-items?s=${encodeURIComponent(state.scenario)}`)
     .then((data) => (Array.isArray(data) ? data : data?.items) || [])
     .catch(() => []);
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
