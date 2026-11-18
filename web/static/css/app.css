@@ -133,8 +133,9 @@
   /* Карта. Токены читаются и CSS, и стилем MapLibre: web/map/style.json
      ссылается на них как var(--map-*), подставляет js/app/map-style.js. */
   --map-land: #f4f3ef;
-  --map-nature-land: var(--map-land);
-  --map-water: #cfe3f1;
+  --map-nature-land: #e3e9c6;
+  --map-nature-wood: #7ea14f;
+  --map-water: #a9cdec;
   --map-waterway: #a9cbe4;
   --map-park: #e1eed6;
   --map-wood: #d8e8cc;
@@ -154,9 +155,10 @@
   --map-road-major: #ffffff;
   --map-motorway: #ffe3d1;
   --map-rail: var(--gray-400);
-  --map-track: #b9a98f;
-  --map-path: #a9764f;
-  --map-hiking-route: #b4531f;
+  --map-track: #c0b49b;
+  --map-path: #8b8071;
+  --map-hiking-route: #4a9a48;
+  --map-hiking-route-casing: #2f7132;
   --map-label: #55515e;
   --map-label-halo: #ffffff;
   --map-place-label: var(--gray-900);

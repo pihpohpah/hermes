@@ -61,6 +61,8 @@ type Handlers struct {
 	MapStyle          *httproutes.MapStyleHandler
 	PMTiles           *httproutes.PMTilesHandler
 	Relief            *httproutes.PMTilesHandler
+	Contours          *httproutes.PMTilesHandler
+	Water             *httproutes.PMTilesHandler
 	WebDir            string
 }
 
@@ -193,6 +195,18 @@ func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
 	if h.Relief != nil {
 		mux.Handle("GET /api/map/relief.pmtiles", h.Relief)
 		mux.Handle("HEAD /api/map/relief.pmtiles", h.Relief)
+	}
+
+	// Горизонтали отдельным векторным архивом (20/100 м, клиент рисует кольца).
+	if h.Contours != nil {
+		mux.Handle("GET /api/map/contours.pmtiles", h.Contours)
+		mux.Handle("HEAD /api/map/contours.pmtiles", h.Contours)
+	}
+
+	// Мировая вода (океаны, озёра) — синий фон акватории вокруг края.
+	if h.Water != nil {
+		mux.Handle("GET /api/map/water.pmtiles", h.Water)
+		mux.Handle("HEAD /api/map/water.pmtiles", h.Water)
 	}
 
 	if h.WebDir != "" {

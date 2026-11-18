@@ -36,6 +36,8 @@ const (
 	defaultGeocoderInterval  = 15 * time.Second
 	defaultPMTilesPath       = "./web/static/pmtiles/primorsky-krai-z15.pmtiles"
 	defaultReliefPath        = "./web/static/pmtiles/primorsky-relief.pmtiles"
+	defaultContoursPath      = "./web/static/pmtiles/primorsky-contours.pmtiles"
+	defaultWaterPath         = "./web/static/pmtiles/primorsky-water.pmtiles"
 	defaultMapDir            = "./web/map"
 	defaultWebDir            = "./web/static"
 	defaultReadHeaderTimeout = 10 * time.Second
@@ -210,6 +212,8 @@ type AppConfig struct {
 	Port              string        `koanf:"PORT" validate:"required"`
 	PMTilesPath       string        `koanf:"PMTILES_PATH" validate:"required"`
 	ReliefPath        string        `koanf:"RELIEF_PATH" validate:"required"`
+	ContoursPath      string        `koanf:"CONTOURS_PATH" validate:"required"`
+	WaterPath         string        `koanf:"WATER_PATH" validate:"required"`
 	MapDir            string        `koanf:"MAP_DIR" validate:"required"`
 	WebDir            string        `koanf:"WEB_DIR" validate:"required"`
 	ReadHeaderTimeout time.Duration `koanf:"APP_READ_HEADER_TIMEOUT" validate:"required"`
@@ -303,6 +307,8 @@ func defaultCfg() Config {
 			Port:              defaultPort,
 			PMTilesPath:       defaultPMTilesPath,
 			ReliefPath:        defaultReliefPath,
+			ContoursPath:      defaultContoursPath,
+			WaterPath:         defaultWaterPath,
 			MapDir:            defaultMapDir,
 			WebDir:            defaultWebDir,
 			ReadHeaderTimeout: defaultReadHeaderTimeout,

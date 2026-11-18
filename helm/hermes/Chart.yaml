@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hermes
+description: Hermes — сервис мест, погоды и офлайн-карт Приморского края
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

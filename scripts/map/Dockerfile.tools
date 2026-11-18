@@ -1,7 +1,28 @@
 # Инструменты сборки карты: tilemaker (рендер MVT-тайлов) + osmium (кроп PBF).
 # Собирается автоматически из build-map.sh / build-relief.sh.
-FROM ghcr.io/systemed/tilemaker:latest
+# tilemaker собираем из исходников v3.2.0 (последний стабильный релиз):
+# тег :master в ghcr нестабилен — на нём геометрия полигонов пишется
+# грубо упрощённой на высоких зумах (зубцы берега на z14-15).
+FROM debian:bookworm-slim AS tilemaker-build
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake curl ca-certificates libboost-dev libboost-filesystem-dev \
+      libboost-program-options-dev libboost-system-dev libboost-iostreams-dev \
+      libprotobuf-dev protobuf-compiler libshp-dev libsqlite3-dev zlib1g-dev \
+      liblua5.1-0-dev rapidjson-dev \
+ && rm -rf /var/lib/apt/lists/* \
+ && curl -fsSL https://codeload.github.com/systemed/tilemaker/tar.gz/refs/tags/v3.2.0 -o /tmp/tm.tgz \
+ && mkdir /src && tar -xzf /tmp/tm.tgz -C /src --strip-components=1 && rm /tmp/tm.tgz \
+ && cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build /build -j"$(nproc)" \
+ && strip /build/tilemaker
 
+FROM debian:bookworm-slim
+COPY --from=tilemaker-build /build/tilemaker /usr/local/bin/tilemaker
 RUN apt-get update \
  && apt-get install -y --no-install-recommends osmium-tool \
+      libboost-filesystem1.74.0 libboost-program-options1.74.0 \
+      libboost-system1.74.0 libboost-iostreams1.74.0 \
+      libprotobuf32 libshp2 libsqlite3-0 zlib1g liblua5.1-0 \
  && rm -rf /var/lib/apt/lists/*
+ENTRYPOINT ["tilemaker"]

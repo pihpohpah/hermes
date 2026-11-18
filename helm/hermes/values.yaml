@@ -1,0 +1,292 @@
+# Default values for hermes.
+#
+# Приложение слушает HTTP на :8080, требует PostGIS и читает архивы карт
+# из каталога, смонтированного в /app/web/static/pmtiles.
+#
+# Секреты (DATABASE_URL, TELEGRAM_BOT_TOKEN, SENTRY_DSN, OPENMETEO_API_KEY)
+# в values не храните: используйте secrets.existingSecret или externalSecrets.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/pihpohpah/hermes
+  # Пустой tag = appVersion из Chart.yaml.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+priorityClassName: ""
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+terminationGracePeriodSeconds: 30
+# Пауза перед SIGTERM, чтобы ingress успел убрать под из endpoints.
+preStopSleepSeconds: 5
+
+service:
+  type: ClusterIP
+  port: 80
+  # Он же containerPort. Должен совпадать с env.PORT.
+  targetPort: 8080
+  annotations: {}
+  labels: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts: []
+  #  - host: hermes.example.com
+  #    paths:
+  #      - path: /
+  #        pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    # Запас на декодирование и ресайз фото до 10000x10000 px.
+    cpu: "1"
+    memory: 1Gi
+
+probes:
+  startup:
+    enabled: true
+    path: /health
+    periodSeconds: 2
+    timeoutSeconds: 3
+    failureThreshold: 30
+  readiness:
+    enabled: true
+    path: /health
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    enabled: true
+    # /health пингует PostgreSQL, поэтому по умолчанию liveness — TCP:
+    # недоступная БД не должна вызывать рестарты подов.
+    type: tcp # tcp | http
+    path: /health
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+# Разносит поды по нодам. В production включён.
+topologySpread:
+  enabled: false
+  maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+affinity: {}
+nodeSelector: {}
+tolerations: []
+
+# Несекретная конфигурация. Превращается в ConfigMap и envFrom.
+# Значения — строки; PORT должен совпадать с service.targetPort.
+env:
+  APP_ENV: prod
+  TZ: Asia/Vladivostok
+  PORT: "8080"
+  DB_PING_TIMEOUT: 5s
+
+  WEATHER_MODE: real
+  OPENMETEO_BASE: https://api.open-meteo.com/v1
+  OPENMETEO_MARINE_BASE: https://marine-api.open-meteo.com/v1
+  OPENMETEO_AIR_QUALITY_BASE: https://air-quality-api.open-meteo.com/v1
+  OPENMETEO_TIMEOUT: 8s
+  OPENMETEO_ATTEMPTS: "3"
+  OPENMETEO_RETRY_BACKOFF: 300ms
+
+  # Абсолютные пути: архивы карт лежат на PVC, статика — в образе.
+  PMTILES_PATH: /app/web/static/pmtiles/primorsky-krai-z15.pmtiles
+  RELIEF_PATH: /app/web/static/pmtiles/primorsky-relief.pmtiles
+  CONTOURS_PATH: /app/web/static/pmtiles/primorsky-contours.pmtiles
+  WATER_PATH: /app/web/static/pmtiles/primorsky-water.pmtiles
+  MAP_DIR: /app/web/map
+  WEB_DIR: /app/web/static
+  PHOTOS_STORAGE_DIR: /app/web/static/uploads
+  PHOTOS_MAX_UPLOAD_MB: "10"
+
+  APP_READ_HEADER_TIMEOUT: 10s
+  APP_SHUTDOWN_TIMEOUT: 15s
+  SESSION_TTL: 720h
+  CORS_ALLOWED_ORIGINS: ""
+
+  PINS_MAX_ACTIVE_PER_USER: "5"
+  PINS_MAX_PER_HOUR: "10"
+  PINS_REPORT_HIDE_THRESHOLD: "3"
+  PINS_MAX_DURATION_H: "12"
+  PINS_PURGE_GRACE_H: "24"
+  PINS_STOP_WORDS: ""
+  PINS_NIGHT_BAN_FROM: ""
+  PINS_NIGHT_BAN_TO: ""
+
+  LOG_LEVEL: INFO
+  LOG_ADD_SOURCE: "false"
+  SENTRY_ENVIRONMENT: prod
+  SENTRY_RELEASE: ""
+  SENTRY_DEBUG: "false"
+  SENTRY_TRACES_SAMPLE_RATE: "0"
+
+  # Публичный Client ID бота (не секрет). Пусто = вход через Telegram выключен.
+  TELEGRAM_CLIENT_ID: ""
+  TELEGRAM_API_BASE: https://api.telegram.org
+  TELEGRAM_MAX_ATTEMPTS: "6"
+
+# Дополнительные env/volume для нестандартных случаев.
+# extraEnv — полные записи Kubernetes env (включая valueFrom).
+extraEnv: []
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+
+secrets:
+  # Имя существующего Secret. Все его ключи попадут в под через envFrom.
+  # Для приложения достаточно: TELEGRAM_BOT_TOKEN, TELEGRAM_PROXY_LIST
+  # (если в URL прокси есть логин/пароль), SENTRY_DSN, OPENMETEO_API_KEY.
+  # DATABASE_URL подставляется отдельно и имеет приоритет над envFrom.
+  existingSecret: ""
+  # Создать Secret из data ниже (только для локальных проверок).
+  create: false
+  name: ""
+  annotations: {}
+  data: {}
+
+# Опциональная интеграция с external-secrets.io.
+# Например:
+# externalSecrets:
+#   enabled: true
+#   secrets:
+#     - name: hermes-app
+#       dataFrom:
+#         key: hermes/production/app.secret.env
+#         version: "1"
+# и secrets.existingSecret: hermes-app
+externalSecrets:
+  enabled: false
+  refreshInterval: 15s
+  secretStoreRef:
+    name: default-secret-store
+    kind: SecretStore
+  secrets: []
+
+persistence:
+  # Офлайн-карты. Файлы кладутся в PVC вручную (см. README),
+  # приложение монтирует его read-only.
+  # Для 2+ реплик нужен RWX StorageClass (NFS/CephFS и т.п.).
+  maps:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    mountPath: /app/web/static/pmtiles
+    readOnly: true
+    # Не удалять PVC при helm uninstall.
+    keep: true
+    annotations: {}
+
+  # Загруженные пользователями фото. Для 2+ реплик тоже нужен RWX,
+  # иначе поды видят только свои файлы.
+  uploads:
+    enabled: false
+    existingClaim: ""
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    mountPath: /app/web/static/uploads
+    readOnly: false
+    # Не удалять PVC при helm uninstall.
+    keep: true
+    annotations: {}
+
+database:
+  # true  — PostgreSQL + PostGIS поднимается в этом же релизе (StatefulSet).
+  # false — используется внешняя БД; задайте database.external.existingSecret
+  #         (ключ DATABASE_URL) или database.external.url.
+  #
+  # Миграции чарт не накатывает: migrations/*.sql применяются отдельно.
+  enabled: true
+
+  image:
+    repository: postgis/postgis
+    tag: 18-3.6-alpine
+    pullPolicy: IfNotPresent
+
+  service:
+    port: 5432
+
+  auth:
+    username: hermes
+    database: hermes
+    password: hermes
+    # Существующий Secret с ключами usernameKey/passwordKey/databaseKey/urlKey.
+    # Чарт его не создаёт; urlKey обязателен, потому что приложение читает
+    # только DATABASE_URL. Пример:
+    #   kubectl -n hermes create secret generic hermes-postgresql \
+    #     --from-literal=username=hermes \
+    #     --from-literal=password='...' \
+    #     --from-literal=database=hermes \
+    #     --from-literal=DATABASE_URL='postgres://hermes:...@hermes-postgresql:5432/hermes?sslmode=disable'
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+    databaseKey: database
+    urlKey: DATABASE_URL
+    sslMode: disable
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    annotations: {}
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  podSecurityContext: {}
+  securityContext: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Используется только при enabled: false.
+  external:
+    existingSecret: ""
+    key: DATABASE_URL
+    url: ""

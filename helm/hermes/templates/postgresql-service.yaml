@@ -1,0 +1,18 @@
+{{- if .Values.database.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hermes.postgresql.fullname" . }}
+  labels:
+    {{- include "hermes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "hermes.componentSelectorLabels" (dict "root" . "component" "postgresql") | nindent 4 }}
+  ports:
+    - name: postgresql
+      port: {{ .Values.database.service.port }}
+      targetPort: postgresql
+      protocol: TCP
+{{- end }}

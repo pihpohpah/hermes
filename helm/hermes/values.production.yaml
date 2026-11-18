@@ -1,0 +1,111 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/pihpohpah/hermes
+  tag: ""
+  pullPolicy: IfNotPresent
+
+env:
+  APP_ENV: prod
+  TZ: Asia/Vladivostok
+  PORT: "8080"
+
+  WEATHER_MODE: real
+  LOG_LEVEL: INFO
+  SENTRY_ENVIRONMENT: production
+  SENTRY_RELEASE: ""
+  SESSION_TTL: 720h
+  CORS_ALLOWED_ORIGINS: ""
+
+  # Client ID из @BotFather; пусто = вход через Telegram выключен.
+  TELEGRAM_CLIENT_ID: ""
+
+# Создайте Secret hermes-app в namespace релиза или включите externalSecrets.
+secrets:
+  existingSecret: hermes-app
+
+# Пример ExternalSecret вместо ручного Secret:
+# externalSecrets:
+#   enabled: true
+#   secretStoreRef:
+#     name: default-secret-store
+#     kind: SecretStore
+#   secrets:
+#     - name: hermes-app
+#       dataFrom:
+#         key: hermes/production/app.secret.env
+#         version: "1"
+#     - name: hermes-postgresql
+#       dataFrom:
+#         key: hermes/production/db.secret.env
+#         version: "1"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    # POST /photos принимает файлы до PHOTOS_MAX_UPLOAD_MB (10 MiB) + multipart.
+    nginx.ingress.kubernetes.io/proxy-body-size: "12m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+  hosts:
+    - host: hermes.example.com # TODO: заменить на реальный host
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+persistence:
+  maps:
+    enabled: true
+    size: 20Gi
+    # Для двух подов на разных нодах нужен RWX. Если RWX нет, поды
+    # смогут одновременно смонтировать RWO только на одной ноде.
+    accessModes:
+      - ReadWriteMany
+    storageClass: "" # TODO: RWX StorageClass (NFS/CephFS)
+  uploads:
+    enabled: false
+    size: 10Gi
+    # Без RWX фото, загруженное через один под, не увидит второй. Выключено, т.к. не нужна работающая статика
+    accessModes:
+      - ReadWriteMany
+    storageClass: "" # TODO: RWX StorageClass (NFS/CephFS)
+
+database:
+  # PostGIS поднимается чартом, но креды и DATABASE_URL берутся из Secret
+  # (создайте его заранее или через externalSecrets).
+  # Обязательные ключи: username, password, database, DATABASE_URL.
+  # DATABASE_URL должен указывать на hermes-postgresql:5432.
+  # Имя Secret и host в URL рассчитаны на release name hermes; при другом
+  # release name поправьте оба значения.
+  enabled: true
+  auth:
+    existingSecret: hermes-postgresql
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

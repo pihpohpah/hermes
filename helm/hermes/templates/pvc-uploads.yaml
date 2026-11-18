@@ -1,0 +1,27 @@
+{{- if and .Values.persistence.uploads.enabled (not .Values.persistence.uploads.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hermes.persistence.uploads.claimName" . }}
+  labels:
+    {{- include "hermes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: uploads
+  {{- if or .Values.persistence.uploads.keep .Values.persistence.uploads.annotations }}
+  annotations:
+    {{- if .Values.persistence.uploads.keep }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.uploads.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.uploads.accessModes | nindent 4 }}
+  {{- with .Values.persistence.uploads.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.uploads.size }}
+{{- end }}

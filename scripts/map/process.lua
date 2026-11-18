@@ -188,7 +188,9 @@ function node_function()
 		elseif place == "neighbourhood" then mz=13
 		elseif place == "isolated_dwelling" then mz=13
 		elseif place == "locality"      then mz=13
-		elseif place == "island"      then mz=12
+		elseif place == "archipelago"   then mz=9
+		elseif place == "island"        then mz=10
+		elseif place == "islet"         then mz=11
 		end
 
 		Layer("place", false)
@@ -439,10 +441,10 @@ function way_function()
 	if landuse == "field" then landuse = "farmland" end
 	if landuse == "meadow" and Find("meadow")=="agricultural" then landuse="farmland" end
 
-	if place == "island" then
+	if place == "island" or place == "islet" or place == "archipelago" then
 		LayerAsCentroid("place")
 		Attribute("class", place)
-		MinZoom(10)
+		MinZoom(9)
 		local pop = tonumber(Find("population")) or 0
 		local capital = capitalLevel(Find("capital"))
 		local rank = calcRank(place, pop, nil)
@@ -770,6 +772,13 @@ function way_function()
 		if l=="wetland" then Attribute("subclass", Find("wetland"))
 		else Attribute("subclass", l) end
 		write_name = true
+		-- подписи природы: пляжи с именем (песок края редко играет роль)
+		if l=="beach" and Holds("name") then
+			LayerAsCentroid("natural_label")
+			Attribute("class", "beach")
+			MinZoom(12)
+			SetNameAttributes()
+		end
 
 	-- Set 'landuse' (from landuse, amenity, leisure, tourism, place, waterway)
 	else
@@ -786,6 +795,14 @@ function way_function()
 			else MinZoom(11) end
 			write_name = true
 		end
+	end
+
+	-- мысы — классическая подпись берега (в landcoverKeys нет, пишем отдельно)
+	if natural=="cape" and Holds("name") then
+		LayerAsCentroid("natural_label")
+		Attribute("class", "cape")
+		MinZoom(11)
+		SetNameAttributes()
 	end
 
 	-- Parks

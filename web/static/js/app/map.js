@@ -10,7 +10,7 @@ import { applyStyleMode, loadMapStyle, styleModeFor } from './map-style.js';
 
 const SPRITE = '/icons.svg';
 const LABELS_ZOOM = 15.5;
-const LOAD_TIMEOUT_MS = 12000;
+const LOAD_TIMEOUT_MS = 30000;
 
 const CITY_CENTER = [131.8855, 43.1155];
 const SCENARIO_VIEW = {
@@ -118,8 +118,19 @@ function boundsOf(coordsList) {
   ];
 }
 
+/* Вид из хеша URL (#z/lat/lng), если он задан: удобно для ссылок на местность. */
+function viewFromHash() {
+  const match = /^#(\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)/.exec(location.hash || '');
+  if (!match) return null;
+  const zoom = Number(match[1]);
+  const lat = Number(match[2]);
+  const lng = Number(match[3]);
+  if (!Number.isFinite(zoom) || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { center: [lng, lat], zoom: Math.min(Math.max(zoom, 5), 18) };
+}
+
 export function createPlacesMap(container, { onError, scenario = 'city' } = {}) {
-  const initialView = SCENARIO_VIEW[scenario] || SCENARIO_VIEW.city;
+  const initialView = viewFromHash() || SCENARIO_VIEW[scenario] || SCENARIO_VIEW.city;
   let map = null;
   let styleMode = 'city';
 
@@ -492,6 +503,8 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
     zoomIn: () => whenReady(() => map.zoomIn({ duration: duration(250) })),
     zoomOut: () => whenReady(() => map.zoomOut({ duration: duration(250) })),
     getCenter: () => (map ? map.getCenter().toArray() : initialView.center),
+    // Доступ к экземпляру MapLibre для диагностики (консоль/тесты).
+    debugMap: () => map,
     getZoom: () => (map ? map.getZoom() : initialView.zoom),
 
     // Аргумент может быть null (очистка маршрута), дефолт `{}` срабатывает только для undefined.

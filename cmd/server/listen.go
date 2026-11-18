@@ -245,9 +245,11 @@ func runListen(
 		TelegramLogin:     httproutes.NewTelegramLoginHandler(logger, telegramLoginUC, cfg.IsProd()),
 		TelegramWidget:    httproutes.NewTelegramWidgetConfigHandler(logger, cfg.TelegramConfig.ClientID, telegramNonces),
 		MapAssets:         httproutes.NewMapAssetsHandler(cfg.MapDir),
-		MapStyle:          httproutes.NewMapStyleHandler(cfg.MapDir, cfg.ReliefPath),
+		MapStyle:          httproutes.NewMapStyleHandler(cfg.MapDir, cfg.ReliefPath, cfg.ContoursPath, cfg.WaterPath),
 		PMTiles:           httproutes.NewPMTilesHandler(logger, cfg.PMTilesPath),
 		Relief:            httproutes.NewPMTilesHandler(logger, cfg.ReliefPath),
+		Contours:          httproutes.NewPMTilesHandler(logger, cfg.ContoursPath),
+		Water:             httproutes.NewPMTilesHandler(logger, cfg.WaterPath),
 		WebDir:            cfg.WebDir,
 	})
 

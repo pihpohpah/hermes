@@ -181,32 +181,40 @@ go run ./cmd/server coverage_probe "${args[@]}"
 """
 
 [tasks.map-ensure]
-description = "Собрать архивы карты (PMTiles), если их ещё нет: векторный — map-download, рельеф — map-relief"
+description = "Собрать архивы карты (PMTiles), если их ещё нет: векторный — map-download, рельеф+контуры — map-relief"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 region="${PMTILES_PATH:-./web/static/pmtiles/primorsky-krai-z15.pmtiles}"
 relief="${RELIEF_PATH:-./web/static/pmtiles/primorsky-relief.pmtiles}"
+contours="${CONTOURS_PATH:-./web/static/pmtiles/primorsky-contours.pmtiles}"
 if [ -f "$region" ]; then
   echo "Архив карты на месте: $region"
 else
   echo "Архива карты нет — собираем (нужен Docker, первый раз 5–10 мин)"
   MAP_OUTPUT="$region" ./scripts/map/build-map.sh
 fi
-if [ -f "$relief" ]; then
-  echo "Архив рельефа на месте: $relief"
+if [ -f "$relief" ] && [ -f "$contours" ]; then
+  echo "Архивы рельефа на месте: $relief + $contours"
 else
-  echo "Архива рельефа нет — собираем для всего края (нужен Docker)"
-  RELIEF_OUTPUT="$relief" ./scripts/map/build-relief.sh
+  echo "Архивов рельефа нет — собираем для всего края (нужен Docker, ~2 ч)"
+  RELIEF_OUTPUT="$relief" RELIEF_CONTOURS_OUTPUT="$contours" ./scripts/map/build-relief.sh
+fi
+water="${WATER_PATH:-./web/static/pmtiles/primorsky-water.pmtiles}"
+if [ -f "$water" ]; then
+  echo "Архив воды на месте: $water"
+else
+  echo "Архива воды нет — собираем из Natural Earth (нужны шейпы в .cache/map/water)"
+  WATER_OUTPUT="$water" ./scripts/map/water/10-water-tiles.sh
 fi
 """
 
 [tasks.map-relief]
-description = "Собрать офлайн-рельеф (hillshade) Приморского края в PMTiles"
+description = "Собрать рельеф края: три PMTiles (рельеф-растр, векторные горизонтали, terrarium-DEM). Шаги — scripts/map/relief/, лог с временем"
 run = "./scripts/map/build-relief.sh"
 
 [tasks.map-relief-local]
-description = "Собрать рельеф только для агломерации Владивостока (быстро)"
+description = "Собрать рельеф только для агломерации Владивостока (тот же пайплайн, узкий bbox — быстро)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -215,22 +223,31 @@ RELIEF_MINZOOM="${RELIEF_MINZOOM:-10}" RELIEF_MAXZOOM="${RELIEF_MAXZOOM:-13}" \
   ./scripts/map/build-relief.sh
 """
 
+[tasks.map-water]
+description = "Собрать мировую воду (океаны, озёра) z0-10: Natural Earth 50m -> primorsky-water.pmtiles. Шейпы кладутся в .cache/map/water/"
+run = "./scripts/map/water/10-water-tiles.sh"
+
 [tasks.map-download]
 description = "Собрать офлайн-карту Приморского края (PMTiles, z0-15) из OSM"
 run = "./scripts/map/build-map.sh"
 
 [tasks.map-size]
-description = "Показать размер собранного архива карты"
+description = "Показать размеры собранных архивов карты (карта, рельеф, горизонтали, DEM)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-f="${MAP_OUTPUT:-web/static/pmtiles/primorsky-krai-z15.pmtiles}"
-if [ ! -f "$f" ]; then
-  echo "Архив не собран: $f"
-  echo "Запустите: mise run map-download"
-  exit 1
-fi
-du -h "$f"
+for f in \
+  "${PMTILES_PATH:-web/static/pmtiles/primorsky-krai-z15.pmtiles}" \
+  "${RELIEF_PATH:-web/static/pmtiles/primorsky-relief.pmtiles}" \
+  "${CONTOURS_PATH:-web/static/pmtiles/primorsky-contours.pmtiles}" \
+  "${WATER_PATH:-web/static/pmtiles/primorsky-water.pmtiles}" \
+  "${DEM_PATH:-web/static/pmtiles/primorsky-dem.pmtiles}"; do
+  if [ -f "$f" ]; then
+    du -h "$f"
+  else
+    echo "нет: $f"
+  fi
+done
 """
 
 [tasks.map-serve]

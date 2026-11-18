@@ -12,6 +12,8 @@
 export const ARCHIVES = [
   { id: 'region', url: '/api/map/region.pmtiles', required: true },
   { id: 'relief', url: '/api/map/relief.pmtiles', required: false },
+  { id: 'contours', url: '/api/map/contours.pmtiles', required: false },
+  { id: 'water', url: '/api/map/water.pmtiles', required: false },
 ];
 
 const DB_NAME = 'hermes-map';
@@ -227,6 +229,34 @@ class OnlineFirstSource {
   }
 }
 
+/* Отсутствующий растровый тайл: pmtiles.js возвращает data=null, и MapLibre v5
+ * оставляет такой тайл навсегда в состоянии loading — событие load карты не
+ * наступает. Подменяем null прозрачным PNG 1×1: тайл догружается, ничего не рисует. */
+const TRANSPARENT_PNG = new Uint8Array(
+  atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==')
+    .split('').map((c) => c.charCodeAt(0)),
+);
+
+function fixMissingTile(params, data) {
+  return data == null && params.type !== 'json' ? TRANSPARENT_PNG : data;
+}
+
+/** Оборачивает handler протокола, подменяя null-данные отсутствующего тайла. */
+function wrapProtocolHandler(handler) {
+  return (params, callbackOrSignal) => {
+    // Сигнатура v4: MapLibre передаёт AbortController и ждёт промис.
+    if (callbackOrSignal instanceof AbortController) {
+      return handler(params, callbackOrSignal).then((result) =>
+        result && result.data == null ? { ...result, data: fixMissingTile(params, result.data) } : result,
+      );
+    }
+    // Сигнатура v3: результат через callback(err, data, cacheControl, expires).
+    const wrapped = (error, data, cacheControl, expires) =>
+      callbackOrSignal(error, fixMissingTile(params, data), cacheControl, expires);
+    return handler(params, wrapped);
+  };
+}
+
 let protocolReady = false;
 
 /** Регистрирует протокол pmtiles:// в MapLibre. Повторный вызов ничего не делает. */
@@ -234,7 +264,7 @@ export function ensureMapProtocol() {
   if (protocolReady) return;
   if (!window.maplibregl || !window.pmtiles) throw new Error('MapLibre или PMTiles не загружены');
   const protocol = new window.pmtiles.Protocol();
-  window.maplibregl.addProtocol('pmtiles', protocol.tile);
+  window.maplibregl.addProtocol('pmtiles', wrapProtocolHandler(protocol.tile));
   for (const archive of ARCHIVES) protocol.add(new window.pmtiles.PMTiles(new OnlineFirstSource(archive)));
   protocolReady = true;
 }

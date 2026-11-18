@@ -1,0 +1,27 @@
+{{- if and .Values.persistence.maps.enabled (not .Values.persistence.maps.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hermes.persistence.maps.claimName" . }}
+  labels:
+    {{- include "hermes.labels" . | nindent 4 }}
+    app.kubernetes.io/component: maps
+  {{- if or .Values.persistence.maps.keep .Values.persistence.maps.annotations }}
+  annotations:
+    {{- if .Values.persistence.maps.keep }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.maps.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.maps.accessModes | nindent 4 }}
+  {{- with .Values.persistence.maps.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.maps.size }}
+{{- end }}

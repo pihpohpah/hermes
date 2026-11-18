@@ -37,19 +37,26 @@ func (h *MapAssetsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.files.ServeHTTP(w, r)
 }
 
-// MapStyleHandler отдаёт style.json с поправкой на наличие архива рельефа.
+// MapStyleHandler отдаёт style.json с поправкой на наличие архивов рельефа.
 //
-// Без архива вырезаются растровый источник рельефа и его слои, иначе MapLibre
-// запрашивает несуществующий /api/map/relief.pmtiles и сыпет ошибками на каждый
-// кадр. Наличие проверяется на каждый запрос: архив можно собрать, не
+// Без архива вырезаются его источник и слои, иначе MapLibre запрашивает
+// несуществующий /api/map/*.pmtiles и сыпет ошибками на каждый кадр.
+// Наличие проверяется на каждый запрос: архив можно собрать, не
 // перезапуская сервер.
 type MapStyleHandler struct {
-	stylePath  string
-	reliefPath string
+	stylePath    string
+	reliefPath   string
+	contoursPath string
+	waterPath    string
 }
 
-func NewMapStyleHandler(mapDir, reliefPath string) *MapStyleHandler {
-	return &MapStyleHandler{stylePath: filepath.Join(mapDir, "style.json"), reliefPath: reliefPath}
+func NewMapStyleHandler(mapDir, reliefPath, contoursPath, waterPath string) *MapStyleHandler {
+	return &MapStyleHandler{
+		stylePath:    filepath.Join(mapDir, "style.json"),
+		reliefPath:   reliefPath,
+		contoursPath: contoursPath,
+		waterPath:    waterPath,
+	}
 }
 
 func (h *MapStyleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,8 +74,20 @@ func (h *MapStyleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body := raw
-	if _, statErr := os.Stat(h.reliefPath); statErr != nil {
-		stripped, stripErr := stripSource(raw, reliefSourceKey)
+	// Архив можно собрать, не перезапуская сервер: наличие проверяем
+	// на каждый запрос и вырезаем все отсутствующие источники.
+	for _, archive := range []struct {
+		path      string
+		sourceKey string
+	}{
+		{h.contoursPath, contoursSourceKey},
+		{h.reliefPath, reliefSourceKey},
+		{h.waterPath, waterSourceKey},
+	} {
+		if _, statErr := os.Stat(archive.path); statErr == nil {
+			continue
+		}
+		stripped, stripErr := stripSource(body, archive.sourceKey)
 		if stripErr != nil {
 			http.Error(w, "map style is invalid", http.StatusInternalServerError)
 
@@ -109,3 +128,7 @@ func stripSource(raw []byte, source string) ([]byte, error) {
 }
 
 const reliefSourceKey = "relief"
+
+const contoursSourceKey = "contours"
+
+const waterSourceKey = "water-global"

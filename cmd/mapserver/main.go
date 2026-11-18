@@ -23,6 +23,8 @@ const (
 	defaultWebDir    = "./web/static"
 	defaultArchive   = "./web/static/pmtiles/primorsky-krai-z15.pmtiles"
 	defaultRelief    = "./web/static/pmtiles/primorsky-relief.pmtiles"
+	defaultContours  = "./web/static/pmtiles/primorsky-contours.pmtiles"
+	defaultWater     = "./web/static/pmtiles/primorsky-water.pmtiles"
 	shutdownTimeout  = 10 * time.Second
 	readHeaderTimout = 10 * time.Second
 	idleTimeout      = time.Minute
@@ -44,6 +46,8 @@ func main() {
 	webDir := flag.String("web-dir", envOr("WEB_DIR", defaultWebDir), "каталог статики приложения")
 	archive := flag.String("archive", envOr("PMTILES_PATH", defaultArchive), "путь к PMTiles-архиву")
 	relief := flag.String("relief", envOr("RELIEF_PATH", defaultRelief), "путь к PMTiles-архиву рельефа")
+	contours := flag.String("contours", envOr("CONTOURS_PATH", defaultContours), "путь к PMTiles-архиву горизонталей")
+	water := flag.String("water", envOr("WATER_PATH", defaultWater), "путь к PMTiles-архиву мировой воды")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -54,7 +58,7 @@ func main() {
 		_, _ = w.Write(devPage)
 	})
 	mux.Handle("GET /map/", httproutes.NewMapAssetsHandler(*mapDir))
-	mux.Handle("GET /map/style.json", httproutes.NewMapStyleHandler(*mapDir, *relief))
+	mux.Handle("GET /map/style.json", httproutes.NewMapStyleHandler(*mapDir, *relief, *contours, *water))
 
 	pmtilesHandler := httproutes.NewPMTilesHandler(logger, *archive)
 	mux.Handle("GET /api/map/region.pmtiles", pmtilesHandler)
@@ -63,6 +67,14 @@ func main() {
 	reliefHandler := httproutes.NewPMTilesHandler(logger, *relief)
 	mux.Handle("GET /api/map/relief.pmtiles", reliefHandler)
 	mux.Handle("HEAD /api/map/relief.pmtiles", reliefHandler)
+
+	contoursHandler := httproutes.NewPMTilesHandler(logger, *contours)
+	mux.Handle("GET /api/map/contours.pmtiles", contoursHandler)
+	mux.Handle("HEAD /api/map/contours.pmtiles", contoursHandler)
+
+	waterHandler := httproutes.NewPMTilesHandler(logger, *water)
+	mux.Handle("GET /api/map/water.pmtiles", waterHandler)
+	mux.Handle("HEAD /api/map/water.pmtiles", waterHandler)
 
 	// Статика приложения: модули карты, CSS с токенами --map-*, спрайт иконок.
 	mux.Handle("GET /", http.FileServer(http.Dir(*webDir)))
@@ -89,6 +101,14 @@ func main() {
 	if _, err := os.Stat(*relief); err != nil {
 		logger.Warn("relief archive not found, nature mode falls back to city layers",
 			slog.String("path", *relief), slog.String("hint", "mise run map-relief (или map-relief-local)"))
+	}
+	if _, err := os.Stat(*contours); err != nil {
+		logger.Warn("contours archive not found, relief renders without contour lines",
+			slog.String("path", *contours), slog.String("hint", "mise run map-relief"))
+	}
+	if _, err := os.Stat(*water); err != nil {
+		logger.Warn("water archive not found, ocean renders as land color",
+			slog.String("path", *water), slog.String("hint", "mise run map-water"))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

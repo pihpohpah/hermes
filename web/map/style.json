@@ -17,6 +17,15 @@
       "url": "pmtiles:///api/map/relief.pmtiles",
       "tileSize": 256,
       "attribution": "© OpenStreetMap contributors · рельеф Copernicus DEM"
+    },
+    "contours": {
+      "type": "vector",
+      "url": "pmtiles:///api/map/contours.pmtiles",
+      "attribution": "© OpenStreetMap contributors · рельеф Copernicus DEM"
+    },
+    "water-global": {
+      "type": "vector",
+      "url": "pmtiles:///api/map/water.pmtiles"
     }
   },
   "layers": [
@@ -52,11 +61,29 @@
       },
       "paint": {
         "raster-opacity": 1,
-        "raster-resampling": "nearest",
-        "raster-fade-duration": 0,
-        "raster-brightness-min": 0.16,
-        "raster-saturation": -0.08,
-        "raster-contrast": -0.05
+        "raster-resampling": "linear",
+        "raster-fade-duration": 300,
+        "raster-saturation": 0.06,
+        "raster-contrast": -0.02
+      },
+      "metadata": {
+        "hermes:mode": "nature"
+      }
+    },
+    {
+      "id": "landcover-wood-nature",
+      "type": "fill",
+      "source": "region",
+      "source-layer": "landcover",
+      "minzoom": 8,
+      "filter": [
+        "==",
+        "class",
+        "wood"
+      ],
+      "paint": {
+        "fill-color": "var(--map-nature-wood)",
+        "fill-opacity": 0.35
       },
       "metadata": {
         "hermes:mode": "nature"
@@ -245,6 +272,19 @@
       }
     },
     {
+      "id": "water-global",
+      "type": "fill",
+      "metadata": {
+        "hermes:mode": "both"
+      },
+      "source": "water-global",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "var(--map-water)"
+      },
+      "maxzoom": 10
+    },
+    {
       "id": "water",
       "type": "fill",
       "source": "region",
@@ -254,6 +294,78 @@
       },
       "metadata": {
         "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "contours-minor",
+      "type": "line",
+      "source": "contours",
+      "source-layer": "contours",
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "minor"
+      ],
+      "minzoom": 12,
+      "paint": {
+        "line-color": "rgb(84,74,58)",
+        "line-opacity": 0.32,
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          0.4,
+          18,
+          1.2
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "nature"
+      }
+    },
+    {
+      "id": "contours-major",
+      "type": "line",
+      "source": "contours",
+      "source-layer": "contours",
+      "filter": [
+        "==",
+        [
+          "get",
+          "kind"
+        ],
+        "major"
+      ],
+      "minzoom": 10,
+      "paint": {
+        "line-color": "rgb(84,74,58)",
+        "line-opacity": 0.48,
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          8,
+          0.5,
+          15,
+          1.3,
+          18,
+          2.8
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "nature"
       }
     },
     {
@@ -371,18 +483,37 @@
         "all",
         [
           "==",
-          "class",
+          [
+            "get",
+            "class"
+          ],
           "path"
         ],
         [
+          "!=",
+          [
+            "get",
+            "hiking_route"
+          ],
+          1
+        ],
+        [
           "in",
-          "subclass",
-          "footway",
-          "path",
-          "steps",
-          "pedestrian",
-          "bridleway",
-          "cycleway"
+          [
+            "get",
+            "subclass"
+          ],
+          [
+            "literal",
+            [
+              "footway",
+              "path",
+              "steps",
+              "pedestrian",
+              "bridleway",
+              "cycleway"
+            ]
+          ]
         ]
       ],
       "minzoom": 12,
@@ -391,19 +522,7 @@
         "line-join": "round"
       },
       "paint": {
-        "line-color": [
-          "case",
-          [
-            "==",
-            [
-              "get",
-              "hiking_route"
-            ],
-            1
-          ],
-          "var(--map-hiking-route)",
-          "var(--map-path)"
-        ],
+        "line-color": "var(--map-path)",
         "line-width": [
           "interpolate",
           [
@@ -420,6 +539,140 @@
         "line-dasharray": [
           2,
           1.6
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "road-hiking-casing",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "get",
+            "class"
+          ],
+          "path"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "hiking_route"
+          ],
+          1
+        ],
+        [
+          "in",
+          [
+            "get",
+            "subclass"
+          ],
+          [
+            "literal",
+            [
+              "footway",
+              "path",
+              "steps",
+              "pedestrian",
+              "bridleway",
+              "cycleway"
+            ]
+          ]
+        ]
+      ],
+      "minzoom": 12,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-hiking-route-casing)",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          1.8,
+          14,
+          3.6
+        ]
+      },
+      "metadata": {
+        "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "road-hiking",
+      "type": "line",
+      "source": "region",
+      "source-layer": "transportation",
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "get",
+            "class"
+          ],
+          "path"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "hiking_route"
+          ],
+          1
+        ],
+        [
+          "in",
+          [
+            "get",
+            "subclass"
+          ],
+          [
+            "literal",
+            [
+              "footway",
+              "path",
+              "steps",
+              "pedestrian",
+              "bridleway",
+              "cycleway"
+            ]
+          ]
+        ]
+      ],
+      "minzoom": 12,
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "var(--map-hiking-route)",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          1.1,
+          14,
+          2.6
         ]
       },
       "metadata": {
@@ -806,7 +1059,7 @@
       "type": "symbol",
       "source": "region",
       "source-layer": "water_name",
-      "minzoom": 12,
+      "minzoom": 9,
       "layout": {
         "text-field": [
           "coalesce",
@@ -830,6 +1083,8 @@
           [
             "zoom"
           ],
+          9,
+          9,
           12,
           11,
           14,
@@ -851,7 +1106,93 @@
       "type": "symbol",
       "source": "region",
       "source-layer": "mountain_peak",
-      "minzoom": 12,
+      "minzoom": 11,
+      "layout": {
+        "text-field": [
+          "case",
+          [
+            "has",
+            "ele"
+          ],
+          [
+            "case",
+            [
+              "has",
+              "name"
+            ],
+            [
+              "concat",
+              [
+                "coalesce",
+                [
+                  "get",
+                  "name:latin"
+                ],
+                [
+                  "get",
+                  "name"
+                ]
+              ],
+              "\n",
+              [
+                "get",
+                "ele"
+              ],
+              " м"
+            ],
+            [
+              "concat",
+              [
+                "get",
+                "ele"
+              ],
+              " м"
+            ]
+          ],
+          [
+            "coalesce",
+            [
+              "get",
+              "name:latin"
+            ],
+            [
+              "get",
+              "name"
+            ]
+          ]
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": 11,
+        "text-line-height": 1.15,
+        "text-offset": [
+          0,
+          0.6
+        ]
+      },
+      "paint": {
+        "text-color": "var(--map-peak-label)",
+        "text-halo-color": "var(--map-label-halo)",
+        "text-halo-width": 1.2
+      },
+      "metadata": {
+        "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "place-island",
+      "type": "symbol",
+      "source": "region",
+      "source-layer": "place",
+      "minzoom": 9,
+      "filter": [
+        "in",
+        "class",
+        "island",
+        "islet",
+        "archipelago"
+      ],
       "layout": {
         "text-field": [
           "coalesce",
@@ -865,18 +1206,71 @@
           ]
         ],
         "text-font": [
-          "Noto Sans Regular"
+          "Noto Sans Italic"
         ],
-        "text-size": 11,
-        "text-offset": [
-          0,
-          0.6
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          9,
+          10,
+          12,
+          12
+        ],
+        "text-letter-spacing": 0.05
+      },
+      "paint": {
+        "text-color": "var(--map-place-label)",
+        "text-halo-color": "var(--map-label-halo)",
+        "text-halo-width": 1.4
+      },
+      "metadata": {
+        "hermes:mode": "both"
+      }
+    },
+    {
+      "id": "natural-label",
+      "type": "symbol",
+      "source": "region",
+      "source-layer": "natural_label",
+      "minzoom": 11,
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Noto Sans Italic"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          10,
+          14,
+          12
         ]
       },
       "paint": {
-        "text-color": "var(--map-peak-label)",
+        "text-color": "var(--map-label)",
         "text-halo-color": "var(--map-label-halo)",
-        "text-halo-width": 1.2
+        "text-halo-width": 1.3
       },
       "metadata": {
         "hermes:mode": "both"

@@ -50,7 +50,8 @@ build_tools() { # образ tilemaker + osmium: PBF-кроп и граница 
     return
   fi
   log "Собираем образ $TOOLS_IMAGE (tilemaker + osmium)"
-  DOCKER_BUILDKIT=0 docker build -t "$TOOLS_IMAGE" -f "$PROFILE_DIR/Dockerfile.tools" "$ROOT_DIR"
+  # контекст — scripts/map (не корень репо: в него входит .cache на десятки ГБ)
+  docker build -t "$TOOLS_IMAGE" -f "$PROFILE_DIR/Dockerfile.tools" "$PROFILE_DIR"
 }
 fetch_pbf() {
   if [ -f "$FAR_EAST_PBF" ]; then
