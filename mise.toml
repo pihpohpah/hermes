@@ -254,6 +254,41 @@ done
 description = "Отладка стиля карты на :8080/map/ (Город/Природа/Море), без Postgres"
 run = "go run ./cmd/mapserver -addr :8080"
 
+# ── Билды карты ────────────────────────────────────────────────────────────
+# Главные команды:
+#   mise run build city-map    — векторная карта (PMTiles z0-15)
+#   mise run build relief-map  — рельеф, горизонтали, terrarium-DEM (3 PMTiles)
+# Скачка исходников — отдельная зависимость (fetch:*), кешируется в .cache/map,
+# так что повторный билд ничего не перекачает.
+
+[tasks.build]
+description = "Собрать карту: city-map (векторная карта края) или relief-map (рельеф, горизонтали, DEM)"
+usage = '''
+arg "<target>" help="Что собирать" {
+  choices "city-map" "relief-map"
+}
+'''
+depends = ["build:{{ usage.target }}"]
+run = 'echo "Готово: ${usage_target?}"'
+
+[tasks."build:city-map"]
+description = "Векторная карта Приморского края (PMTiles z0-15) из OSM (Geofabrik) — первый запуск 5–10 мин"
+depends = ["fetch:city-map"]
+run = "./scripts/map/build-map.sh"
+
+[tasks."build:relief-map"]
+description = "Рельеф края: высотный градиент + векторные горизонтали + terrarium-DEM (три PMTiles) — ~2 ч при свежем кэше DEM, дольше при первом запуске"
+depends = ["fetch:relief-map"]
+run = "./scripts/map/build-relief.sh"
+
+[tasks."fetch:city-map"]
+description = "Исходники городской карты: Geofabrik PBF + граница края + береговая линия (кешируются в .cache/map)"
+run = "./scripts/map/build-map.sh sources"
+
+[tasks."fetch:relief-map"]
+description = "Исходник рельефа: мозаика Copernicus DEM GLO-30 (кешируется в .cache/map, ~2 ГБ скачивание при первом запуске)"
+run = "./scripts/map/build-relief.sh sources"
+
 [tasks.design]
 description = "Открыть дизайн-прототип (статический сервер на :8080)"
 dir = "vlru-places"

@@ -46,7 +46,24 @@ run_step() {
   fi
 }
 
+# sources — только собрать мозаику DEM GLO-30 (скачивание листов, если её нет
+# в кэше). Идемпотентно: повторный полный прогон мозаику не пересобирает.
+# Вызывается из `mise run fetch:relief-map`; `mise run build relief-map` делает
+# это же через depends.
+sources() {
+  mkdir -p "$WORK_DIR/relief" "$WORK_DIR/dem"
+  need_docker
+  if dem_ready; then
+    log "DEM-мозаика уже собрана для bbox $BBOX"
+  else
+    bash "$RELIEF_DIR/10-dem-mosaic.sh"
+  fi
+}
 main() {
+  if [ "${1:-}" = "sources" ]; then
+    sources
+    exit 0
+  fi
   mkdir -p "$WORK_DIR/relief" "$WORK_DIR/dem"
   need_docker
 

@@ -161,7 +161,22 @@ report() {
 HINT
   fi
 }
+# sources — только скачать/подготовить исходники (PBF, граница, береговая линия).
+# Идемпотентно: повторный полный прогон ничего не перекачает. Вызывается из
+# `mise run fetch:city-map`; `mise run build city-map` делает это же через depends.
+sources() {
+  mkdir -p "$CACHE_DIR"
+  build_tools
+  fetch_pbf
+  extract_boundary
+  crop_pbf
+  geo_area
+}
 main() {
+  if [ "${1:-}" = "sources" ]; then
+    sources
+    exit 0
+  fi
   mkdir -p "$CACHE_DIR"
   build_tools
   fetch_pbf
