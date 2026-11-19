@@ -153,7 +153,11 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
 
   // Вызовы до готовности карты (данные, камера, маршрут) ждут в очереди.
   const pending = [];
-  const whenReady = (fn) => (state.ready ? fn() : pending.push(fn));
+  const whenReady = (fn) => {
+    if (state.destroyed) return;
+    if (state.ready) fn();
+    else pending.push(fn);
+  };
 
   const emit = (id, type) => container.dispatchEvent(new CustomEvent('places:select', { detail: { id, type }, bubbles: true }));
   const emitHover = (id) => container.dispatchEvent(new CustomEvent('places:hover', { detail: { id }, bubbles: true }));
@@ -262,16 +266,18 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
   }
 
   function updateLabels() {
+    if (state.destroyed || !map) return;
     container.classList.toggle('show-labels', map.getZoom() >= LABELS_ZOOM);
   }
 
   /* ── Маркеры мест и событий ── */
 
   function scheduleSync() {
-    if (state.syncScheduled) return;
+    if (state.destroyed || state.syncScheduled) return;
     state.syncScheduled = true;
     requestAnimationFrame(() => {
       state.syncScheduled = false;
+      if (state.destroyed) return;
       syncItemMarkers();
     });
   }
@@ -321,7 +327,7 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
   }
 
   function syncItemMarkers() {
-    if (!state.ready || state.mode !== 'items') return;
+    if (state.destroyed || !state.ready || state.mode !== 'items') return;
     const features = map.querySourceFeatures('items');
     const seen = new Set();
 
@@ -538,14 +544,17 @@ export function createPlacesMap(container, { onError, scenario = 'city' } = {}) 
     },
 
     resize: () => map?.resize(),
-    isReady: () => state.ready,
+    isReady: () => state.ready && !state.destroyed,
 
     destroy() {
+      if (state.destroyed) return;
       state.destroyed = true;
+      state.ready = false;
       pending.length = 0;
       clearInterval(pinTimer);
       clearTimeout(loadTimer);
       map?.remove();
+      map = null;
     },
   };
 

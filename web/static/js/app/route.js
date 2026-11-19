@@ -224,6 +224,7 @@ export function registerRoute() {
     stops: [],
     summary: '',
     modes: ROUTE_MODES,
+    mode: storage.get(ROUTE_MODE_KEY, 'foot'),
     editorURL: '/?panel=route',
     init() {
       const refresh = () => {
@@ -237,6 +238,7 @@ export function registerRoute() {
       this.unsubscribe = routeState.subscribe(() => {
         this.stops = routeState.stops;
         this.summary = routeSummaryText();
+        this.mode = storage.get(ROUTE_MODE_KEY, 'foot');
         this.editorURL = routeEditorURL();
       });
       refresh();
@@ -246,6 +248,7 @@ export function registerRoute() {
       return `Маршрут · ${countLabel(this.stops.length, ['точка', 'точки', 'точек'])}`;
     },
     setMode(mode) {
+      this.mode = mode;
       setRouteMode(mode);
     },
     destroy() {
