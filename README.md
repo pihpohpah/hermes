@@ -52,7 +52,7 @@ cookie. Полезные страницы: `/health`, `/catalog`, `/now`, `/rule
 
 | Переменная | По умолчанию | Что влияет |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | `postgres://postgres:***@localhost:5432/hermes?sslmode=disable` | подключение к БД |
+| `DATABASE_URL` | `postgres://hermes:***@localhost:5432/hermes?sslmode=disable` | подключение к БД |
 | `PORT` | `8080` | порт HTTP-сервера |
 | `WEB_DIR` | `./web/static` | корень статики (CSS/JS/загруженные фото) |
 | `WEATHER_MODE` | `real` | `mock` — демо-данные без сети; `real` — запросы к Open-Meteo |

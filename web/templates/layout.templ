@@ -71,6 +71,9 @@ templ header(v LayoutView) {
 						</span>
 					</a>
 				</nav>
+				<button type="button" class="header__note" data-action="mvp-note" aria-haspopup="dialog">
+					<span class="header__note-title">Каво и чо</span>
+				</button>
 			</div>
 			if v.Scenario != "" {
 				<div class="scenario-switcher" data-scenarios data-scenario={ v.Scenario } role="group" aria-label="Сценарий">
@@ -174,6 +177,11 @@ templ mobileMenu(v LayoutView) {
 					@mobileNavLink("/", "Карта", "map", "Все места на одной карте", v)
 					@mobileNavLink("/catalog", "Справочник", "catalog", "Поиск, подборки и события", v)
 					@mobileNavLink("/now", "Сейчас", "now", "Быстрые метки от жителей", v)
+					<button type="button" class="mobile-menu__link mobile-menu__link--note" data-action="mvp-note">
+						<span class="mobile-menu__icon">@icon("info", "")</span>
+						<span><strong>Каво и чо</strong><small>Идея MVP</small></span>
+						@icon("chevron-right", "icon--sm")
+					</button>
 					<button type="button" class="mobile-menu__link" data-action="lucky">
 						<span class="mobile-menu__icon">@icon("dices", "")</span>
 						<span><strong>Мне повезёт</strong><small>Случайное место, событие или маршрут</small></span>

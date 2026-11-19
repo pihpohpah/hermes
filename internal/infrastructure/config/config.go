@@ -18,7 +18,7 @@ import (
 
 const (
 	defaultPort              = "8080"
-	defaultDatabaseURL       = "postgres://postgres:postgres@localhost:5432/hermes?sslmode=disable"
+	defaultDatabaseURL       = "postgres://hermes:hermes@localhost:5432/hermes?sslmode=disable"
 	defaultOpenMeteoBase     = "https://api.open-meteo.com/v1"
 	defaultMarineBase        = "https://marine-api.open-meteo.com/v1"
 	defaultAirQualityBase    = "https://air-quality-api.open-meteo.com/v1"

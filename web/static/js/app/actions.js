@@ -3,7 +3,7 @@
  * Модуль подключается за эффект — обработчик встаёт при импорте. */
 import { $, $$, countLabel, currentParams, storage } from './util.js';
 import { api, CSRF_KEY } from './api.js';
-import { confirmDialog, toast } from './ui.js';
+import { confirmDialog, openDialog, toast } from './ui.js';
 import { openAuthDialog, requireAuth } from './auth.js';
 import { downloadIcs, openLightbox, openRenameDialog, openReportDialog, shareLink } from './media.js';
 import { clearRoute, replaceRoute, ROUTE_KEY, toggleRoute } from './route.js';
@@ -46,6 +46,14 @@ document.addEventListener('click', (event) => {
       break;
     case 'lucky':
       openLuckyDialog();
+      break;
+    case 'mvp-note':
+      openDialog({
+        title: 'Каво и чо',
+        body: `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet. Cras mattis consectetur purus sit amet fermentum.</p>
+          <p>Donec ullamcorper nulla non metus auctor fringilla. Maecenas sed diam eget risus varius blandit sit amet non magna. Vestibulum id ligula porta felis euismod semper.</p>
+          <p>Nullam quis risus eget urna mollis ornare vel eu leo. Aenean lacinia bibendum nulla sed consectetur. Etiam porta sem malesuada magna mollis euismod.</p>`,
+      });
       break;
     case 'share':
       event.preventDefault();

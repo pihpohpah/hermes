@@ -53,13 +53,13 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     # Docker запускает их через эмуляцию, платформа указана явно.
     docker run -d --name "$CONTAINER" --platform linux/amd64 \
       -e POSTGRES_DB="${POSTGRES_DB:-hermes}" \
-      -e POSTGRES_USER="${POSTGRES_USER:-postgres}" \
-      -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}" \
+      -e POSTGRES_USER="${POSTGRES_USER:-hermes}" \
+      -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-hermes}" \
       -p "$PORT:5432" \
       postgis/postgis:18-3.6 >/dev/null
   fi
   for _ in $(seq 1 60); do
-    docker exec "$CONTAINER" pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-hermes}" -q && { echo "Postgres готов"; exit 0; }
+    docker exec "$CONTAINER" pg_isready -U "${POSTGRES_USER:-hermes}" -d "${POSTGRES_DB:-hermes}" -q && { echo "Postgres готов"; exit 0; }
     sleep 1
   done
   echo "Postgres не поднялся за 60 с: docker logs $CONTAINER"
