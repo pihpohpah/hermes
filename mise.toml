@@ -6,6 +6,7 @@ go = "1.27.3"
 _.file = ".env"
 
 [tasks.bootstrap]
+description = "Создать .env из .env.example, если его нет, и скачать Go-зависимости"
 run = """
 if [ ! -f .env ]; then
   cp .env.example .env
@@ -17,9 +18,10 @@ go mod download
 """
 
 [tasks.dev]
-description = "Поднять всю систему: Postgres, миграции, данные, фронтенд, архивы карты — и запустить сервер"
-# depends = ["data-load", "assets", "map-ensure"]
-depends = ["assets"]
+description = "Поднять Postgres, накатить миграции, собрать фронтенд — и запустить сервер"
+# data-load (сид + mock-погода) и map-ensure (часы сборки) запускаются
+# отдельно: первый — один раз на свежую базу, второй — когда нужны архивы карты.
+depends = ["migrate-up", "assets"]
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -147,7 +149,7 @@ description = "Загрузить почасовую погоду Open-Meteo д�
 run = "go run ./cmd/server weather_load"
 
 [tasks.conditions-assess]
-description = "Оценить условия для мест (эвристики) за сегодня: ACTIVITY=walk,sup,hike,run, PLACE=<uuid>"
+description = "Оценить условия для мест (эвристики), по умолчанию за сегодня: DATE=YYYY-MM-DD, ACTIVITY=walk,sup,hike,run, PLACE=<uuid>"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -181,7 +183,7 @@ go run ./cmd/server coverage_probe "${args[@]}"
 """
 
 [tasks.map-ensure]
-description = "Собрать архивы карты (PMTiles), если их ещё нет: векторный — map-download, рельеф+контуры — map-relief"
+description = "Собрать недостающие архивы карты (PMTiles): векторный (map-download), рельеф и горизонтали (map-relief), мировую воду (map-water)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail

@@ -12,8 +12,8 @@
 - **Атрибуция.** Строка «OpenFreeMap · © участники OpenStreetMap» обязательна по лицензии ODbL. Её нельзя скрывать
   или перекрывать интерфейсом.
 
-Смена провайдера сводится к замене `TILES_URL` и `GLYPHS_URL` в `style.js`. Подходят MapTiler, Stadia и собственный
-сервер тайлов (planetiler + martin). Подойдёт любой источник в схеме OpenMapTiles.
+Смена провайдера сводится к замене `TILES_URL` и `GLYPHS_URL` в `style.js`. Подойдёт любой источник в схеме
+OpenMapTiles: MapTiler, Stadia или собственный сервер тайлов (planetiler + martin).
 
 ## Маркеры и кластеры
 

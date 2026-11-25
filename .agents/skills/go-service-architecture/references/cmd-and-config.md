@@ -1,96 +1,91 @@
 # Устройство `cmd` и `infrastructure/config`
 
-## 1. Паттерн: Single-Binary Multi-Mode (`cmd/<app>/main.go`)
+## 1. Один бинарник, несколько режимов (`cmd/server/main.go`)
 
-Приложение собирается в один бинарный файл и выбирает режим работы по первому аргументу командной строки (`os.Args[1]`):
-- `listen` — запуск HTTP и gRPC серверов.
-- `<command_name>` — разовое выполнение консольной команды (используется для Kubernetes `CronJob`).
+Сервис собирается в один бинарник, режим выбирается первым аргументом (`os.Args[1]`):
 
-В `main.go` инициализируются только общие для всех режимов инфраструктурные ресурсы:
-1. Конфигурация (`config.Load()`).
-2. Мульти-обработчик логов `slog.NewMultiHandler` (JSON в `stdout` + `sentryslog` для `Warn`/`Error`/`Fatal`).
-3. Подключение к PostgreSQL (`sql.Open` + `db.PingContext` с таймаутом).
-4. Репозиторий.
+- `listen` (по умолчанию, если аргументов нет) поднимает HTTP-сервер;
+- `<command_name>` разово выполняет консольную команду: `migrate`, `seed`, `weather_load` и другие. Список и разбор флагов
+  лежат в `cmd/server/console.go`.
 
-### Пример `cmd/<app>/main.go`
+`main.go` создаёт только ресурсы, общие для всех режимов:
+
+1. Конфигурацию: `config.Load()`.
+2. Логгер: `slog.NewMultiHandler` из базового обработчика (JSON в проде, текст локально) и `sentryslog` для
+   `Warn`/`Error`/`Fatal`, если задан `SENTRY_DSN`.
+3. Пул соединений PostgreSQL: `pgxpool.New` и `pool.Ping` с таймаутом `cfg.PingTimeout`.
+4. Репозитории и провайдер погоды, которые нужны и серверу, и командам.
+
+Отдельный бинарник `cmd/mapserver` отдаёт карту без Postgres, для отладки стиля.
+
+### Сокращённый `cmd/server/main.go`
 
 ```go
-package main
-
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"log"
-	"log/slog"
-	"os"
-
-	"github.com/getsentry/sentry-go"
-	sentryslog "github.com/getsentry/sentry-go/slog"
-	_ "github.com/lib/pq" // trigger init
-
-	"example.com/project/internal/infrastructure/config"
-	"example.com/project/internal/infrastructure/repository"
-)
-
-// @title	Swagger Service API
-// @version	1.0.0
 func main() {
 	ctx := context.Background()
 
+	command := "listen"
+	args := []string{}
 	const minArgsCount = 2
-	if len(os.Args) < minArgsCount {
-		log.Fatal("Usage: app [listen|console_command_name]")
+	if len(os.Args) >= minArgsCount {
+		command = os.Args[1]
+		args = os.Args[minArgsCount:]
 	}
-	command := os.Args[1]
 
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config load failed: %v", err)
 	}
+
 	logger, err := newLogger(ctx, cfg)
 	if err != nil {
 		log.Fatalf("logger initialization failed: %v", err)
 	}
 
-	db, err := sql.Open("postgres", cfg.URL)
+	pool, err := pgxpool.New(ctx, cfg.URL)
 	if err != nil {
-		log.Fatalf("failed to open postgres connection: %v", err)
+		log.Fatalf("failed to create pgx pool: %v", err)
 	}
+
 	pingCtx, pingCancel := context.WithTimeout(ctx, cfg.PingTimeout)
-	if err := db.PingContext(pingCtx); err != nil {
+	if err := pool.Ping(pingCtx); err != nil {
 		pingCancel()
-		if cErr := db.Close(); cErr != nil {
-			log.Printf("postgres close after ping failure: %v", cErr)
-		}
+		pool.Close()
 		log.Fatalf("failed to ping postgres: %v", err)
 	}
 	pingCancel()
 
-	repo := repository.NewTrustedNetRepository(db)
+	placeRepo := repository.NewPlaceRepository(pool)
+	weatherRepo := repository.NewWeatherRepository(pool)
+	// ... остальные репозитории и провайдер погоды
 
 	switch command {
 	case "listen":
-		err = runListen(ctx, logger, cfg, repo, db)
+		err = runListen(ctx, logger, cfg, pool, placeRepo, weatherRepo, forecastRepo, tripRepo, reportRepo, provider)
 	default:
-		err = runCommand(ctx, command, logger, repo)
+		err = runCommand(ctx, command, args, deps)
 	}
 
-	if cErr := db.Close(); cErr != nil {
-		log.Printf("postgres close: %v", cErr)
-	}
+	pool.Close()
 	if err != nil {
-		log.Fatalf("console run err: %v", err)
+		log.Fatalf("run %s failed: %v", command, err)
 	}
 }
 
 func newLogger(ctx context.Context, cfg config.Config) (*slog.Logger, error) {
-	handlers := []slog.Handler{
-		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     cfg.Level,
-			AddSource: cfg.AddSource,
-		}),
+	opts := &slog.HandlerOptions{
+		Level:     cfg.Level,
+		AddSource: cfg.AddSource,
 	}
+
+	var baseHandler slog.Handler
+	if cfg.IsProd() {
+		baseHandler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		baseHandler = slog.NewTextHandler(os.Stdout, opts)
+	}
+
+	handlers := []slog.Handler{baseHandler}
 
 	if cfg.DSN != "" {
 		if err := sentry.Init(sentry.ClientOptions{
@@ -98,8 +93,8 @@ func newLogger(ctx context.Context, cfg config.Config) (*slog.Logger, error) {
 			Environment:      cfg.Environment,
 			Release:          cfg.Release,
 			Debug:            cfg.Debug,
-			EnableTracing:    cfg.SampleRate > 0,
-			TracesSampleRate: cfg.SampleRate,
+			EnableTracing:    cfg.TracesSampleRate > 0,
+			TracesSampleRate: cfg.TracesSampleRate,
 		}); err != nil {
 			return nil, fmt.Errorf("initialize sentry: %w", err)
 		}
@@ -114,94 +109,56 @@ func newLogger(ctx context.Context, cfg config.Config) (*slog.Logger, error) {
 }
 ```
 
----
+## 2. Серверный режим и graceful shutdown (`cmd/server/listen.go`)
 
-## 2. Паттерн: Серверный режим и Graceful Shutdown (`cmd/<app>/listen.go`)
+`runListen` собирает зависимости руками (Pure DI):
 
-В `listen.go` происходит явная сборка (Pure DI) всех UseCase и транспортных адаптеров:
-- Один и тот же экземпляр `UseCase` передается и в HTTP-хендлер, и в gRPC-сервер.
-- Оба сервера запускаются в отдельных горутинах и разделяют общий `runCtx`.
-- Если один из серверов падает с ошибкой, он вызывает `cancel()`, инициируя остановку всего процесса.
-- При получении `SIGINT`/`SIGTERM` (или отмене `runCtx`) вызывается `server.Shutdown(shutdownCtx)` с таймаутом `cfg.ShutdownTimeout`, а `defer grpcSrv.GracefulStop()` останавливает gRPC.
+- создаёт usecase-ы из репозиториев: `usecase.NewGetPlaceUseCase(placeRepo)`;
+- создаёт хендлеры из usecase-ов: `httproutes.NewGetPlaceHandler(logger, getPlaceUC)`;
+- передаёт все хендлеры одной структурой `routes.Handlers` в `routes.NewHTTPRouter`.
 
-### Пример `cmd/<app>/listen.go`
+Сервер работает в отдельной горутине. Если `ListenAndServe` падает, горутина вызывает `cancel()` и процесс
+останавливается. По `SIGINT`/`SIGTERM` вызывается `server.Shutdown` с новым контекстом и таймаутом
+`cfg.ShutdownTimeout`: контекст приложения к этому моменту уже отменён.
+
+### Сокращённый `cmd/server/listen.go`
 
 ```go
-package main
-
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"log/slog"
-	"net"
-	"net/http"
-	"os/signal"
-	"syscall"
-
-	servicev1 "example.com/project-proto/proto/v1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-
-	"example.com/project/docs"
-	"example.com/project/internal/application/routes"
-	grpcreg "example.com/project/internal/application/routes/grpc"
-	httproutes "example.com/project/internal/application/routes/http"
-	"example.com/project/internal/application/usecase"
-	"example.com/project/internal/infrastructure/config"
-	"example.com/project/internal/infrastructure/repository"
-)
-
 func runListen(
 	ctx context.Context,
 	logger *slog.Logger,
 	cfg config.Config,
-	repo *repository.TrustedNetRepository,
-	db *sql.DB,
+	pool *pgxpool.Pool,
+	placeRepo *repository.PlaceRepository,
+	// ... остальные репозитории
+	provider openmeteo.HourlyProvider,
 ) error {
-	if cfg.SwaggerHost != "" {
-		docs.SwaggerInfo.Host = cfg.SwaggerHost
-	}
+	listPlacesUC := usecase.NewListPlacesUseCase(placeRepo)
+	getPlaceUC := usecase.NewGetPlaceUseCase(placeRepo)
+	// ... остальные usecase-ы
 
-	getBotsUC := usecase.NewGetBotsUseCase(repo)
-	getBotsHandler := httproutes.NewGetBotsHandler(logger, getBotsUC)
-	healthHandler := httproutes.NewHealthCheckHandler(logger, db)
-	router := routes.NewHTTPRouter(getBotsHandler, healthHandler)
+	router := routes.NewHTTPRouter(logger, routes.Handlers{
+		Health:     httproutes.NewHealthCheckHandler(logger, pool),
+		ListPlaces: httproutes.NewListPlacesHandler(logger, listPlacesUC),
+		GetPlace:   httproutes.NewGetPlaceHandler(logger, getPlaceUC),
+		// ...
+		WebDir: cfg.WebDir,
+	})
 
 	server := &http.Server{
-		Addr:              cfg.Addr,
+		Addr:              cfg.Addr(),
 		Handler:           router,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var grpcSrv *grpc.Server
-	if cfg.GRPCAddr != "" {
-		lis, err := net.Listen("tcp", cfg.GRPCAddr)
-		if err != nil {
-			return fmt.Errorf("grpc listen: %w", err)
-		}
-		grpcSrv = grpc.NewServer()
-		servicev1.RegisterBotsServiceServer(grpcSrv, grpcreg.NewBotsServer(getBotsUC))
-		reflection.Register(grpcSrv)
-		go func() {
-			logger.Info("grpc server started", "addr", cfg.GRPCAddr)
-			if err := grpcSrv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-				logger.Error("grpc server failed", "error", err)
-				cancel()
-			}
-		}()
-
-		defer grpcSrv.GracefulStop()
-	}
-
 	go func() {
-		logger.Info("http server started", slog.String("addr", cfg.Addr))
+		logger.Info("http server started", slog.String("addr", cfg.Addr()))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("http server failed", "error", err)
+			logger.Error("http server failed", slog.Any("error", err))
 			cancel()
 		}
 	}()
@@ -214,7 +171,7 @@ func runListen(
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer shutdownCancel()
 
-	//nolint:contextcheck
+	//nolint:contextcheck // shutdown must run with a fresh timeout context after appCtx is cancelled
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
@@ -224,69 +181,53 @@ func runListen(
 }
 ```
 
----
+## 3. Конфигурация из встроенных структур (`internal/infrastructure/config`)
 
-## 3. Паттерн: Конфигурация со Squash-композицией (`internal/infrastructure/config`)
-
-Конфигурация разбивается на тематические структуры (`AppConfig`, `DatabaseConfig`, `LoggerConfig`, `SentryConfig`), которые встраиваются в корневую структуру `Config`.
+Конфигурация разбита на тематические структуры (`AppConfig`, `DatabaseConfig`, `OpenMeteoConfig`, `PinsConfig`,
+`SentryConfig` и другие), которые встраиваются в корневую `Config`. Поэтому в коде пишется `cfg.URL`, а не
+`cfg.DatabaseConfig.URL`.
 
 Порядок загрузки:
-1. Дефолтные значения в `defaultCfg()`.
-2. Опциональный файл `.env` через `koanf`.
-3. Переменные окружения ОС.
-4. Декодирование через `mapstructure` с `Squash: true`, хуками `StringToTimeDurationHookFunc()` и `TextUnmarshallerHookFunc()`.
-5. Валидация через `validator.New().Struct(cfg)`.
 
-### Пример `internal/infrastructure/config/config.go`
+1. Значения по умолчанию из `defaultCfg()`.
+2. Файл `.env`, если он есть, через `koanf`.
+3. Переменные окружения.
+4. Декодирование через `mapstructure` с `Squash: true` и хуками `StringToTimeDurationHookFunc()` и
+   `TextUnmarshallerHookFunc()`. Второй хук разбирает `LOG_LEVEL` прямо в `slog.Level`.
+5. Проверка через `validator.New().Struct(cfg)`.
+
+Новая переменная окружения появляется в трёх местах: поле с тегом `koanf` (и `validate`, если нужно), значение по
+умолчанию в `defaultCfg()` и строка в `.env.example`.
+
+### Сокращённый `config.go`
 
 ```go
-package config
-
-import (
-	"fmt"
-	"log/slog"
-	"os"
-	"time"
-
-	"github.com/go-playground/validator/v10"
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/knadh/koanf/parsers/dotenv"
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/v2"
-)
-
 type Config struct {
 	AppConfig
 	DatabaseConfig
+	OpenMeteoConfig
 	LoggerConfig
 	SentryConfig
-}
-
-type AppConfig struct {
-	Addr              string        `koanf:"APP_ADDR"`
-	GRPCAddr          string        `koanf:"GRPC_ADDR"`
-	ReadHeaderTimeout time.Duration `koanf:"APP_READ_HEADER_TIMEOUT"`
-	ShutdownTimeout   time.Duration `koanf:"APP_SHUTDOWN_TIMEOUT"`
-	SwaggerHost       string        `koanf:"SWAGGER_HOST"`
+	PinsConfig
+	// ...
 }
 
 type DatabaseConfig struct {
-	URL         string        `koanf:"DB_URL" validate:"required"`
+	URL         string        `koanf:"DATABASE_URL" validate:"required"`
 	PingTimeout time.Duration `koanf:"DB_PING_TIMEOUT" validate:"required"`
+}
+
+type OpenMeteoConfig struct {
+	Mode     WeatherMode   `koanf:"WEATHER_MODE" validate:"required,oneof=real mock"`
+	BaseURL  string        `koanf:"OPENMETEO_BASE" validate:"required,url"`
+	Timeout  time.Duration `koanf:"OPENMETEO_TIMEOUT" validate:"required"`
+	Attempts int           `koanf:"OPENMETEO_ATTEMPTS" validate:"required,gte=1,lte=5"`
+	// ...
 }
 
 type LoggerConfig struct {
 	Level     slog.Level `koanf:"LOG_LEVEL"`
 	AddSource bool       `koanf:"LOG_ADD_SOURCE"`
-}
-
-type SentryConfig struct {
-	DSN         string  `koanf:"SENTRY_DSN"`
-	Environment string  `koanf:"SENTRY_ENVIRONMENT"`
-	Release     string  `koanf:"SENTRY_RELEASE"`
-	Debug       bool    `koanf:"SENTRY_DEBUG"`
-	SampleRate  float64 `koanf:"SENTRY_TRACES_SAMPLE_RATE"`
 }
 
 func Load() (Config, error) {
@@ -297,7 +238,7 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("load config file `.env`: %w", err)
 		}
 	} else if !os.IsNotExist(err) {
-		return Config{}, fmt.Errorf("stat config file `.env` err: %w", err)
+		return Config{}, fmt.Errorf("stat config file `.env`: %w", err)
 	}
 
 	if err := k.Load(env.Provider("", ".", nil), nil); err != nil {
@@ -326,24 +267,16 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-const (
-	defaultReaderTimeout = time.Second * 10
-	defaultPingTimeout   = time.Second * 5
-)
-
 func defaultCfg() Config {
 	return Config{
-		AppConfig: AppConfig{
-			Addr:              ":8080",
-			GRPCAddr:          ":9090",
-			ReadHeaderTimeout: defaultReaderTimeout,
-		},
 		DatabaseConfig: DatabaseConfig{
+			URL:         defaultDatabaseURL,
 			PingTimeout: defaultPingTimeout,
 		},
 		LoggerConfig: LoggerConfig{
 			Level: slog.LevelDebug,
 		},
+		// ...
 	}
 }
 ```

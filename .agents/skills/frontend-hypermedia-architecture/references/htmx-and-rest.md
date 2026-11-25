@@ -1,201 +1,113 @@
-# Hypermedia (HTMX) и REST: Основа фронтенда
+# htmx и REST
 
-Источник базовых правил: [Mindrally `htmx` skill](https://github.com/mindrally/skills/blob/HEAD/htmx/SKILL.md), адаптированный под Go-сервисы и REST-архитектуру.
+Основа: [Mindrally `htmx` skill](https://github.com/mindrally/skills/blob/HEAD/htmx/SKILL.md), переложенный на hermes.
 
----
+## 1. Принципы
 
-## 1. Ключевые принципы Hypermedia + REST
+1. **Состоянием управляет сервер.** Модели, валидация и бизнес-правила живут в Go. Клиент получает либо HTML-фрагмент, либо JSON в обёртке `APIResponse[T]` (`internal/application/routes/http/common.go`):
 
-1. **Сервер управляет состоянием**:
-   - Не дублируй серверные модели, правила валидации и бизнес-логику в клиентском JavaScript.
-   - Сервер возвращает либо готовые HTML-фрагменты (для HTMX-взаимодействий), либо каноничный JSON REST-ответ (`APIResponse[T]`: `{"success": bool, "error": string, "data": ...}`).
-2. **Минимальный payload**:
-   - На HTMX-запросы (`HX-Request: true`) возвращай только изменившийся HTML-фрагмент (partial), а не всю страницу целиком.
-3. **Семантичные HTTP-методы и коды ответа**:
-   - Чтение и фильтрация: `GET` (`hx-get`) + синхронизация query-параметров в URL (`hx-push-url="true"` или `hx-replace-url="true"`).
-   - Создание: `POST` (`hx-post`).
-   - Обновление: `PUT` / `PATCH` (`hx-put`, `hx-patch`).
-   - Удаление: `DELETE` (`hx-delete` + `hx-confirm`).
-   - Ошибки валидации возвращают `400 Bad Request` / `422 Unprocessable Entity`, серверные ошибки — `500 Internal Server Error`.
+   ```json
+   {"success": false, "error": "place not found", "code": "NOT_FOUND", "data": null}
+   ```
 
----
+   `code` заполняется только у ошибок (`INVALID_ARGUMENT`, `NOT_FOUND`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `TIMEOUT`, `INTERNAL_ERROR` и др., см. `errorCode`).
+2. **Страница и фрагмент рендерятся из одного view.** У каждой обновляемой области есть пара ручек: страница (`GET /catalog`, `Pages.CatalogPage`) и фрагмент (`GET /fragments/catalog-results`, `Fragments.CatalogResults`). Обе вызывают `loadCatalogView` и отдают один и тот же `templ`-компонент: страница целиком, фрагмент только `CatalogResults(view)`. Заголовок `HX-Request` для выбора шаблона не используется.
+3. **htmx отвечает за GET.** Чтение, фильтры, вкладки и пагинация идут через `hx-get` на `/fragments/*`. Мутации (`POST /pins`, `PUT /pins/{id}/going`, `POST /submissions`) идут через `api()` из `web/static/js/app/api.js`: он подставляет `X-CSRF-Token` из `localStorage` и разбирает обёртку. `hx-post`, `hx-put` и `hx-delete` в шаблонах пока не встречаются; если они понадобятся, CSRF-заголовок придётся передать через `hx-headers`.
+4. **Коды ответа.** Ошибки домена переводятся в статус функцией `statusCode`: `models.ErrInvalidArgument` в 400, `ErrNotFound` в 404, `ErrUnauthorized` в 401, `ErrForbidden` в 403, `ErrConflict` в 409, остальное в 500.
 
-## 2. Базовые атрибуты HTMX и стратегии `hx-swap`
+## 2. Атрибуты htmx
 
-- **Запросы**: `hx-get`, `hx-post`, `hx-put`, `hx-patch`, `hx-delete`.
-- **Куда вставлять**: `hx-target="#container"` или относительные селекторы (`closest tr`, `this`, `next .error`).
-- **Как вставлять (`hx-swap`)**:
-  - `innerHTML` (по умолчанию) — заменить содержимое целевого контейнера.
-  - `outerHTML` — заменить сам целевой элемент (отлично подходит для обновления строки таблицы или карточки целиком).
-  - `beforeend` — дописать в конец списка (бесконечный скролл или добавление нового элемента).
-  - `delete` — удалить целевой элемент из DOM после успешного `hx-delete`.
-  - `swap:150ms settle:150ms` — задержка для плавной CSS/Alpine-анимации при замене DOM.
+- `hx-get` — адрес фрагмента, обычно из хелпера view: `q.fragmentURL()` даёт `/fragments/catalog-results?...`.
+- `hx-target` — контейнер с постоянным id: `#catalog-results`, `#map-panel-inner`, `#profile-tab`.
+- `hx-push-url` — адрес полной страницы (`q.pageURL()`), чтобы ссылку можно было открыть заново и кнопка «Назад» работала.
+- `hx-swap` — по умолчанию `innerHTML`, и в проекте другие варианты пока не нужны. `outerHTML` подходит для замены карточки целиком, `beforeend` для догрузки списка.
+- `hx-trigger` — для поллинга: `load, every 60s` у счётчика «Сейчас».
+- `hx-disable` — на формах поиска (`data-role="catalog-search"`, `"map-search"`). Ввод обрабатывает `catalog.js` с debounce 250 мс и вызывает `panelSwap()` из `nav.js`.
 
----
+## 3. Примеры из кода
 
-## 3. Эталонные паттерны разметки HTMX
+### 3.1. Чип фильтра справочника
 
-### 3.1. Реактивная фильтрация таблицы с синхронизацией URL (на примере подсетей ботов)
+`web/templates/catalog.templ`: ссылка работает и без JS, а с htmx подменяет только результаты.
 
-Форма фильтров отправляет `GET`-запрос при изменении любого селекта или ввода текста с debounce, обновляет таблицу `#bots-table-body` и сохраняет параметры фильтрации в адресной строке браузера.
+```templ
+<a
+	class="chip"
+	href={ templ.SafeURL(q.with(func(n *CatalogQueryView) { n.Category = category.ID }).pageURL()) }
+	hx-get={ q.with(func(n *CatalogQueryView) { n.Category = category.ID }).fragmentURL() }
+	hx-target="#catalog-results"
+	hx-push-url={ q.with(func(n *CatalogQueryView) { n.Category = category.ID }).pageURL() }
+	aria-pressed={ strconv.FormatBool(q.Category == category.ID) }
+>
+	@icon(category.Icon, "")
+	{ category.Label }
+</a>
 
-```html
-<section class="space-y-4">
-  <form
-    hx-get="/ui/bots"
-    hx-target="#bots-table-body"
-    hx-trigger="change, input delay:300ms from:input[name='q']"
-    hx-replace-url="true"
-    hx-indicator="#loading-indicator"
-    class="flex flex-wrap items-center gap-3"
-  >
-    <select name="source" class="rounded border px-3 py-2 text-sm">
-      <option value="">Все источники</option>
-      <option value="yandex">Yandex</option>
-      <option value="google">Google Common</option>
-      <option value="google_special_crawlers">Google Special</option>
-    </select>
-
-    <select name="ipV" class="rounded border px-3 py-2 text-sm">
-      <option value="">IPv4 + IPv6</option>
-      <option value="4">IPv4</option>
-      <option value="6">IPv6</option>
-    </select>
-
-    <input
-      type="search"
-      name="q"
-      placeholder="Поиск по CIDR..."
-      class="rounded border px-3 py-2 text-sm"
-    />
-
-    <span id="loading-indicator" class="htmx-indicator text-xs text-slate-500">
-      Обновление...
-    </span>
-  </form>
-
-  <table class="w-full border-collapse text-left text-sm">
-    <thead>
-      <tr class="border-b bg-slate-50">
-        <th class="px-3 py-2">CIDR</th>
-        <th class="px-3 py-2">Источник</th>
-        <th class="px-3 py-2">Версия IP</th>
-        <th class="px-3 py-2"></th>
-      </tr>
-    </thead>
-    <tbody id="bots-table-body">
-      <!-- Сервер рендерит сюда строки <tr> -->
-    </tbody>
-  </table>
-</section>
+<div id="catalog-results">
+	@CatalogResults(view)
+</div>
 ```
 
-### 3.2. Удаление строки с подтверждением и мгновенным удалением из DOM
+Выбранное состояние передаётся через `aria-pressed`, а не через класс `is-active`.
 
-```html
-<tr id="bot-row-42" class="border-b">
-  <td class="px-3 py-2 font-mono">66.249.64.0/19</td>
-  <td class="px-3 py-2">google</td>
-  <td class="px-3 py-2">4</td>
-  <td class="px-3 py-2 text-right">
-    <button
-      hx-delete="/ui/bots/42"
-      hx-target="closest tr"
-      hx-swap="outerHTML swap:150ms"
-      hx-confirm="Удалить подсеть 66.249.64.0/19?"
-      class="text-red-600 hover:underline"
-    >
-      Удалить
-    </button>
-  </td>
-</tr>
+### 3.2. Поллинг счётчика
+
+`web/templates/layout.templ`:
+
+```templ
+<span hx-get="/fragments/live-count" hx-trigger="load, every 60s" hx-swap="innerHTML">
+	@LiveCount(v.LivePins)
+</span>
 ```
 
----
+### 3.3. Мутация и обновление фрагмента
 
-## 4. Как определять роуты и хендлеры на Go для Hypermedia + REST
+`web/static/js/app/actions.js`, кнопка «Я приду» с `data-action="pin-going"`:
 
-В архитектуре Go-сервиса (`internal/application/routes/http`) один и тот же `GetBotsUseCase` может обслуживать:
-1. **Чистый JSON REST-эндпоинт** (`/api/v1/bots`) через `APIResponseWriter[[]presenter.TrustedBotNet]`.
-2. **Hypermedia HTML-эндпоинт** (`/ui/bots`), который рендерит полную страницу или только partial `<tbody>`, если присутствует заголовок `HX-Request: true`.
+```js
+const joined = el.getAttribute('aria-pressed') === 'true';
+try {
+  await api(`/pins/${encodeURIComponent(id)}/going`, { method: joined ? 'DELETE' : 'PUT' });
+  toast(joined ? 'Отметку сняли' : 'Отметили: вы идёте. Автор увидит это');
+  await refreshPins();
+  htmx.ajax('GET', `/fragments/pin/${encodeURIComponent(id)}`, { target: '#map-panel-inner' });
+} catch (error) {
+  toast(error.message || 'Не получилось отметиться', { type: 'danger' });
+}
+```
 
-### Пример Go-хендлера для HTMX Partial + Full Page
+Мутация идёт через `api()`, потом точки на карте и фрагмент панели перечитываются с сервера. Клиент сам счётчик не пересчитывает. `api()` возвращает `payload.data` или бросает `ApiError` с полями `status` и `code`. Текст ошибки показывается пользователю, поэтому сообщения сервера должны быть понятными.
+
+## 4. Go: страница и фрагмент
+
+`internal/application/routes/http/fragments.go`:
 
 ```go
-package http
+// GET /fragments/catalog-results?... — сетка или список результатов справочника.
+func (f *Fragments) CatalogResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method GET expected", http.StatusMethodNotAllowed)
 
-import (
-	"html/template"
-	"log/slog"
-	"net/http"
-	"strconv"
-
-	"example.com/project/internal/application/presenter"
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type BotsUIHandler struct {
-	logger  *slog.Logger
-	tmpl    *template.Template
-	useCase GetBotsUC
-}
-
-func NewBotsUIHandler(logger *slog.Logger, tmpl *template.Template, uc GetBotsUC) *BotsUIHandler {
-	return &BotsUIHandler{logger: logger, tmpl: tmpl, useCase: uc}
-}
-
-func (h *BotsUIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var ipV *trustednet.IPVersion
-	if rawIPV := r.URL.Query().Get("ipV"); rawIPV != "" {
-		v, err := strconv.Atoi(rawIPV)
-		if err != nil {
-			http.Error(w, "invalid ipV", http.StatusBadRequest)
-			return
-		}
-		parsedIPV, err := trustednet.NewIPVersion(v)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		ipV = &parsedIPV
-	}
-
-	var sources []trustednet.Source
-	for _, rawSrc := range r.URL.Query()["source"] {
-		if rawSrc == "" {
-			continue
-		}
-		src, err := trustednet.NewSource(rawSrc)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		sources = append(sources, src)
-	}
-
-	nets, err := h.useCase.Do(r.Context(), sources, ipV)
-	if err != nil {
-		h.logger.Error("load bots for ui failed", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	viewData := presenter.TrustedBotNetsToHTTP(nets)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	view, err := f.pages.loadCatalogView(r.Context(), r, parseCatalogQuery(r))
+	if err != nil {
+		f.error(w, r, "catalog results fragment", err)
 
-	templateName := "bots_page.html"
-	if r.Header.Get("HX-Request") == "true" {
-		templateName = "bots_table_rows.html"
+		return
 	}
 
-	if err := h.tmpl.ExecuteTemplate(w, templateName, viewData); err != nil {
-		h.logger.Error("render template failed", "template", templateName, "error", err)
-	}
+	f.render(w, r, templates.CatalogResults(view))
 }
 ```
 
----
+`Pages.CatalogPage` в `pages.go` устроен так же, но рендерит `templates.CatalogPage(view)`. Новые ручки регистрируются в `internal/application/routes/router.go`: страницы рядом с `GET /catalog`, фрагменты рядом с `GET /fragments/*`, JSON рядом с `GET /api/*`.
 
-## 5. Работа с чистым JSON REST API без HTMX
+## 5. Ошибки во фрагментах
 
-Если бэкенд предоставляет только JSON REST API (формат `APIResponse[T]` из `internal/application/routes/http/common.go`), не нужно подключать React — используй легкий `fetch` внутри `Alpine.data()` компонента (подробный шаблон приведен в [alpine-transitions-and-state.md](<alpine-transitions-and-state.md>)).
+`Fragments.error` пишет в лог и отвечает `http.Error` со статусом из `statusCode`. htmx по умолчанию не вставляет ответы 4xx и 5xx, поэтому контейнер остаётся со старым содержимым. Если пользователю нужно увидеть ошибку на месте, верни разметку пустого состояния со статусом 200 или обработай `htmx:responseError` в JS.
+
+## 6. JSON без htmx
+
+Если данные нужны скрипту, а не разметке (точки карты `GET /api/map-items`, карточка `GET /api/items/{id}`), используй `api()` из модуля или из `Alpine.data()`. Шаблон компонента описан в [alpine-transitions-and-state.md](<alpine-transitions-and-state.md>).

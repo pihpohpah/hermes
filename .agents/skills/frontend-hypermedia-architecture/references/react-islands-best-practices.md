@@ -1,82 +1,86 @@
-# React-острова в редких кейсах (Vercel React Best Practices)
+# Изолированные модули и React
 
-Источник базовых правил: [Vercel Engineering `vercel-react-best-practices`](https://github.com/vercel-labs/agent-skills/blob/HEAD/skills/react-best-practices/SKILL.md).
+Правила для React взяты из [Vercel `react-best-practices`](https://github.com/vercel-labs/agent-skills/blob/HEAD/skills/react-best-practices/SKILL.md).
 
----
+## 1. Остров без React: карта
 
-## 1. Когда React разрешен (и когда запрещен)
+React в hermes нет. Единственный «остров», то есть кусок страницы с собственным долгоживущим состоянием на клиенте, это карта MapLibre. Новый виджет такого рода строится по её образцу.
 
-В нашей архитектуре базой являются **HTMX (Hypermedia) + REST** и **Alpine.js**.
-- **Запрещено использовать React**: для таблиц, CRUD-форм, модалок, фильтров, лендингов, стандартных админок и навигации.
-- **Разрешено использовать React (как изолированный Island-виджет)**:
-  1. Интерактивная визуализация сетевых топологий / подсетей / графов на Canvas/WebGL/SVG с зумом и drag-and-drop.
-  2. Real-time дашборды с высокой частотой обновления (WebSockets/SSE) и сложной клиентской агрегацией.
-  3. Сложные многошаговые редакторы со связанным локальным графом состояния (undo/redo стек, live-компиляция правил).
+1. **Узел с данными.** Сервер рендерит контейнер и кладёт параметры в `data-*`:
 
-Даже когда React оправдан, монтируй его **в конкретный DOM-узел** (`<div id="subnet-visualizer-island" data-initial='...'></div>`), а не превращай все приложение в тяжелое SPA.
+   ```templ
+   <div class="map-stage" id="map-stage" data-stage-mode={ mode } data-scenario={ scenario } aria-label="Карта">
+   	…
+   	<div class="map-canvas" id="map"></div>
+   </div>
+   ```
 
----
+   Мини-карта на странице места делает то же самое через `data-mini-map`, `data-lat`, `data-lon` (`detail.templ`).
+2. **Монтирование.** `initStage()` в `stage.js` читает `dataset`, при необходимости догружает вендор (`ensureMapVendor()`: при `hx-boost`-переходе `<head>` не перечитывается) и создаёт контроллер `createPlacesMap()` из `map.js`. Ошибка создания показывается в разметке «Карта не загрузилась» с кнопкой «Повторить».
+3. **Жизненный цикл.** `initPage()` в `app.js` вызывается на `DOMContentLoaded` и `htmx:load`. Если узел `#map-stage` сменился или пропал, старый контроллер уничтожается через `destroy()`, иначе живёт дальше. Своп `#map-panel-inner` карту не трогает, потому что она лежит вне цели свопа.
+4. **Связь с остальной страницей** идёт через методы контроллера (`window.placesMap.setPins()`, `.select()`, `.flyTo()`) и делегированные `data-action`, а не через общий реактивный стор.
 
-## 2. Приоритизированные правила Vercel React Best Practices
+## 2. Когда допустим React
 
-Если ты пишешь или ревьюишь React-компонент, обязательно проверяй его по 8 категориям правил в порядке критичности:
+React можно подключить, только если выполнены все условия:
+
+- задачу не решить htmx-фрагментом, Alpine-компонентом или модулем по образцу карты;
+- всё состояние живёт на клиенте и часто меняется: редактор графа с undo/redo, canvas с drag-and-drop, поток данных по WebSocket с клиентской агрегацией;
+- остров монтируется в один узел с `data-*`, как карта, и не превращает страницу в SPA.
+
+Для таблиц, форм, модалок, фильтров и навигации React не нужен. Подключение React меняет сборку: `mise run assets` собирает esbuild-ом один бандл из `app.js` без npm-зависимостей и JSX. Поэтому такое решение согласуется заранее.
+
+## 3. Правила Vercel по приоритету
 
 | Приоритет | Категория | Влияние | Префикс правил |
 | :--- | :--- | :--- | :--- |
-| 1 | Устранение водопадов запросов (Eliminating Waterfalls) | CRITICAL | `async-` |
-| 2 | Оптимизация размера бандла (Bundle Size Optimization) | CRITICAL | `bundle-` |
-| 3 | Серверная производительность (Server-Side Performance) | HIGH | `server-` |
-| 4 | Клиентская загрузка данных (Client-Side Data Fetching) | MEDIUM-HIGH | `client-` |
-| 5 | Оптимизация ре-рендеров (Re-render Optimization) | MEDIUM | `rerender-` |
-| 6 | Производительность рендеринга (Rendering Performance) | MEDIUM | `rendering-` |
-| 7 | Производительность JavaScript (JS Performance) | LOW-MEDIUM | `js-` |
-| 8 | Продвинутые паттерны хуков (Advanced Patterns) | LOW | `advanced-` |
+| 1 | Водопады запросов | CRITICAL | `async-` |
+| 2 | Размер бандла | CRITICAL | `bundle-` |
+| 3 | Серверная производительность | HIGH | `server-` |
+| 4 | Загрузка данных на клиенте | MEDIUM-HIGH | `client-` |
+| 5 | Лишние ре-рендеры | MEDIUM | `rerender-` |
+| 6 | Производительность рендеринга | MEDIUM | `rendering-` |
+| 7 | Производительность JavaScript | LOW-MEDIUM | `js-` |
+| 8 | Продвинутые паттерны хуков | LOW | `advanced-` |
 
----
+Правила `async-`, `bundle-`, `client-` и `js-` относятся к любому JS, не только к React.
 
-## 3. Главные правила с примерами кода
+## 4. Главные правила с примерами
 
-### 3.1. Устранение водопадов (`async-*` — CRITICAL)
-- **`async-parallel`**: Никогда не делай последовательные `await` для независимых REST-запросов. Запускай их параллельно через `Promise.all()`.
-- **`async-cheap-condition-before-await` / `async-defer-await`**: Сначала проверяй быстрые синхронные условия, и только в нужной ветке вызывай `await`.
+### 4.1. Водопады (`async-*`)
 
-```tsx
-// Плохо: последовательный водопад (Waterfall)
-async function loadBotStats() {
-  const yandex = await fetch('/api/v1/bots?source=yandex').then((r) => r.json());
-  const google = await fetch('/api/v1/bots?source=google').then((r) => r.json());
-  return { yandex: yandex.data, google: google.data };
-}
+- **`async-parallel`.** Независимые запросы запускаются параллельно через `Promise.all()`, а не последовательными `await`.
+- **`async-cheap-condition-before-await`, `async-defer-await`.** Сначала дешёвые синхронные проверки, `await` только в нужной ветке.
 
-// Хорошо: параллельная загрузка
-async function loadBotStats() {
-  const [yandexRes, googleRes] = await Promise.all([
-    fetch('/api/v1/bots?source=yandex'),
-    fetch('/api/v1/bots?source=google'),
-  ]);
-  const [yandex, google] = await Promise.all([yandexRes.json(), googleRes.json()]);
-  return { yandex: yandex.data, google: google.data };
-}
+Так загружаются остановки маршрута в `route.js`:
+
+```js
+const loaded = await Promise.all(ids.map((id) => fetchItem(id).catch(() => null)));
+if (current !== this.version) return;
+this.stops = loaded.filter(Boolean);
 ```
 
-### 3.2. Оптимизация размера бандла (`bundle-*` — CRITICAL)
-- **`bundle-barrel-imports`**: Избегай импортов из корневых barrel-файлов (`index.ts`), которые тянут сотни неиспользуемых иконок или утилит. Импортируй модули напрямую.
-- **`bundle-conditional` / `bundle-dynamic-imports`**: Подгружай тяжелые модули (графики, редакторы кода) лениво через `React.lazy()` или динамический `import()` только при активации функции.
+Проверка `version` отбрасывает ответ, если за время запроса маршрут успел измениться.
+
+### 4.2. Размер бандла (`bundle-*`)
+
+- **`bundle-barrel-imports`.** Импорт напрямую из модуля, без корневых `index.js`, которые тянут лишнее.
+- **`bundle-conditional`, `bundle-dynamic-imports`.** Тяжёлые зависимости грузятся лениво, только когда нужны. В hermes так грузится MapLibre: `ensureMapVendor()` подключает скрипты только на страницах с картой. В React для этого есть `lazy()` и динамический `import()`:
 
 ```tsx
 import { lazy, Suspense, useState } from 'react';
 
-const HeavyCidrMap = lazy(() => import('./HeavyCidrMap'));
+const RouteGraphEditor = lazy(() => import('./RouteGraphEditor'));
 
-export function CidrAnalyzerIsland() {
-  const [showMap, setShowMap] = useState(false);
+export function RouteEditorIsland() {
+  const [open, setOpen] = useState(false);
 
   return (
     <div>
-      <button onClick={() => setShowMap((prev) => !prev)}>Показать карту подсетей</button>
-      {showMap ? (
-        <Suspense fallback={<div>Загрузка карты...</div>}>
-          <HeavyCidrMap />
+      <button type="button" onClick={() => setOpen((prev) => !prev)}>Редактор маршрута</button>
+      {open ? (
+        <Suspense fallback={<div>Загрузка редактора…</div>}>
+          <RouteGraphEditor />
         </Suspense>
       ) : null}
     </div>
@@ -84,51 +88,52 @@ export function CidrAnalyzerIsland() {
 }
 ```
 
-### 3.3. Клиентский фетчинг и события (`client-*` — MEDIUM-HIGH)
-- **`client-swr-dedup`**: Для чтения REST API в React-острове используй `SWR` (или дедуплицирующий кэш), чтобы избежать повторных запросов и гонок в `useEffect`.
-- **`client-passive-event-listeners`**: Для обработчиков `scroll`, `wheel`, `touchstart` всегда указывай `{ passive: true }`.
+### 4.3. Загрузка данных и события (`client-*`)
 
-### 3.4. Оптимизация ре-рендеров (`rerender-*` — MEDIUM)
-- **`rerender-derived-state-no-effect`**: Никогда не вычисляй производное состояние через `useEffect` + `setState`. Вычисляй его прямо во время рендера.
-- **`rerender-move-effect-to-event`**: Логика, вызванная действием пользователя (отправка формы, клик по фильтру), должна жить в обработчике события (`onClick`, `onSubmit`), а не в `useEffect`.
-- **`rerender-functional-setstate`**: Используй функциональный апдейтер `setItems(prev => ...)`, чтобы колбэки не зависели от текущего состояния.
-- **`rerender-lazy-state-init`**: Передавай функцию `useState(() => computeInitial())` для дорогих начальных вычислений (например, парсинг `dataset.initial`).
-- **`rerender-transitions` / `rerender-use-deferred-value`**: Оборачивай несрочные тяжелые обновления фильтрации в `startTransition` или `useDeferredValue`, чтобы ввод в инпут оставался мгновенным.
-- **`rerender-no-inline-components`**: Никогда не объявляй дочерние компоненты внутри функции другого компонента.
+- **`client-swr-dedup`.** Чтение REST в React-острове идёт через дедуплицирующий кэш (SWR или аналог), а не через голый `useEffect`. Вне React ту же роль играет `itemCache` в `fetchItem()` из `api.js`.
+- **`client-passive-event-listeners`.** У обработчиков `scroll`, `wheel`, `touchstart` указывается `{ passive: true }`.
+
+### 4.4. Ре-рендеры (`rerender-*`)
+
+- **`rerender-derived-state-no-effect`.** Производное состояние вычисляется в рендере, а не через `useEffect` + `setState`.
+- **`rerender-move-effect-to-event`.** Реакция на действие пользователя живёт в обработчике (`onClick`, `onSubmit`), а не в `useEffect`.
+- **`rerender-functional-setstate`.** Апдейтер `setItems((prev) => …)`, чтобы колбэк не зависел от текущего состояния.
+- **`rerender-lazy-state-init`.** Дорогое начальное значение передаётся функцией: `useState(() => JSON.parse(node.dataset.initial))`.
+- **`rerender-transitions`, `rerender-use-deferred-value`.** Тяжёлая фильтрация оборачивается в `startTransition` или `useDeferredValue`, чтобы ввод не тормозил.
+- **`rerender-no-inline-components`.** Дочерний компонент не объявляется внутри другого компонента.
 
 ```tsx
 import { useDeferredValue, useMemo, useState } from 'react';
 
-interface BotNet {
-  cidr: string;
-  source: string;
-  type: number;
+interface Place {
+  id: string;
+  title: string;
 }
 
-export function CidrFilterWidget({ items }: { items: BotNet[] }) {
+export function PlaceFilter({ places }: { places: Place[] }) {
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
 
-  // Вычисляем производное состояние в рендере, без useEffect + setState
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((n) => n.cidr.toLowerCase().includes(q));
-  }, [items, deferredQuery]);
+    if (!q) return places;
+    return places.filter((p) => p.title.toLowerCase().includes(q));
+  }, [places, deferredQuery]);
 
   return (
     <div>
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Фильтр CIDR..." />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название места" />
       <p>Найдено: {filtered.length}</p>
     </div>
   );
 }
 ```
 
-### 3.5. Рендеринг и JavaScript-оптимизации (`rendering-*`, `js-*`)
-- **`rendering-conditional-render`**: Используй тернарный оператор `condition ? <Node /> : null` вместо `count && <Node />`, чтобы случайно не отрендерить `0` в DOM.
-- **`rendering-hoist-jsx`**: Выноси статичный неизменяемый JSX в константы за пределы компонента.
-- **`rendering-content-visibility`**: Для длинных списков используй CSS `content-visibility: auto`.
-- **`js-set-map-lookups` / `js-index-maps`**: Для частых проверок вхождения или поиска по ключу (например, проверка CIDR в списке выбранных) используй `Set` и `Map` (`O(1)`) вместо `Array.prototype.includes` / `find` (`O(N)`).
-- **`js-hoist-regexp`**: Выноси создание `new RegExp(...)` или литералов регулярных выражений за пределы рендера и циклов.
-- **`js-tosorted-immutable`**: Используй `array.toSorted()` вместо мутирующего `.sort()`.
+### 4.5. Рендеринг и JavaScript (`rendering-*`, `js-*`)
+
+- **`rendering-conditional-render`.** `condition ? <Node /> : null` вместо `count && <Node />`, иначе в DOM попадёт `0`.
+- **`rendering-hoist-jsx`.** Статичный JSX выносится в константы вне компонента.
+- **`rendering-content-visibility`.** Длинным спискам помогает CSS `content-visibility: auto`.
+- **`js-set-map-lookups`, `js-index-maps`.** Для частых проверок вхождения и поиска по ключу берутся `Set` и `Map`, а не `includes` и `find` по массиву.
+- **`js-hoist-regexp`.** Регулярные выражения создаются вне рендера и циклов.
+- **`js-tosorted-immutable`.** `array.toSorted()` вместо мутирующего `.sort()`.

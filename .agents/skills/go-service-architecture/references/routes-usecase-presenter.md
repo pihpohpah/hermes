@@ -1,194 +1,191 @@
-# Устройство `usecase`, `presenter` и `routes` (HTTP + gRPC)
+# Устройство `usecase`, `presenter` и `routes`
 
-## 1. Паттерн: UseCase с Consumer-Driven интерфейсом (`internal/application/usecase`)
+## 1. Usecase с интерфейсом на стороне потребителя (`internal/application/usecase`)
 
-Каждый сценарий использования оформляется отдельной структурой с методом `Do(ctx, ...)`.
-Зависимость на хранилище описывается неэкспортируемым интерфейсом `repo` прямо в файле сценария и содержит только те методы, которые нужны этому сценарию.
+Каждый сценарий — отдельная структура с методом `Do(ctx, ...)` и конструктором `New<Name>UseCase`. Зависимость на
+хранилище описывает неэкспортируемый интерфейс в том же файле, и в нём только методы, нужные этому сценарию
+(`placeLister`, `placeGetter`, `placeCreator`). Один репозиторий закрывает несколько таких интерфейсов.
 
-### Пример `internal/application/usecase/get_bots.go`
+Usecase проверяет бизнес-правила и возвращает доменные ошибки (`models.Invalid(...)`, `models.ErrNotFound`), а не
+HTTP-коды.
+
+### Пример `internal/application/usecase/places.go`
 
 ```go
-package usecase
-
-import (
-	"context"
-
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type GetBotsUseCase struct {
-	repo repo
+// GetPlaceUseCase loads a single place by id.
+type GetPlaceUseCase struct {
+	places placeGetter
 }
 
-func NewGetBotsUseCase(repo repo) *GetBotsUseCase {
-	return &GetBotsUseCase{repo}
+type placeGetter interface {
+	GetByID(ctx context.Context, id string) (models.Place, error)
 }
 
-type repo interface {
-	List(
-		ctx context.Context,
-		source []trustednet.Source,
-		ipV *trustednet.IPVersion,
-	) ([]trustednet.TrustedBotNet, error)
+func NewGetPlaceUseCase(places placeGetter) *GetPlaceUseCase {
+	return &GetPlaceUseCase{places: places}
 }
 
-func (u *GetBotsUseCase) Do(
-	ctx context.Context,
-	sources []trustednet.Source,
-	ipV *trustednet.IPVersion,
-) (result []trustednet.TrustedBotNet, err error) {
-	return u.repo.List(ctx, sources, ipV)
+func (u *GetPlaceUseCase) Do(ctx context.Context, id string) (models.Place, error) {
+	if id == "" {
+		return models.Place{}, models.Invalid("`id` is required")
+	}
+
+	// id may be a UUID or the human-readable slug from the URL.
+	return u.places.GetByID(ctx, id)
+}
+
+// ListPlacesUseCase returns places filtered by layer, type or radius around a
+// point. An empty filter lists the catalogue page by page.
+type ListPlacesUseCase struct {
+	places placeLister
+}
+
+type placeLister interface {
+	List(ctx context.Context, filter models.PlaceFilter) ([]models.Place, error)
+}
+
+func NewListPlacesUseCase(places placeLister) *ListPlacesUseCase {
+	return &ListPlacesUseCase{places: places}
+}
+
+func (u *ListPlacesUseCase) Do(ctx context.Context, filter models.PlaceFilter) ([]models.Place, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = defaultPlaceListLimit
+	}
+
+	return u.places.List(ctx, filter)
 }
 ```
 
----
+## 2. Presenter: доменная модель → DTO (`internal/application/presenter`)
 
-## 2. Паттерн: Presenter / DTO Mapper (`internal/application/presenter`)
+JSON-форму ответа задаёт `presenter`: DTO с тегами `json` и функции `<Model>ToHTTP`. Доменные сущности тегов не несут.
+Здесь же переименовываются поля (`Location` → `lat`/`lon`), слайсы value objects превращаются в строки, а `nil`
+остаётся `null`, а не нулём.
 
-Доменные модели не содержат тегов сериализации (`json` или `protobuf`). За преобразование доменных структур в структуры ответа для HTTP и gRPC отвечает пакет `presenter`.
-
-### Пример `internal/application/presenter/bots.go`
+### Пример `internal/application/presenter/places.go` (фрагмент)
 
 ```go
-package presenter
-
-import (
-	"fmt"
-
-	servicev1 "example.com/project-proto/proto/v1"
-
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type TrustedBotNet struct {
-	CIDR   string               `json:"cidr"`
-	Source trustednet.Source    `json:"source"`
-	Type   trustednet.IPVersion `json:"type"`
+type Place struct {
+	ID          string           `json:"id"`
+	Slug        string           `json:"slug,omitempty"`
+	Name        string           `json:"name"`
+	Type        models.PlaceType `json:"type"`
+	Layer       models.LayerCode `json:"layer"`
+	Lat         float64          `json:"lat"`
+	Lon         float64          `json:"lon"`
+	PriceFree   *bool            `json:"price_free,omitempty"`
+	Access      []string         `json:"access"`
+	// ...
 }
 
-func TrustedBotNetsToHTTP(in []trustednet.TrustedBotNet) []TrustedBotNet {
-	out := make([]TrustedBotNet, len(in))
-	for i := range in {
-		out[i] = TrustedBotNet{
-			CIDR:   in[i].CIDR,
-			Source: in[i].Source,
-			Type:   in[i].Type,
-		}
+func PlaceToHTTP(in models.Place) Place {
+	access := make([]string, 0, len(in.Access))
+	for _, mode := range in.Access {
+		access = append(access, string(mode))
 	}
+
+	out := Place{
+		ID:        in.ID,
+		Name:      in.Name,
+		Type:      in.Type,
+		Layer:     in.Layer,
+		Lat:       in.Location.Lat,
+		Lon:       in.Location.Lon,
+		PriceFree: in.PriceFree,
+		Access:    access,
+		// ...
+	}
+	// ...
 
 	return out
 }
 
-func TrustedBotNetsToProto(in []trustednet.TrustedBotNet) ([]*servicev1.TrustedBotNet, error) {
-	out := make([]*servicev1.TrustedBotNet, 0, len(in))
+func PlacesToHTTP(in []models.Place) []Place {
+	out := make([]Place, len(in))
 	for i := range in {
-		item, err := trustedBotNetToProto(in[i])
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, item)
+		out[i] = PlaceToHTTP(in[i])
 	}
 
-	return out, nil
-}
-
-func trustedBotNetToProto(n trustednet.TrustedBotNet) (*servicev1.TrustedBotNet, error) {
-	var src servicev1.Source
-	switch n.Source {
-	case trustednet.Yandex:
-		src = servicev1.Source_SOURCE_YANDEX
-	case trustednet.GoogleCommon:
-		src = servicev1.Source_SOURCE_GOOGLE
-	case trustednet.GoogleSpecial:
-		src = servicev1.Source_SOURCE_GOOGLE_SPECIAL_CRAWLERS
-	default:
-		return nil, fmt.Errorf("unknown trusted bot source: %s", n.Source)
-	}
-
-	var ipV servicev1.IPVersion
-	switch n.Type {
-	case trustednet.V4:
-		ipV = servicev1.IPVersion_IP_VERSION_V4
-	case trustednet.V6:
-		ipV = servicev1.IPVersion_IP_VERSION_V6
-	default:
-		return nil, fmt.Errorf("unknown trusted bot ip version: %d", n.Type)
-	}
-
-	return &servicev1.TrustedBotNet{
-		Cidr:      n.CIDR,
-		Source:    src,
-		IpVersion: ipV,
-	}, nil
+	return out
 }
 ```
 
----
+## 3. HTTP-роутер (`internal/application/routes/router.go`)
 
-## 3. Паттерн: Определение HTTP-роутера (`internal/application/routes/router.go`)
+Роутер построен на `http.NewServeMux()` с шаблонами Go 1.22+: метод в шаблоне (`"GET /places/{id}"`), параметр пути
+читается через `r.PathValue("id")`. Хендлеры приходят одной структурой `routes.Handlers` из `cmd/server/listen.go`.
 
-Роутер строится на стандартном `http.ServeMux` (Go `net/http`).
-В нем регистрируются инфраструктурные эндпоинты (`/health`, `/metrics`, `/swagger/`, `net/http/pprof` через blank import) и бизнес-хендлеры, реализующие интерфейс `http.Handler` (`ServeHTTP`).
+В роутере регистрируются:
 
-### Пример `internal/application/routes/router.go`
+- служебные ручки: `GET /health`, `HEAD /health` и `net/http/pprof` через blank import;
+- JSON API: `/places`, `/events`, `/pins`, `/forecast/...`, `/submissions`;
+- страницы на `templ` (`GET /catalog`, `GET /place/{id}`) и htmx-фрагменты (`GET /fragments/...`);
+- архивы карты (`/api/map/*.pmtiles`) и статика из `WebDir`.
+
+Доступ задают middleware: `requireAuth` для мутаций, `loadAuth` для чтения, которое по-разному показывается
+анонимам и вошедшим. Снаружи весь mux оборачивают `withRecover`, `withCORS` и `withRequestLog`.
+
+### Сокращённый `router.go`
 
 ```go
-package routes
+func NewHTTPRouter(logger *slog.Logger, h Handlers) http.Handler {
+	mux := http.NewServeMux()
 
-import (
-	"net/http"
-	_ "net/http/pprof" // trigger init
+	mux.Handle("GET /health", h.Health)
+	mux.Handle("HEAD /health", h.Health)
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/swaggo/http-swagger/v2"
+	mux.Handle("GET /places", h.ListPlaces)
+	mux.Handle("POST /places", h.CreatePlace)
+	mux.Handle("GET /places/{id}", h.GetPlace)
 
-	httproutes "example.com/project/internal/application/routes/http"
-)
+	// Радар «Сейчас»: чтение доступно анонимно (с декорированием для своих),
+	// мутации — только после входа.
+	mux.Handle("GET /pins", loadAuth(h.ListPins))
+	mux.Handle("POST /pins", requireAuth(h.CreatePin))
 
-func NewHTTPRouter(
-	getBotsHandler *httproutes.GetBotsHandler,
-	healthCheckHandler *httproutes.HealthCheckHandler,
-) *http.ServeMux {
-	mux := http.DefaultServeMux
+	if h.Fragments != nil {
+		mux.Handle("GET /fragments/catalog-results", loadAuth(http.HandlerFunc(h.Fragments.CatalogResults)))
+	}
+	// ...
 
-	mux.Handle("/health", healthCheckHandler)
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.Handle("/swagger/", httpSwagger.Handler())
-
-	mux.Handle("/api/v1/bots", getBotsHandler)
-
-	return mux
+	return withRecover(logger, withCORS(h.AllowedOrigins, withRequestLog(logger, mux)))
 }
 ```
 
----
+## 4. Единый JSON-ответ и хендлеры (`internal/application/routes/http`)
 
-## 4. Паттерн: Generic Response Envelope и HTTP-хендлеры (`internal/application/routes/http`)
+### 4.1. Обёртка ответа (`common.go`)
 
-### 4.1. Единый формат HTTP-ответа (`common.go`)
-Все HTTP-ручки возвращают единую JSON-обертку `APIResponse[T]`:
+Все JSON-ручки отвечают в одном формате, чтобы фронтенд ветвился по `success`, не разбирая статус:
+
 ```json
 {
-  "success": true,
-  "error": "",
-  "data": [...]
+  "success": false,
+  "error": "unexpected activity `ski`, expected: hike, sup, run, walk",
+  "code": "INVALID_ARGUMENT",
+  "data": null
 }
 ```
-Для записи ответа и логирования ошибок используется параметризованный дженерик-тип `APIResponseWriter[data any]`.
+
+`code` появляется только в ошибках. Ответ пишет дженерик `APIResponseWriter[T]`:
+
+- `Success(w, data)` отвечает 200;
+- `SuccessWithStatus(w, code, data)` нужен для 201 и похожих;
+- `Error(w, status, err)` пишет ошибку в лог и в ответ.
+
+Доменную ошибку в HTTP-статус переводит `statusCode(err)`: `ErrInvalidArgument` → 400, `ErrNotFound` → 404,
+`ErrUnauthorized` → 401, `ErrForbidden` → 403, `ErrConflict` → 409, `context.Canceled` → 499,
+`context.DeadlineExceeded` → 504, остальное → 500. Тело запроса читает `decodeJSON`: он ограничивает размер
+(`maxJSONBodyBytes`) и отклоняет неизвестные поля.
 
 ```go
-// internal/application/routes/http/common.go
-package http
-
-import (
-	"encoding/json"
-	"log/slog"
-	"net/http"
-)
-
+// APIResponse is the single envelope every JSON endpoint returns, so the front
+// end can branch on `success` without inspecting status codes.
 type APIResponse[data any] struct {
 	Success bool   `json:"success"`
 	Error   string `json:"error"`
+	Code    string `json:"code,omitempty"`
 	Data    data   `json:"data"`
 }
 
@@ -203,258 +200,116 @@ func NewAPIResponseWriter[data any](logger *slog.Logger) *APIResponseWriter[data
 }
 
 func (a *APIResponseWriter[data]) Error(writer http.ResponseWriter, code int, err error) {
-	a.logger.Error("request failed", "error", err)
+	a.logger.Error("request failed", slog.Any("error", err), slog.Int("status", code))
 
-	writer.Header().Add("Content-Type", "application/json")
+	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(code)
 
-	if err := json.NewEncoder(writer).Encode(APIResponse[any]{false, err.Error(), nil}); err != nil {
-		a.logger.Error("json encode of error response failed", "error", err)
+	if encodeErr := json.NewEncoder(writer).Encode(APIResponse[any]{
+		Success: false,
+		Error:   err.Error(),
+		Code:    errorCode(code, err),
+		Data:    nil,
+	}); encodeErr != nil {
+		a.logger.Error("json encode of error response failed", slog.Any("error", encodeErr))
 	}
 }
 
 func (a *APIResponseWriter[data]) Success(writer http.ResponseWriter, d data) {
-	r := APIResponse[data]{
-		Success: true,
-		Error:   "",
-		Data:    d,
-	}
-
-	writer.Header().Add("Content-Type", "application/json")
-	if err := json.NewEncoder(writer).Encode(r); err != nil {
-		a.logger.Error("json encode of success response failed", "error", err)
-	}
+	a.SuccessWithStatus(writer, http.StatusOK, d)
 }
 ```
 
-### 4.2. Бизнес HTTP-хендлер (`bots.go`) и HealthCheck (`health_check.go`)
-Каждый HTTP-хендлер:
-1. Хранит типизированный `*APIResponseWriter[ResponseDTO]` и локальный интерфейс `UseCase`.
-2. Реализует `ServeHTTP(w http.ResponseWriter, r *http.Request)` и документируется Swagger-комментариями.
-3. Парсит и валидирует входные параметры через конструкторы `domain` (`NewIPVersion`, `NewSource`), при ошибке возвращая `http.StatusBadRequest`.
-4. Вызывает `useCase.Do(r.Context(), ...)`, при ошибке возвращая `http.StatusInternalServerError`.
-5. Маппит результат через `presenter` и отправляет через `responseWriter.Success`.
+### 4.2. Хендлер (`places.go`) и health check (`health_check.go`)
+
+Хендлер:
+
+1. Хранит типизированный `*APIResponseWriter[<DTO>]` и экспортируемый интерфейс usecase (`GetPlaceUC`), объявленный
+   рядом с ним.
+2. Реализует `ServeHTTP` и сам проверяет метод: роутер уже фильтрует по методу, а проверка защищает хендлер, если
+   его подключат иначе.
+3. Разбирает параметры запроса доменными конструкторами (`models.NewActivity`, `models.NewLayerCode`). Ошибка
+   конструктора уже несёт `ErrInvalidArgument`, поэтому `statusCode(err)` вернёт 400.
+4. Вызывает `useCase.Do(r.Context(), ...)` и переводит ошибку через `statusCode(err)`.
+5. Отдаёт результат через `presenter` и `responseWriter.Success`.
 
 ```go
-// internal/application/routes/http/bots.go
-package http
+type GetPlaceUC interface {
+	Do(ctx context.Context, id string) (models.Place, error)
+}
 
-import (
-	"context"
-	"errors"
-	"log/slog"
-	"net/http"
-	"strconv"
-
-	"example.com/project/internal/application/presenter"
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type GetBotsHandler struct {
+type GetPlaceHandler struct {
 	logger         *slog.Logger
-	responseWriter *APIResponseWriter[[]presenter.TrustedBotNet]
-	useCase        GetBotsUC
+	responseWriter *APIResponseWriter[presenter.Place]
+	useCase        GetPlaceUC
 }
 
-func NewGetBotsHandler(
-	logger *slog.Logger,
-	uc GetBotsUC,
-) *GetBotsHandler {
-	return &GetBotsHandler{logger, NewAPIResponseWriter[[]presenter.TrustedBotNet](logger), uc}
+func NewGetPlaceHandler(logger *slog.Logger, uc GetPlaceUC) *GetPlaceHandler {
+	return &GetPlaceHandler{
+		logger:         logger,
+		responseWriter: NewAPIResponseWriter[presenter.Place](logger),
+		useCase:        uc,
+	}
 }
 
-type GetBotsUC interface {
-	Do(ctx context.Context, source []trustednet.Source, ipV *trustednet.IPVersion) ([]trustednet.TrustedBotNet, error)
-}
-
-// ServeHTTP handles GET /api/v1/bots and returns trusted bot CIDRs for the requested sources.
-//
-// @Summary		Returns list of search bots IP
-// @Description	Returns list of search bots IP
-// @Tags		sessions
-// @Param source	query	[]trustednet.Source	false	"источники подсеток"	collectionFormat(multi)
-// @Param ipV 		query	int					false	"ip version"
-// @Produce		json
-// @Success		200	{object}	APIResponse[[]presenter.TrustedBotNet]
-// @Failure		400	{object}	APIResponse[any]
-// @Failure		500	{object}	APIResponse[any]
-// @Router		/api/v1/bots [get]
-func (h *GetBotsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *GetPlaceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.responseWriter.Error(w, http.StatusBadRequest, errors.New("method GET expected"))
+		h.responseWriter.Error(w, http.StatusMethodNotAllowed, errors.New("method GET expected"))
 
 		return
 	}
 
-	var ipV *trustednet.IPVersion
-	sources := make([]trustednet.Source, 0)
-	if ipVString := r.URL.Query().Get("ipV"); ipVString != "" {
-		v, err := strconv.Atoi(ipVString)
-		if err != nil {
-			h.responseWriter.Error(w, http.StatusBadRequest, errors.New("ipV expected as integer"))
-
-			return
-		}
-		version, err := trustednet.NewIPVersion(v)
-		if err != nil {
-			h.responseWriter.Error(w, http.StatusBadRequest, err)
-
-			return
-		}
-		ipV = &version
-	}
-
-	if r.URL.Query().Has("source") {
-		for _, s := range r.URL.Query()["source"] {
-			s, err := trustednet.NewSource(s)
-			if err != nil {
-				h.responseWriter.Error(w, http.StatusBadRequest, err)
-
-				return
-			}
-			sources = append(sources, s)
-		}
-	}
-
-	nets, err := h.useCase.Do(r.Context(), sources, ipV)
+	place, err := h.useCase.Do(r.Context(), r.PathValue("id"))
 	if err != nil {
-		h.responseWriter.Error(w, http.StatusInternalServerError, err)
+		h.responseWriter.Error(w, statusCode(err), err)
 
 		return
 	}
 
-	h.responseWriter.Success(w, presenter.TrustedBotNetsToHTTP(nets))
+	h.responseWriter.Success(w, presenter.PlaceToHTTP(place))
 }
 ```
 
+Health check зависит от узкого `dbPinger`, а не от `*pgxpool.Pool`, и пингует базу с собственным таймаутом:
+
 ```go
-// internal/application/routes/http/health_check.go
-package http
-
-import (
-	"database/sql"
-	"log/slog"
-	"net/http"
-)
-
+// HealthCheckHandler reports whether the service can reach PostgreSQL.
 type HealthCheckHandler struct {
-	logger         *slog.Logger
-	db             *sql.DB
-	responseWriter *APIResponseWriter[any]
+	logger *slog.Logger
+	pinger dbPinger
+	writer *APIResponseWriter[healthResponse]
 }
 
-func NewHealthCheckHandler(
-	logger *slog.Logger,
-	db *sql.DB,
-) *HealthCheckHandler {
-	return &HealthCheckHandler{logger, db, NewAPIResponseWriter[any](logger)}
+type dbPinger interface {
+	Ping(ctx context.Context) error
 }
 
 func (h *HealthCheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := h.db.PingContext(r.Context()); err != nil {
-		h.responseWriter.Error(w, http.StatusInternalServerError, err)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		h.writer.Error(w, http.StatusMethodNotAllowed, errors.New("method GET or HEAD expected"))
 
 		return
 	}
 
-	h.responseWriter.Success(w, nil)
+	ctx, cancel := context.WithTimeout(r.Context(), healthCheckTimeout)
+	defer cancel()
+
+	if err := h.pinger.Ping(ctx); err != nil {
+		h.logger.Error("health check: database unreachable", slog.Any("error", err))
+		h.writer.Error(w, http.StatusServiceUnavailable, errors.New("database unreachable"))
+
+		return
+	}
+
+	h.writer.Success(w, healthResponse{Status: "ok", Database: "ok"})
 }
 ```
 
----
+### 4.3. Страницы и фрагменты
 
-## 5. Паттерн: Определение gRPC-сервера (`internal/application/routes/grpc`)
+Страницы (`pages.go`) и htmx-фрагменты (`fragments.go`) рендерят HTML-шаблоны `templ` из `web/templates/`, а не JSON.
+Они берут те же usecase-ы, что и JSON-ручки. `ErrNotFound` на странице показывает `NotFoundPage`, а не JSON-ошибку.
+Правила фронтенда описаны в скилле `frontend-hypermedia-architecture`.
 
-gRPC-сервер переиспользует тот же `UseCase`, что и HTTP-хендлер:
-1. Встраивает `Unimplemented<Service>Server` для прямой совместимости контрактов.
-2. Объявляет собственный интерфейс `GetBotsUC`.
-3. Преобразует proto-enum в доменные Value Objects (`trustednet.NewSource`, `trustednet.NewIPVersion`), возвращая `status.Error(codes.InvalidArgument, ...)` при некорректных входных данных.
-4. Вызывает `s.uc.Do(ctx, ...)` и преобразует результат через `presenter.TrustedBotNetsToProto(nets)`.
-
-### Пример `internal/application/routes/grpc/bots_server.go`
-
-```go
-package grpc
-
-import (
-	"context"
-	"fmt"
-	"strings"
-
-	servicev1 "example.com/project-proto/proto/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"example.com/project/internal/application/presenter"
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type GetBotsUC interface {
-	Do(ctx context.Context, sources []trustednet.Source, ipV *trustednet.IPVersion) ([]trustednet.TrustedBotNet, error)
-}
-
-type BotsServer struct {
-	servicev1.UnimplementedBotsServiceServer
-	uc GetBotsUC
-}
-
-func NewBotsServer(uc GetBotsUC) *BotsServer {
-	return &BotsServer{uc: uc}
-}
-
-func (s *BotsServer) GetBots(
-	ctx context.Context,
-	req *servicev1.GetBotsRequest,
-) (*servicev1.GetBotsResponse, error) {
-	sources, err := protoSourcesToTrusted(req.GetSources())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	var ipV *trustednet.IPVersion
-	if req.IpVersion != nil {
-		v := req.GetIpVersion()
-		if v == servicev1.IPVersion_IP_VERSION_UNSPECIFIED {
-			return nil, status.Error(codes.InvalidArgument, "ip_version must be v4 or v6 when set")
-		}
-		tv, err := trustednet.NewIPVersion(int(v))
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		ipV = &tv
-	}
-
-	nets, err := s.uc.Do(ctx, sources, ipV)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	items, err := presenter.TrustedBotNetsToProto(nets)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &servicev1.GetBotsResponse{Items: items}, nil
-}
-
-func protoSourcesToTrusted(srcs []servicev1.Source) ([]trustednet.Source, error) {
-	if len(srcs) == 0 {
-		return nil, nil
-	}
-
-	out := make([]trustednet.Source, 0, len(srcs))
-	for _, src := range srcs {
-		sourceName, ok := servicev1.Source_name[int32(src)]
-		if !ok {
-			return nil, fmt.Errorf("unknown source enum value: %v", src)
-		}
-		source, err := trustednet.NewSource(strings.ToLower(sourceName[len("SOURCE_"):]))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, source)
-	}
-
-	return out, nil
-}
-```
+Если появится gRPC, его сервер берёт те же usecase-ы, переводит proto-enum доменными конструкторами и маппит
+`ErrInvalidArgument` в `codes.InvalidArgument`.

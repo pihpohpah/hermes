@@ -1,258 +1,220 @@
 # Устройство `domain` и `infrastructure/repository`
 
-## 1. Паттерн: Сущности и Value Objects со Smart Constructors (`internal/domain`)
+## 1. Сущности и value objects с конструкторами (`internal/domain/models`)
 
-В слое `domain` запрещены зависимости на внешние пакеты (JSON/SQL/gRPC-теги также не ставятся на доменные модели — за сериализацию отвечает `presenter` или `repository`).
+Пакет `domain` импортирует только stdlib. Доменных пакетов два:
 
-### Правила проектирования домена:
-1. **Сущность (Entity)**: чистая Go-структура, использующая строгие доменные типы вместо голых `string`/`int`.
-2. **Value Object**: типизированный алиас примитива (`type Source string`, `type IPVersion int`) с набором допустимых констант.
-3. **Smart Constructor**: функция `New<Type>(raw) (<Type>, error)`, которая гарантирует, что невалидное значение невозможно сконструировать.
+- `models` хранит сущности (`Place`, `Event`, `Pin`, `User`), value objects и общие ошибки;
+- `scoring` содержит эвристику оценки условий.
 
-### Пример сущности и Value Objects (`internal/domain/trusted_net`)
+Правила:
 
-```go
-// internal/domain/trusted_net/bot_net.go
-package trustednet
+1. Сущность — обычная Go-структура со строгими доменными типами вместо голых `string`/`int`: `Type PlaceType`,
+   `Layer LayerCode`, `Location Point`.
+2. Value object — именованный тип над примитивом (`type Activity string`, `type PlaceType string`) с набором констант.
+3. Конструктор `New<Type>(raw) (<Type>, error)` не даёт создать невалидное значение. Ошибку он возвращает через
+   `models.Invalid(...)` / `models.Invalidf(...)`, чтобы она совпадала с `errors.Is(err, models.ErrInvalidArgument)`.
+4. Общие ошибки лежат в `errors.go`: `ErrInvalidArgument`, `ErrNotFound`, `ErrUnauthorized`, `ErrForbidden`,
+   `ErrConflict`. HTTP-слой маппит их в 400, 404, 401, 403 и 409.
+5. Сущности (`Place`, `Event`, `Pin`) не несут тегов сериализации: JSON для API собирает `presenter`, строки БД
+   разбирает `repository`. Теги допустимы у вспомогательных структур, которые хранятся в `jsonb` или приходят извне
+   как есть: `WeatherObservation`, `SourceStatus`, `Photo`, `TelegramIDClaims`.
 
-import "time"
-
-type TrustedBotNet struct {
-	CIDR      string
-	Source    Source
-	Type      IPVersion
-	CreatedAt time.Time
-}
-```
+### Пример value object (`internal/domain/models/activity.go`)
 
 ```go
-// internal/domain/trusted_net/source.go
-package trustednet
-
-import (
-	"fmt"
-	"strings"
-)
-
-type Source string
+// Activity is the kind of outdoor pursuit a forecast is scored for.
+type Activity string
 
 const (
-	Yandex        Source = "yandex"
-	GoogleCommon  Source = "google"
-	GoogleSpecial Source = "google_special_crawlers"
+	ActivityHike Activity = "hike"
+	ActivitySup  Activity = "sup"
+	ActivityRun  Activity = "run"
+	ActivityWalk Activity = "walk"
 )
 
-func NewSource(s string) (Source, error) {
-	switch s {
-	case string(Yandex):
-		return Yandex, nil
-	case string(GoogleCommon):
-		return GoogleCommon, nil
-	case string(GoogleSpecial):
-		return GoogleSpecial, nil
-	default:
-		return Source(""), fmt.Errorf(
-			"unexpected source `%s`, expected: `%s`",
-			s,
-			strings.Join([]string{string(Yandex), string(GoogleCommon), string(GoogleSpecial)}, "`,`"),
-		)
+// NewActivity parses an activity coming from an HTTP query, CLI flag or a
+// database row. Unlike a plain type conversion it rejects unknown values, so a
+// typo cannot silently produce a zero-score forecast.
+func NewActivity(raw string) (Activity, error) {
+	activity := Activity(raw)
+	if !activity.Valid() {
+		return "", Invalid(fmt.Sprintf(
+			"unexpected activity `%s`, expected: hike, sup, run, walk", raw,
+		))
 	}
+
+	return activity, nil
 }
 ```
 
+### Пример value object со структурой (`internal/domain/models/geo.go`)
+
 ```go
-// internal/domain/trusted_net/ip_version.go
-package trustednet
+type Point struct {
+	Lat float64
+	Lon float64
+}
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-)
-
-type IPVersion int
-
-const (
-	V4 IPVersion = 4
-	V6 IPVersion = 6
-)
-
-func NewIPVersion(ipV int) (IPVersion, error) {
-	switch ipV {
-	case int(V4):
-		return V4, nil
-	case int(V6):
-		return V6, nil
-	default:
-		return IPVersion(0), fmt.Errorf(
-			"unexpected ip version `%d`, expected: `%s`",
-			ipV,
-			strings.Join([]string{strconv.Itoa(int(V4)), strconv.Itoa(int(V6))}, "`,`"),
-		)
+func NewPoint(lat, lon float64) (Point, error) {
+	if math.IsNaN(lat) || math.IsNaN(lon) || math.IsInf(lat, 0) || math.IsInf(lon, 0) {
+		return Point{}, Invalid("coordinates must be finite numbers")
 	}
+
+	if lat < minLatitude || lat > maxLatitude {
+		return Point{}, Invalid(fmt.Sprintf("latitude `%g` must be between -90 and 90", lat))
+	}
+
+	if lon < minLongitude || lon > maxLongitude {
+		return Point{}, Invalid(fmt.Sprintf("longitude `%g` must be between -180 and 180", lon))
+	}
+
+	return Point{Lat: lat, Lon: lon}, nil
 }
 ```
 
----
+## 2. SQL-репозиторий на pgx (`internal/infrastructure/repository`)
 
-## 2. Паттерн: SQL-репозиторий поверх `database/sql` (`internal/infrastructure/repository`)
+Репозитории работают с PostgreSQL/PostGIS через `pgx/v5` и `*pgxpool.Pool`, без ORM. Схема лежит в `migrations/` и
+накатывается командой `migrate`.
 
-Репозиторий инкапсулирует работу с реляционной базой данных без ORM.
+Приёмы:
 
-### Ключевые приемы:
-1. **Никаких интерфейсов в пакете репозитория**: репозиторий возвращает конкретный указатель `*TrustedNetRepository`. Узкие интерфейсы объявляются там, где репозиторий используется (`usecase`, `commands`).
-2. **Динамическая сборка параметризованных запросов**: для `IN ($1, $2)` и батч-конструкций `VALUES ($2), ($3)` используется счетчик позиции аргумента `argPos`, что полностью защищает от SQL-инъекций.
-3. **Восстановление доменных инвариантов при чтении**: значения, прочитанные через `rows.Scan` в сырые переменные (`srcRaw string`, `ipRaw int`), обязательно проходят через `trustednet.NewSource(srcRaw)` и `trustednet.NewIPVersion(ipRaw)`.
-4. **Безопасное закрытие `sql.Rows`**: используется именованный возврат `(result []..., err error)` и проверка `rows.Close()` внутри `defer`, чтобы не потерять ошибку закрытия курсора, а также обязательная проверка `rows.Err()` после цикла `rows.Next()`.
+1. В пакете репозитория нет интерфейсов. Конструктор возвращает конкретный указатель (`*PlaceRepository`), а узкие
+   интерфейсы объявляет потребитель (`usecase`, `commands`).
+2. Запросы только параметризованные. Динамический `WHERE` собирается счётчиком позиции `argPos`, значения уходят в
+   `args`, в текст запроса попадают только плейсхолдеры `$n`. Пример: `buildPlaceListQuery` в `places.go`. Нумерацию
+   плейсхолдеров проверяет `places_query_test.go`.
+3. Прочитанные значения снова проходят через доменные конструкторы. `rows.Scan` пишет в сырые переменные
+   (`typeRaw string`, `layerRaw string`), затем `scanPlace` вызывает `models.NewPlaceType`, `models.NewLayerCode`,
+   `models.NewPoint`.
+4. Курсор закрывается `defer rows.Close()` (в pgx он не возвращает ошибку), после цикла проверяется `rows.Err()`.
+5. `pgx.ErrNoRows` превращается в `models.ErrNotFound`, чтобы usecase и HTTP-слой не знали о драйвере.
+6. Повторный запуск сида и импорта не плодит дубли: запись идёт через `INSERT ... ON CONFLICT ... DO UPDATE`
+   (`EventRepository.UpsertBySlug`).
+7. Транзакции открывает `TxManager.Run(ctx, fn)` и кладёт `pgx.Tx` в контекст. Методы, которые должны работать и в
+   транзакции, и без неё, берут соединение через `queryWith(ctx, r.pool)`.
 
-### Пример `internal/infrastructure/repository/trusted_net.go`
+### Сокращённый `internal/infrastructure/repository/places.go`
 
 ```go
-package repository
-
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"strings"
-	"time"
-
-	trustednet "example.com/project/internal/domain/trusted_net"
-)
-
-type TrustedNetRepository struct {
-	db *sql.DB
+type PlaceRepository struct {
+	pool *pgxpool.Pool
 }
 
-func NewTrustedNetRepository(db *sql.DB) *TrustedNetRepository {
-	return &TrustedNetRepository{db: db}
+func NewPlaceRepository(pool *pgxpool.Pool) *PlaceRepository {
+	return &PlaceRepository{pool: pool}
 }
 
-func (r *TrustedNetRepository) Upsert(ctx context.Context, botNet trustednet.TrustedBotNet) error {
-	const query = `
-		WITH updated AS (
-			UPDATE trusted_bot_nets
-			SET ip_version = $3
-			WHERE cidr = $1::cidr AND source = $2
-			RETURNING id
-		)
-		INSERT INTO trusted_bot_nets (cidr, source, ip_version)
-		SELECT $1::cidr, $2, $3
-		WHERE NOT EXISTS (SELECT 1 FROM updated)
-	`
+func (r *PlaceRepository) List(ctx context.Context, filter models.PlaceFilter) ([]models.Place, error) {
+	query, args := buildPlaceListQuery(filter)
 
-	if _, err := r.db.ExecContext(ctx, query, botNet.CIDR, botNet.Source, int(botNet.Type)); err != nil {
-		return fmt.Errorf("upsert trusted bot net: %w", err)
-	}
-
-	return nil
-}
-
-func (r *TrustedNetRepository) DeleteStale(
-	ctx context.Context,
-	source trustednet.Source,
-	nets []trustednet.TrustedBotNet,
-) error {
-	if len(nets) == 0 {
-		return errors.New("nets slice must not be empty")
-	}
-
-	args := make([]any, 0, 1+len(nets))
-	args = append(args, source)
-	valuesRows := make([]string, 0, len(nets))
-	argPos := 2
-	for _, net := range nets {
-		valuesRows = append(valuesRows, fmt.Sprintf("($%d)", argPos))
-		args = append(args, net.CIDR)
-		argPos++
-	}
-
-	query := fmt.Sprintf(`
-		DELETE FROM trusted_bot_nets t
-		WHERE t.source = $1
-		AND NOT EXISTS (
-			SELECT 1
-			FROM (VALUES %s) AS actual(cidr)
-			WHERE t.cidr = actual.cidr::cidr
-		)
-	`, strings.Join(valuesRows, ","))
-	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
-		return fmt.Errorf("delete stale trusted bot nets: %w", err)
-	}
-
-	return nil
-}
-
-func (r *TrustedNetRepository) List(
-	ctx context.Context,
-	sources []trustednet.Source,
-	ipV *trustednet.IPVersion,
-) (result []trustednet.TrustedBotNet, err error) {
-	query := "SELECT cidr, source, ip_version, created_at FROM trusted_bot_nets"
-	var where []string
-	var args []any
-	argPos := 1
-
-	if len(sources) > 0 {
-		inSources := make([]string, 0, len(sources))
-		for _, source := range sources {
-			args = append(args, source)
-			inSources = append(inSources, fmt.Sprintf("$%d", argPos))
-			argPos++
-		}
-		where = append(where, fmt.Sprintf("source IN (%s)", strings.Join(inSources, ", ")))
-	}
-	if ipV != nil {
-		where = append(where, fmt.Sprintf("ip_version = $%d", argPos))
-		args = append(args, ipV)
-	}
-	if len(where) > 0 {
-		query = fmt.Sprintf("%s WHERE %s", query, strings.Join(where, " AND "))
-	}
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query trusted bot nets: %w", err)
+		return nil, fmt.Errorf("query places: %w", err)
 	}
-	defer func() {
-		if cErr := rows.Close(); cErr != nil && err == nil {
-			err = fmt.Errorf("close trusted bot nets rows: %w", cErr)
-		}
-	}()
+	defer rows.Close()
 
-	result = make([]trustednet.TrustedBotNet, 0)
+	result := make([]models.Place, 0)
 	for rows.Next() {
-		var (
-			cidr      string
-			srcRaw    string
-			ipRaw     int
-			createdAt time.Time
-		)
-
-		if err := rows.Scan(&cidr, &srcRaw, &ipRaw, &createdAt); err != nil {
-			return nil, fmt.Errorf("scan trusted bot net row: %w", err)
+		place, scanErr := scanPlace(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		src, err := trustednet.NewSource(srcRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse source from db value `%s`: %w", srcRaw, err)
-		}
-		ipVersion, err := trustednet.NewIPVersion(ipRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse ip version from db value `%d`: %w", ipRaw, err)
-		}
-
-		result = append(result, trustednet.TrustedBotNet{
-			CIDR:      cidr,
-			Source:    src,
-			Type:      ipVersion,
-			CreatedAt: createdAt,
-		})
+		result = append(result, place)
 	}
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate trusted bot net rows: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate places rows: %w", err)
 	}
 
 	return result, nil
+}
+
+// GetByID resolves a place by UUID or by its unique slug, so both the API
+// identifiers and the human-readable URL part work.
+func (r *PlaceRepository) GetByID(ctx context.Context, id string) (models.Place, error) {
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM places p
+		%s
+		WHERE p.id::text = $3 OR p.slug = $3
+	`, fmt.Sprintf(placeColumns, "NULL::double precision AS distance_m"), latestAssessmentJoin)
+
+	place, err := scanPlace(
+		r.pool.QueryRow(ctx, query, string(models.ActivityWalk), scoring.AlgorithmVersion, id),
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Place{}, models.ErrNotFound
+		}
+
+		return models.Place{}, fmt.Errorf("query place by id: %w", err)
+	}
+
+	return place, nil
+}
+
+func buildPlaceListQuery(filter models.PlaceFilter) (string, []any) {
+	leading := listLeadingArgs()
+	argPos := len(leading) + 1
+
+	var (
+		where   []string
+		args    = make([]any, 0, argPos)
+		orderBy = "p.created_at DESC"
+	)
+
+	if filter.Type != nil {
+		where = append(where, fmt.Sprintf("p.type = $%d", argPos))
+		args = append(args, string(*filter.Type))
+		argPos++
+	}
+
+	if filter.Layer != nil {
+		where = append(where, fmt.Sprintf("p.layer_code = $%d", argPos))
+		args = append(args, string(*filter.Layer))
+		argPos++
+	}
+	// ... радиус (PostGIS), категория, полнотекстовый q
+
+	// ... limit, SELECT, WHERE, ORDER BY собираются тем же способом
+	return query, append(leading, args...)
+}
+```
+
+### Разбор строки в доменную модель (`scanPlace`, фрагмент)
+
+```go
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanPlace(row rowScanner) (models.Place, error) {
+	var (
+		id       string
+		typeRaw  string
+		layerRaw string
+		lat      float64
+		lon      float64
+		// ...
+	)
+
+	if err := row.Scan(&id, /* ... */ &typeRaw, &layerRaw, /* ... */ &lat, &lon /* ... */); err != nil {
+		return models.Place{}, fmt.Errorf("scan place row: %w", err)
+	}
+
+	pt, err := models.NewPlaceType(typeRaw)
+	if err != nil {
+		return models.Place{}, fmt.Errorf("parse place type from db `%s`: %w", typeRaw, err)
+	}
+	layer, err := models.NewLayerCode(layerRaw)
+	if err != nil {
+		return models.Place{}, fmt.Errorf("parse layer code from db `%s`: %w", layerRaw, err)
+	}
+	loc, err := models.NewPoint(lat, lon)
+	if err != nil {
+		return models.Place{}, fmt.Errorf("parse place location: %w", err)
+	}
+	// ...
 }
 ```

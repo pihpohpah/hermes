@@ -1549,8 +1549,10 @@ a:hover {
   margin-right: calc(var(--space-1) * -1);
 }
 
+/* Базис auto, не 0% из `flex: 1`: процент от высоты модального <dialog>
+ * часть браузеров разрешает в ноль, и тело схлопывается до паддингов. */
 .dialog__body {
-  flex: 1;
+  flex: 1 1 auto;
   padding: var(--space-4) var(--space-6) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
